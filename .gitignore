@@ -13,6 +13,7 @@ supabase/.temp/
 Thumbs.db
 desktop.ini
 *.log
+*.tsbuildinfo
 npm-debug.log*
 yarn-debug.log*
 pnpm-debug.log*
