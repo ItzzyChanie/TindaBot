@@ -35,3 +35,6 @@ policy = "per_worker"
 
 [analytics]
 enabled = false
+
+[functions.seller-reply]
+verify_jwt = true
