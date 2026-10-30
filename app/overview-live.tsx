@@ -4,7 +4,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
-type Activity = { id: string; name: string; body: string; time: string };
+type Activity = { id: string; conversationId: string; name: string; body: string; time: string };
 
 function greeting(hour: number) {
   if (hour < 12) return { text: "Good morning", emoji: "☀️" };
@@ -58,7 +58,7 @@ export function OverviewLive({ name, openCount, orderCount, sales, inStock, prod
     <div className="page-heading"><div><p className="eyebrow">{date}</p><h1>{salutation.text}, {name} <span aria-hidden="true">{salutation.emoji}</span></h1><p className="muted">Here&apos;s what&apos;s happening in your shop today.</p></div>{children}</div>
     <section className="stats-grid" aria-label="Shop summary">{stats.map((stat) => <article className="stat-card" key={stat.label}><p className="muted">{stat.label}</p><strong>{stat.value}</strong><span>{stat.note}</span></article>)}</section>
     <section className="overview-grid"><article className="panel activity-panel"><div className="panel-heading"><div><p className="eyebrow">Your shop</p><h2>Recent activity</h2></div><Link className="text-button" href="/inbox">View all <span aria-hidden="true">→</span></Link></div>
-      {activities.length ? activities.map((activity) => <Link className="activity-row" href={`/inbox?conversation=${encodeURIComponent(activity.id)}`} key={activity.id}><span className="avatar avatar-mint" aria-hidden="true">{activity.name.slice(0, 1).toUpperCase()}</span><div><strong>{activity.name}</strong><p>{activity.body}</p></div><time dateTime={activity.time}>{ago(activity.time, now.getTime())}</time></Link>) : <p className="muted">No conversations yet.</p>}
+      {activities.length ? activities.map((activity) => <Link className="activity-row" href={`/inbox?conversation=${encodeURIComponent(activity.conversationId)}`} key={activity.id}><span className="avatar avatar-mint" aria-hidden="true">{activity.name.slice(0, 1).toUpperCase()}</span><div><strong>{activity.name}</strong><p>{activity.body}</p></div><time dateTime={activity.time}>{ago(activity.time, now.getTime())}</time></Link>) : <p className="muted">No conversations yet.</p>}
     </article><article className="panel storefront-card"><div className="store-icon" aria-hidden="true">✳</div><p className="eyebrow">Your storefront</p><h2>Looking good, {name}!</h2><p className="muted">Your customers can browse what&apos;s available right now.</p><Link className="button button-light" href="/storefront">View storefront <span aria-hidden="true">↗</span></Link></article></section>
   </div>;
 }

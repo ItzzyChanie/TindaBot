@@ -23,7 +23,7 @@ export default async function OverviewPage() {
   const activities = (conversations.data ?? []).map((message) => {
     const conversation = Array.isArray(message.conversations) ? message.conversations[0] : message.conversations;
     const customer = Array.isArray(conversation?.customers) ? conversation.customers[0] : conversation?.customers;
-    return { id: conversation?.id ?? message.id, name: customer?.name || "Customer", body: message.body, time: message.created_at };
+    return { id: message.id, conversationId: conversation?.id ?? message.id, name: customer?.name || "Customer", body: message.body, time: message.created_at };
   });
 
   return <OverviewLive name={name} openCount={openCount} orderCount={orderCount} sales={sales}
