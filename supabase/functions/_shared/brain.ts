@@ -96,7 +96,8 @@ function regionFor(location: string | null): string | null {
   const value = (location ?? "")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
+    .toLowerCase()
+    .replace(/\b(?:outside|outside of|other than|sa labas ng)\s+(?:the\s+)?metro manila\b/g, " ");
   if (
     /\b(metro manila|ncr|manila|quezon city|makati|taguig|pasig|pasay|paranaque|caloocan|marikina|mandaluyong|muntinlupa|las pinas|malabon|navotas|san juan|pateros|valenzuela)\b/.test(
       value,
@@ -122,6 +123,12 @@ function regionFor(location: string | null): string | null {
   )
     return "Mindanao";
   return null;
+}
+
+function asksOtherAreaShipping(message: string): boolean {
+  const normalized = message.normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  return /\b(ibang lugar|ibang area|other place|other places|other area|other areas|another area|different area|outside metro manila|outside manila|outside ncr|elsewhere|provincial shipping)\b/.test(normalized);
 }
 
 export function runIncomingBrain(
@@ -211,7 +218,9 @@ export function runIncomingBrain(
   const contextProduct = input.products.find((product) =>
     product.active && product.id === input.contextProductId
   );
-  if (contextProduct && !understanding.product_query &&
+  const refersToSelectedProduct = /\b(this|that|it|these|those|ito|nito|iyan|iyon|yun|yung item|item na ito)\b/i
+    .test(input.message.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase());
+  if (contextProduct && (!understanding.product_query || refersToSelectedProduct) &&
     ["price", "availability", "question", "order_confirm"].includes(understanding.intent)) {
     understanding = {
       ...understanding,
@@ -419,8 +428,21 @@ export function runIncomingBrain(
     );
   }
   if (understanding.intent === "shipping") {
+    const asksOtherAreas = asksOtherAreaShipping(input.message);
     const region = regionFor(understanding.location);
     const rate = region ? input.settings.shipping_rates[region] : undefined;
+    if (!region && asksOtherAreas) {
+      const otherRates = Object.entries(input.settings.shipping_rates)
+        .filter(([area, amount]) => area.toLocaleLowerCase() !== "metro manila" && Number.isFinite(amount));
+      if (otherRates.length === 0)
+        return escalate("Wala pa po akong saved shipping rate para sa ibang areas. I-check ko muna sa seller po.");
+      return respond(
+        { shipping_rates: Object.fromEntries(otherRates), amounts: otherRates.map(([, amount]) => amount) },
+        "Shipping rates po outside Metro Manila: " +
+          otherRates.map(([area, amount]) => area + " " + peso(amount)).join(", ") +
+          ". Sabihin po ang specific area ninyo para ma-confirm ang tamang rate.",
+      );
+    }
     if (typeof rate !== "number") {
       if (!region && input.settings.shipping_rates["Metro Manila"] === undefined &&
         input.settings.shipping_rates.Luzon === undefined &&

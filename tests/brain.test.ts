@@ -109,6 +109,34 @@ describe("grounded incoming conversation brain", () => {
     expect(result.needsSeller).toBe(false);
   });
 
+  it("prefers the selected shop item over a mistaken deictic product phrase", async () => {
+    const result = await runIncomingBrain({
+      ...baseInput,
+      message: "Is this available po?",
+      contextProductId: product.id,
+    }, ai(understanding({ intent: "availability", product_query: "this", confidence: 0.95 })));
+
+    expect(result.reply).toContain(product.name);
+    expect(result.needsSeller).toBe(false);
+  });
+
+  it("lists configured shipping rates outside Metro Manila", async () => {
+    const result = await runIncomingBrain({
+      ...baseInput,
+      message: "sa ibang lugar po? how much?",
+      settings: {
+        ...baseInput.settings,
+        shipping_rates: { "Metro Manila": 80, Luzon: 120, Visayas: 150, Mindanao: 180 },
+      },
+    });
+
+    expect(result.reply).toContain("outside Metro Manila");
+    expect(result.reply).toContain("Luzon ₱120.00");
+    expect(result.reply).toContain("Visayas ₱150.00");
+    expect(result.reply).not.toContain("Metro Manila ₱80.00");
+    expect(result.needsSeller).toBe(false);
+  });
+
   it("returns to assistant mode on /assistant and clears the handoff wait", async () => {
     const result = await runIncomingBrain({
       ...baseInput,

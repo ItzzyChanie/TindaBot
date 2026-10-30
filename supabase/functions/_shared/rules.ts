@@ -65,7 +65,50 @@ const numberWords: Record<string, number> = {
   sampu: 10,
   sampung: 10,
   ten: 10,
+  eleven: 11,
+  "labing isa": 11,
+  "labing isang": 11,
+  labindalawa: 12,
+  "labing dalawa": 12,
+  "labing dalawang": 12,
+  twelve: 12,
+  labintatlo: 13,
+  "labing tatlo": 13,
+  thirteen: 13,
+  labinapat: 14,
+  "labing apat": 14,
+  fourteen: 14,
+  labinlima: 15,
+  "labing lima": 15,
+  fifteen: 15,
+  labinanim: 16,
+  "labing anim": 16,
+  sixteen: 16,
+  labimpito: 17,
+  "labing pito": 17,
+  seventeen: 17,
+  labingwalo: 18,
+  "labing walo": 18,
+  eighteen: 18,
+  labinsiyam: 19,
+  "labing siyam": 19,
+  nineteen: 19,
+  dalawampu: 20,
+  dalawampung: 20,
+  twenty: 20,
 };
+const numberWordEntries = Object.entries(numberWords)
+  .sort((left, right) => right[0].split(" ").length - left[0].split(" ").length);
+
+function numberAt(tokens: string[], start: number): { value: number; end: number } | null {
+  for (const [phrase, value] of numberWordEntries) {
+    const parts = phrase.split(" ");
+    if (tokens.slice(start, start + parts.length).join(" ") === phrase)
+      return { value, end: start + parts.length };
+  }
+  const numeric = tokens[start]?.match(/^\d{1,2}$/);
+  return numeric ? { value: Number(numeric[0]), end: start + 1 } : null;
+}
 
 const sizeWords: Record<string, string[]> = {
   s: ["s", "small", "sm", "sml", "smol"],
@@ -123,10 +166,15 @@ const intentPhrases = {
   order_help: ["paano mag order", "paano umorder", "how to order", "how can i order", "how to buy"],
   price: ["magkano", "how much", "price", "presyo", "hm", "total magkano", "cost"],
   availability: ["available", "availability", "avail", "may stock", "in stock", "meron", "mayroon", "anong sizes", "anong size", "available sizes"],
-  shipping: ["shipping", "delivery fee", "shipping fee", "pa deliver", "padeliver", "deliver sa", "ship to", "shipping to", "delivery", "deliver", "nagde deliver", "gaano katagal"],
+  shipping: ["shipping", "delivery fee", "shipping fee", "pa deliver", "padeliver", "deliver sa", "ship to", "shipping to", "delivery", "deliver", "nagde deliver", "gaano katagal", "ibang lugar", "other places", "other areas", "outside metro manila", "outside manila", "outside ncr", "elsewhere", "provincial shipping"],
   order_confirm: ["order na", "order ko na", "confirm order", "confirm", "i-confirm", "sige kunin", "kuha ko na", "kukuha", "kunin ko", "pabili", "checkout", "mine", "go na"],
   greeting: ["hi", "hello", "hey", "good morning", "good afternoon", "good evening", "kamusta", "kumusta", "musta"],
 };
+const otherAreaShippingPhrases = [
+  "ibang lugar", "ibang area", "other place", "other places", "other area",
+  "other areas", "another area", "different area", "outside metro manila",
+  "outside manila", "outside ncr", "elsewhere", "provincial shipping",
+];
 
 export function isAcknowledgement(message: string): boolean {
   let normalized = normalizeMessage(message);
@@ -145,13 +193,13 @@ export function isAcknowledgement(message: string): boolean {
 const stopWords = new Set([
   "magkano", "how", "much", "price", "presyo", "hm", "cost", "available",
   "availability", "avail", "stock", "meron", "mayroon", "may", "ba", "have", "do", "you", "it",
-  "the", "a", "an", "is", "of", "to", "for", "me", "please", "paki", "po",
+  "the", "a", "an", "is", "are", "in", "from", "at", "of", "to", "for", "me", "please", "paki", "po",
   "ang", "yung", "ng", "sa", "pa", "ano", "anong", "deliver", "delivery", "ship", "shipping",
   "fee", "item", "items", "pcs", "pc", "piece", "pieces", "piraso", "qty",
   "quantity", "size", "sizes", "order", "gusto", "ko", "nito", "iyan", "ito", "na",
   "with", "and", "or", "medium", "med", "small", "large", "extra", "xl", "xxl", "kayo", "kayong", "kami", "nyo", "ninyo", "ninyong", "what", "are", "have",
-  "this", "that",
-  ...Object.keys(numberWords),
+  "this", "that", "ibang", "lugar", "other", "place", "places", "area", "areas", "outside", "province", "provinces", "provincial", "elsewhere", "another", "different", "location", "locations",
+  ...Object.keys(numberWords).flatMap((word) => word.split(" ")),
 ]);
 
 export function normalizeMessage(value: string): string {
@@ -226,8 +274,12 @@ export function matchQuantityAnswer(message: string): number | null {
   const normalized = normalizeMessage(message);
   const direct = normalized.match(/^(\d{1,2})(?:\s+(?:pc|pcs|piece|pieces|piraso))?$/)?.[1];
   if (direct) return Number(direct) >= 1 ? Number(direct) : null;
-  const token = normalized.split(" ").find((word) => numberWords[word] !== undefined);
-  return token ? numberWords[token] : null;
+  const tokens = normalized.split(" ");
+  for (let index = 0; index < tokens.length; index += 1) {
+    const found = numberAt(tokens, index);
+    if (found) return found.value;
+  }
+  return null;
 }
 
 export function matchCatalogLocation(message: string): string | null {
@@ -302,30 +354,33 @@ function extractQuantities(message: string, productStart: number | null): number
   const tokens = message.split(" ");
   const candidates = new Set<number>();
   for (let index = 0; index < tokens.length; index += 1) {
-    const token = tokens[index];
-    const value = /^\d{1,2}$/.test(token) ? Number(token) : numberWords[token];
+    const found = numberAt(tokens, index);
+    if (!found) continue;
+    const value = found.value;
     if (!value || value > 100) continue;
     const prev = tokens[index - 1] ?? "";
-    const next = tokens[index + 1] ?? "";
+    const next = tokens[found.end] ?? "";
     const hasUnit = quantityUnits.has(next) || quantityUnits.has(prev);
-    const nearProduct = productStart !== null && productStart >= index &&
+    const nearProduct = productStart !== null && productStart >= found.end &&
       productStart - index <= 4 &&
-      tokens.slice(index + 1, productStart).every((word) =>
+      tokens.slice(found.end, productStart).every((word) =>
         Object.values(sizeWords).flat().includes(word) || word === "size" ||
-        word === "or" || word === "and" || /^\d{1,2}$/.test(word)
+        word === "or" || word === "and" || word === "na" || /^\d{1,2}$/.test(word)
       );
     const prefixed = prev === "x" || prev === "qty" || prev === "quantity";
     const nextIsSize = Object.values(sizeWords).flat().includes(next);
     const followsProduct = productStart !== null && index > productStart &&
       index - productStart <= 4 && (hasUnit || next === "x" || nextIsSize);
     if (hasUnit || nearProduct || prefixed || followsProduct) candidates.add(value);
+    index = found.end - 1;
   }
   return [...candidates].sort((a, b) => a - b);
 }
 
 function extractLocation(message: string): string | null {
+  const locationText = message.replace(/\b(?:outside|outside of|other than|sa labas ng)\s+(?:the\s+)?metro manila\b/g, " ");
   const matches = regions.flatMap((region) => region.aliases
-    .filter((alias) => containsPhrase(message, alias))
+    .filter((alias) => containsPhrase(locationText, alias))
     .map((alias) => ({ region: region.name, length: alias.length })));
   matches.sort((a, b) => b.length - a.length);
   return matches[0]?.region ?? null;
@@ -382,6 +437,7 @@ export function understandFromRules(
   else if (/\b(nasaan|asan)\b.*\b(order|parcel)\b/.test(normalized)) intent = "status";
   else if (hasAny(normalized, intentPhrases.payment)) intent = "payment";
   else if (hasAny(normalized, intentPhrases.order_help)) intent = "order_help";
+  else if (hasAny(normalized, otherAreaShippingPhrases)) intent = "shipping";
   else if (!bestMatch && hasAny(normalized, intentPhrases.shipping)) intent = "shipping";
   else if (hasAny(normalized, intentPhrases.price)) intent = "price";
   else if (hasAny(normalized, intentPhrases.availability)) intent = "availability";

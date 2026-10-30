@@ -98,6 +98,18 @@ describe("catalog-grounded message rules", () => {
     });
   });
 
+  it("recognizes shipping questions about areas outside Metro Manila", () => {
+    expect(understandFromRules("sa ibang lugar po? how much?", catalog)).toMatchObject({
+      intent: "shipping",
+      product_query: null,
+      location: null,
+    });
+    expect(understandFromRules("shipping outside Metro Manila to Cebu", catalog))
+      .toMatchObject({ intent: "shipping", location: "Visayas" });
+    expect(understandFromRules("How much is the shipping fee in other places outside Metro Manila?", catalog))
+      .toMatchObject({ intent: "shipping", product_query: null, location: null });
+  });
+
   it("recognizes size answers regardless of casing and common typos", () => {
     for (const answer of ["m", "MEDIUM", "meduim", "M po", "LARGE", "larg", "small", "smol"]) {
       expect(matchCatalogSize(answer, ["S", "M", "L"])).not.toBeNull();
@@ -106,6 +118,23 @@ describe("catalog-grounded message rules", () => {
     expect(matchCatalogSize("LARGE", ["S", "M", "L"])).toBe("L");
     expect(matchQuantityAnswer("dalawa po")).toBe(2);
     expect(matchQuantityAnswer("3 pcs")).toBe(3);
+  });
+
+  it("extracts Tagalog and English quantity words for catalog items", () => {
+    const examples: Array<[string, number]> = [
+      ["isa", 1], ["isang", 1], ["one", 1],
+      ["dalawa", 2], ["dalawang", 2], ["two", 2],
+      ["tatlo", 3], ["tatlong", 3], ["three", 3],
+      ["apat", 4], ["apat na", 4], ["four", 4], ["lima", 5], ["limang", 5], ["five", 5],
+      ["anim", 6], ["six", 6], ["pito", 7], ["seven", 7],
+      ["walo", 8], ["eight", 8], ["siyam", 9], ["nine", 9],
+      ["sampu", 10], ["ten", 10], ["labing isang", 11], ["eleven", 11],
+      ["labing dalawa", 12], ["twelve", 12], ["dalawampu", 20], ["twenty", 20],
+    ];
+    for (const [word, quantity] of examples) {
+      expect(understandFromRules(`magkano po ${word} medium t-shirt`, catalog).quantity)
+        .toBe(quantity);
+    }
   });
 
   it("recognizes short price and availability wording around item names", () => {
