@@ -9,6 +9,7 @@ export type UnderstandingIntent =
   | "order_help"
   | "catalog"
   | "size_chart"
+  | "seller_availability"
   | "shipping"
   | "complaint"
   | "other"
@@ -126,6 +127,20 @@ const intentPhrases = {
   order_confirm: ["order na", "order ko na", "confirm order", "confirm", "i-confirm", "sige kunin", "kuha ko na", "kukuha", "kunin ko", "pabili", "checkout", "mine", "go na"],
   greeting: ["hi", "hello", "hey", "good morning", "good afternoon", "good evening", "kamusta", "kumusta", "musta"],
 };
+
+export function isAcknowledgement(message: string): boolean {
+  let normalized = normalizeMessage(message);
+  if (!normalized) return false;
+  normalized = normalized.replace(/\b(ok){2,}\b/g, "ok");
+  const words = normalized.split(" ").map((word) => word.replace(/(.)\1+/g, "$1"));
+  const accepted = new Set([
+    "ok", "okay", "okey", "oki", "okie", "sure", "sige", "sge", "ge", "yes",
+    "yeah", "yep", "oo", "opo", "po", "noted", "alright", "allright", "no",
+    "problem", "thanks", "thank", "you", "salamat", "ty", "thx",
+  ]);
+  if (!words.length || words.some((word) => !accepted.has(word))) return false;
+  return words.some((word) => ["ok", "okay", "okey", "oki", "okie", "sure", "sige", "sge", "ge", "yes", "yeah", "yep", "oo", "opo", "no", "noted", "alright", "allright", "salamat", "thanks", "thank", "ty", "thx"].includes(word));
+}
 
 const stopWords = new Set([
   "magkano", "how", "much", "price", "presyo", "hm", "cost", "available",
@@ -352,9 +367,13 @@ export function understandFromRules(
     resolveProduct(productQuery, catalog).status === "ambiguous";
   const availabilityCue = hasAny(normalized, intentPhrases.availability) ||
     (bestMatch && size !== null && /\b(may|meron|mayroon)\b/.test(normalized));
+  const sellerAvailability = /\b(what time|anong oras|anong araw|kailan|kelan|when|anong oras)\b/.test(normalized) &&
+    /\b(seller|siya|sya|kayo|owner|shop)\b/.test(normalized) &&
+    /\b(avail|available|online|active|free)\b/.test(normalized);
 
   let intent: UnderstandingIntent = "unknown";
-  if (hasAny(normalized, intentPhrases.size_chart)) intent = "size_chart";
+  if (sellerAvailability) intent = "seller_availability";
+  else if (hasAny(normalized, intentPhrases.size_chart)) intent = "size_chart";
   else if (hasAny(normalized, intentPhrases.catalog)) intent = "catalog";
   else if (hasAny(normalized, intentPhrases.complaint)) intent = "complaint";
   else if (hasAny(normalized, intentPhrases.other)) intent = "other";

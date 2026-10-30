@@ -2,6 +2,7 @@ import {
   matchCatalogLocation,
   matchCatalogSize,
   matchQuantityAnswer,
+  isAcknowledgement,
   resolveProduct,
   understandFromRules,
   type CatalogProduct,
@@ -142,9 +143,15 @@ export function runIncomingBrain(
     missedRequest: true,
   });
   if (sellerRequest) {
-    return escalate(
+    return {
+      ...escalate(
       "Naipasa na po kayo sa seller. Pakihintay po ng reply rito; maaaring may inaasikaso lang siya ngayon.",
-    );
+      ),
+      pending: { ...input.pending, seller_handoff: true },
+    };
+  }
+  if (input.pending.seller_handoff === true && isAcknowledgement(input.message)) {
+    return base;
   }
   if (/^\s*\/start(?:@[a-z0-9_]+)?\s*$/i.test(input.message)) {
     if (input.aiMode !== "auto") return base;
@@ -294,6 +301,14 @@ export function runIncomingBrain(
       { greeting: true, automated_assistant: true },
       "Hello po! Ano pong item ang gusto ninyong itanong?",
     );
+  }
+  if (understanding.intent === "seller_availability") {
+    return {
+      ...escalate(
+        "Since I'm just an assistant, I don't know what exact day or time the seller is available. Thank you for understanding :>",
+      ),
+      pending: { ...input.pending, seller_handoff: true },
+    };
   }
   if (understanding.intent === "catalog") {
     const activeProducts = input.products.filter((item) => item.active);

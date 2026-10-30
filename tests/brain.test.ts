@@ -208,6 +208,54 @@ describe("grounded incoming conversation brain", () => {
     expect(result.reply).toContain("seller");
   });
 
+  it("stores seller handoff and stays silent on acknowledgement messages", async () => {
+    const handoff = await runIncomingBrain({ ...baseInput, message: "/seller" });
+    expect(handoff.reply).toContain("Naipasa na po kayo sa seller");
+    expect(handoff.pending.seller_handoff).toBe(true);
+
+    for (const message of ["ok", "okayy", "okok", "sgee", "okay sigee", "sure no problem"]) {
+      const result = await runIncomingBrain({
+        ...baseInput,
+        message,
+        pending: handoff.pending,
+      });
+      expect(result.action).toBe("none");
+      expect(result.reply).toBeNull();
+      expect(result.pending.seller_handoff).toBe(true);
+    }
+  });
+
+  it("continues answering new questions during seller handoff", async () => {
+    const result = await runIncomingBrain({
+      ...baseInput,
+      message: "hm Isla blouse?",
+      pending: { seller_handoff: true },
+    });
+    expect(result.action).toBe("reply");
+    expect(result.reply).toContain("Isla Linen Top");
+    expect(result.pending.seller_handoff).toBe(true);
+  });
+
+  it("explains that the assistant cannot know the seller's schedule", async () => {
+    const result = await runIncomingBrain({
+      ...baseInput,
+      message: "mga what time po kaya sya avail?",
+      pending: { seller_handoff: true },
+    });
+    expect(result.reply).toContain("I don't know what exact day or time");
+    expect(result.needsSeller).toBe(true);
+    expect(result.missedRequest).toBe(true);
+    expect(result.pending.seller_handoff).toBe(true);
+
+    const thanks = await runIncomingBrain({
+      ...baseInput,
+      message: "okayy",
+      pending: result.pending,
+    });
+    expect(thanks.action).toBe("none");
+    expect(thanks.reply).toBeNull();
+  });
+
   it("lists all active catalog items with their current offer, sizes, and stock", async () => {
     const second: BrainProduct = {
       ...product,

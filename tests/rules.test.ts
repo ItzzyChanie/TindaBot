@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { matchCatalogSize, matchQuantityAnswer, understandFromRules, type CatalogProduct } from "../supabase/functions/_shared/rules";
+import { isAcknowledgement, matchCatalogSize, matchQuantityAnswer, understandFromRules, type CatalogProduct } from "../supabase/functions/_shared/rules";
 
 const catalog: CatalogProduct[] = [
   {
@@ -128,6 +128,26 @@ describe("catalog-grounded message rules", () => {
       "See Size Chart",
     ]) {
       expect(understandFromRules(message, catalog).intent).toBe("size_chart");
+    }
+  });
+
+  it("recognizes acknowledgement replies with casing, repeated letters, and common typos", () => {
+    for (const message of [
+      "ok", "ok ok", "okok", "okay", "okayy", "sure", "suree", "sige", "sge", "sgee",
+      "okay sigee", "ok sige", "sure, no problem", "sige po", "no problem", "thank you",
+    ]) {
+      expect(isAcknowledgement(message)).toBe(true);
+    }
+    expect(isAcknowledgement("okay, how much is the shirt?")).toBe(false);
+  });
+
+  it("recognizes questions about the seller's availability time", () => {
+    for (const message of [
+      "what time po kaya sya avail?",
+      "mga what time po kaya siya available?",
+      "what time po kayo available?",
+    ]) {
+      expect(understandFromRules(message, catalog).intent).toBe("seller_availability");
     }
   });
 });
