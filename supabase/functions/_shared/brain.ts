@@ -218,8 +218,21 @@ export function runIncomingBrain(
   const contextProduct = input.products.find((product) =>
     product.active && product.id === input.contextProductId
   );
-  const refersToSelectedProduct = /\b(this|that|it|these|those|ito|nito|iyan|iyon|yun|yung item|item na ito)\b/i
+  const refersToSelectedProduct = /\b(this|that|it|these|those|ito|dito|nito|iyan|diyan|iyon|yun|dun|yung item|item na ito)\b/i
     .test(input.message.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase());
+  if (
+    contextProduct && understanding.intent === "price" &&
+    understanding.quantities_mentioned.length === 0
+  ) {
+    const quantity = matchQuantityAnswer(input.message);
+    if (quantity !== null) {
+      understanding = {
+        ...understanding,
+        quantity,
+        quantities_mentioned: [quantity],
+      };
+    }
+  }
   if (contextProduct && (!understanding.product_query || refersToSelectedProduct) &&
     ["price", "availability", "question", "order_confirm"].includes(understanding.intent)) {
     understanding = {

@@ -109,6 +109,26 @@ describe("grounded incoming conversation brain", () => {
     expect(result.needsSeller).toBe(false);
   });
 
+  it("uses the shop-selected item and Tagalog quantity words for short price follow-ups", async () => {
+    const examples: Array<[string, number, string]> = [
+      ["How much po sa tatlo?", 3, "99.99"],
+      ["Magkano po dito kapag tatlo?", 3, "99.99"],
+      ["magkano po sa apat?", 4, "133.32"],
+    ];
+    for (const [message, quantity, subtotal] of examples) {
+      const result = await runIncomingBrain({
+        ...baseInput,
+        message,
+        contextProductId: product.id,
+      });
+
+      expect(result.reply).toContain(product.name);
+      expect(result.reply).toContain(`x${quantity}`);
+      expect(result.reply).toContain(subtotal);
+      expect(result.needsSeller).toBe(false);
+    }
+  });
+
   it("prefers the selected shop item over a mistaken deictic product phrase", async () => {
     const result = await runIncomingBrain({
       ...baseInput,

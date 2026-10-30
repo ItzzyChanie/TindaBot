@@ -196,7 +196,7 @@ const stopWords = new Set([
   "the", "a", "an", "is", "are", "in", "from", "at", "of", "to", "for", "me", "please", "paki", "po",
   "ang", "yung", "ng", "sa", "pa", "ano", "anong", "deliver", "delivery", "ship", "shipping",
   "fee", "item", "items", "pcs", "pc", "piece", "pieces", "piraso", "qty",
-  "quantity", "size", "sizes", "order", "gusto", "ko", "nito", "iyan", "ito", "na",
+  "quantity", "size", "sizes", "order", "gusto", "ko", "nito", "iyan", "ito", "dito", "diyan", "dun", "na",
   "with", "and", "or", "medium", "med", "small", "large", "extra", "xl", "xxl", "kayo", "kayong", "kami", "nyo", "ninyo", "ninyong", "what", "are", "have",
   "this", "that", "ibang", "lugar", "other", "place", "places", "area", "areas", "outside", "province", "provinces", "provincial", "elsewhere", "another", "different", "location", "locations",
   ...Object.keys(numberWords).flatMap((word) => word.split(" ")),
@@ -210,7 +210,7 @@ export function normalizeMessage(value: string): string {
 function normalizeProductQuery(value: string): string {
   return normalizeMessage(value)
     .replace(/\bt\s*shirt\b/g, " tshirt ")
-    .replace(/\b(na|po|opo|please|pls|paki|yung|ang|itong|ito|nito|ba|kaya)\b/g, " ")
+    .replace(/\b(na|po|opo|please|pls|paki|yung|ang|itong|ito|dito|nito|diyan|dun|ba|kaya)\b/g, " ")
     .replace(/\s+/g, " ").trim();
 }
 
