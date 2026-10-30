@@ -11,6 +11,9 @@ type Settings = {
   payment_instructions: string;
   policies: string;
   size_chart_url: string | null;
+  greeting_text: string;
+  shipping_text: string;
+  faq_answers: Record<string, string>;
 };
 
 async function compressSizeChart(file: File): Promise<File> {
@@ -50,16 +53,24 @@ function storagePathFromPublicUrl(value: string | null): string | null {
 export function SettingsForm({
   initialSettings,
   initialError,
+  sellerName,
+  sellerEmail,
 }: {
   initialSettings: Settings | null;
   initialError: string;
+  sellerName: string;
+  sellerEmail: string;
 }) {
   const [settings, setSettings] = useState<Settings>({
     shipping_rates: initialSettings?.shipping_rates ?? {},
     payment_instructions: initialSettings?.payment_instructions ?? "",
     policies: initialSettings?.policies ?? "",
     size_chart_url: initialSettings?.size_chart_url ?? null,
+    greeting_text: initialSettings?.greeting_text ?? "",
+    shipping_text: initialSettings?.shipping_text ?? "",
+    faq_answers: initialSettings?.faq_answers ?? {},
   });
+  const [name, setName] = useState(sellerName);
   const [sizeChartFile, setSizeChartFile] = useState<File | null>(null);
   const [storedChartUrl, setStoredChartUrl] = useState(initialSettings?.size_chart_url ?? null);
   const [busy, setBusy] = useState(false);
@@ -73,6 +84,8 @@ export function SettingsForm({
     setNotice("");
     try {
       const supabase = createSupabaseBrowserClient();
+      const { error: profileError } = await supabase.auth.updateUser({ data: { full_name: name.trim() } });
+      if (profileError) throw profileError;
       const previousUrl = storedChartUrl;
       let sizeChartUrl = settings.size_chart_url;
       let uploadedPath: string | null = null;
@@ -131,6 +144,21 @@ export function SettingsForm({
         onSubmit={(event) => void save(event)}
       >
         <section>
+          <p className="eyebrow">SELLER PROFILE</p>
+          <h2>General information</h2>
+          <label className="settings-label">Full name<input required maxLength={120} value={name} onChange={(event) => setName(event.target.value)} /></label>
+          <label className="settings-label">Account email<input type="email" value={sellerEmail} readOnly aria-readonly="true" /></label>
+        </section>
+        <section>
+          <p className="eyebrow">AUTOMATED REPLIES</p>
+          <h2>Seller-editable answers</h2>
+          <p className="muted">These answers are used for matching questions. Replies stay limited to the catalog and shop details.</p>
+          <label className="settings-label">Greeting<textarea rows={3} maxLength={1000} value={settings.greeting_text} onChange={(event) => setSettings({ ...settings, greeting_text: event.target.value })} placeholder="Kumusta po! Ano pong item ang gusto ninyong itanong?" /></label>
+          <label className="settings-label">Shipping details<textarea rows={3} maxLength={1500} value={settings.shipping_text} onChange={(event) => setSettings({ ...settings, shipping_text: event.target.value })} placeholder="Add dispatch timing and delivery details that apply to your shop." /></label>
+          <label className="settings-label">How to order<textarea rows={3} maxLength={1000} value={settings.faq_answers.order_help ?? ""} onChange={(event) => setSettings({ ...settings, faq_answers: { ...settings.faq_answers, order_help: event.target.value } })} placeholder="Tell customers what details they should send to place an order." /></label>
+          <label className="settings-label">Payment FAQ answer<textarea rows={3} maxLength={1000} value={settings.faq_answers.payment ?? ""} onChange={(event) => setSettings({ ...settings, faq_answers: { ...settings.faq_answers, payment: event.target.value } })} placeholder="Leave blank to use the payment instructions below." /></label>
+        </section>
+        <section>
           <p className="eyebrow">DELIVERY</p>
           <h2>Shipping rates</h2>
           <p className="muted">
@@ -165,6 +193,7 @@ export function SettingsForm({
             ))}
           </div>
         </section>
+        <p className="muted settings-privacy-note">Chat messages are retained for 90 days. Customers see a privacy notice when chat starts.</p>
         <section>
           <p className="eyebrow">CUSTOMER HELP</p>
           <h2>Size chart</h2>

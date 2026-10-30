@@ -17,3 +17,7 @@ Seller sign-in uses Supabase Auth email and password. Create seller accounts fro
 The message-understanding eval is rules-based and runs offline: `npm run eval:understand`. Add representative Taglish and English examples to `eval/messages.json`; the evaluator uses the same catalog phrase rules as Telegram. The Telegram assistant does not call an AI provider; intent and catalog matching use local rules, and all price offers use `quote()`.
 
 This repository contains mock UI data only. Keep credentials in local environment files and never commit them. To enable the staged-secret commit check, run `git config core.hooksPath .githooks` once in this clone.
+
+## Chat privacy and retention
+
+The chat widget and the assistant's first reply disclose that the assistant is automated and that chat messages are retained for 90 days. Do not send payment credentials or other sensitive information in chat. For this MVP, the 90-day retention period is the operating rule; expired chat records must be deleted by the shop operator from Supabase. Automated deletion is not configured yet.

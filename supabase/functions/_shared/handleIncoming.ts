@@ -210,11 +210,11 @@ export async function handleIncoming(
 
   const { data: settingsRow, error: settingsError } = await supabase
     .from("shop_settings")
-    .select("shipping_rates, payment_instructions, policies, size_chart_url")
+    .select("shipping_rates, payment_instructions, policies, size_chart_url, greeting_text, shipping_text, faq_answers")
     .eq("shop_id", "00000000-0000-4000-8000-000000000001")
     .maybeSingle();
   if (settingsError) throw settingsError;
-  const settings = settingsRow ?? { shipping_rates: {}, payment_instructions: "", policies: "", size_chart_url: null };
+  const settings = settingsRow ?? { shipping_rates: {}, payment_instructions: "", policies: "", size_chart_url: null, greeting_text: "", shipping_text: "", faq_answers: {} };
   const { data: latestOrderRow, error: orderError } = await supabase
     .from("orders")
     .select("id, total, shipping, status, created_at")
@@ -237,6 +237,9 @@ export async function handleIncoming(
       payment_instructions: settings.payment_instructions ?? "",
       policies: settings.policies ?? "",
       size_chart_url: settings.size_chart_url ?? null,
+      greeting_text: settings.greeting_text ?? "",
+      shipping_text: settings.shipping_text ?? "",
+      faq_answers: object(settings.faq_answers) as Record<string, string>,
     },
     latestOrder: latestOrderRow
       ? {

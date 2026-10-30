@@ -6,13 +6,12 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 
 const links = [
   { href: "/", label: "Overview", icon: "⌂" },
-  { href: "/inbox", label: "Inbox", icon: "▤", count: "4" },
+  { href: "/inbox", label: "Inbox", icon: "▤" },
   { href: "/catalog", label: "Catalog", icon: "◫" },
   { href: "/orders", label: "Orders", icon: "▣" },
   { href: "/insights", label: "Insights", icon: "▥" },
   { href: "/storefront", label: "Storefront", icon: "↗" },
-
-  { href: "/settings", label: "Settings", icon: "Settings" },
+  { href: "/settings", label: "Settings", icon: "⚙" },
 ];
 
 export function AppShell({
@@ -27,6 +26,8 @@ export function AppShell({
   const email = userEmail ?? "Seller account";
   const [signOutError, setSignOutError] = useState("");
   const [unreadCount, setUnreadCount] = useState(0);
+  const [menuOpen, setMenuOpen] = useState(false);
+  useEffect(() => setMenuOpen(false), [pathname]);
   const refreshUnread = useCallback(async () => {
     const { createSupabaseBrowserClient } = await import("@/lib/supabase/client");
     const { count, error } = await createSupabaseBrowserClient()
@@ -71,7 +72,7 @@ export function AppShell({
 
   return (
     <div className="app-layout">
-      <aside className="sidebar">
+      <aside className={`sidebar${menuOpen ? " open" : ""}`}>
         <Link href="/" className="brand">
           <span className="brand-mark" aria-hidden="true">
             t
@@ -80,21 +81,14 @@ export function AppShell({
             Tinda<span className="brand-accent">Bot</span>
           </span>
         </Link>
-        <div className="shop-switcher">
-          <span className="shop-avatar">M</span>
-          <span className="shop-details">
-            <strong>Mia&apos;s Closet</strong>
-            <small>Free plan</small>
-          </span>
-          <span className="chevron">⌄</span>
-        </div>
-        <nav className="main-nav" aria-label="Main navigation">
+        <nav className="main-nav" id="primary-navigation" aria-label="Main navigation">
           <span className="nav-label">WORKSPACE</span>
           {links.map((link) => (
             <Link
               key={link.href}
               href={link.href}
               className={`nav-link${pathname === link.href ? " active" : ""}`}
+              aria-current={pathname === link.href ? "page" : undefined}
             >
               <span className="nav-icon" aria-hidden="true">
                 {link.icon}
@@ -145,10 +139,12 @@ export function AppShell({
               Tinda<span className="brand-accent">Bot</span>
             </span>
           </Link>
-          <button className="mobile-menu" aria-label="Menu">
-            ☰
+          <button className="mobile-menu" aria-label={menuOpen ? "Close menu" : "Open menu"}
+            aria-expanded={menuOpen} aria-controls="primary-navigation" onClick={() => setMenuOpen((open) => !open)}>
+            {menuOpen ? "×" : "☰"}
           </button>
         </header>
+        {menuOpen && <button className="menu-backdrop" aria-label="Close navigation" onClick={() => setMenuOpen(false)} />}
         {children}
       </main>
     </div>

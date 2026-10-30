@@ -42,6 +42,9 @@ export type BrainInput = {
     payment_instructions: string;
     policies: string;
     size_chart_url: string | null;
+    greeting_text?: string;
+    shipping_text?: string;
+    faq_answers?: Record<string, string>;
   };
   latestOrder?: {
     id: number;
@@ -69,7 +72,7 @@ export type BrainRules = {
 
 const defaultRules: BrainRules = { understand: understandFromRules };
 const disclosure =
-  "Automated assistant po ito ng shop. I-type ang SELLER para makausap ang seller.";
+  "Automated assistant po ito ng shop. I-type ang SELLER para makausap ang seller. Privacy notice: chat messages are retained for 90 days po.";
 const unknownMessageReply =
   "I-check ko muna ito sa seller po. Kaya kong tumulong sa presyo, size at stock, shipping, bayad, at order status.";
 
@@ -192,7 +195,7 @@ export function runIncomingBrain(
     return {
       ...base,
       action: "reply",
-      reply: "Kumusta po! Ako ang automated assistant ng shop, kaya assistant po ang kausap ninyo ngayon." + productWelcome + " Maaari akong sumagot ng basic questions tungkol sa catalog items, presyo, sizes at stock, shipping, payment, at paano mag-order. Mag-type ng /assistant para magpatuloy sa assistant o /seller para makausap ang seller; kapag nag-switch po kayo sa seller, pakihintay ang reply niya rito.",
+      reply: ((input.settings.greeting_text ?? "").trim() || "Kumusta po!") + " Ako ang automated assistant ng shop." + productWelcome + " Maaari akong sumagot ng basic questions tungkol sa catalog items, presyo, sizes at stock, shipping, payment, at paano mag-order. Mag-type ng /assistant para magpatuloy sa assistant o /seller para makausap ang seller; kapag nag-switch po kayo sa seller, pakihintay ang reply niya rito. Privacy notice: chat messages are retained for 90 days po.",
     };
   }
 
@@ -361,7 +364,7 @@ export function runIncomingBrain(
   if (understanding.intent === "greeting") {
     return respond(
       { greeting: true, automated_assistant: true },
-      "Hello po! Ano pong item ang gusto ninyong itanong?",
+      (input.settings.greeting_text ?? "").trim() || "Hello po! Ano pong item ang gusto ninyong itanong?",
     );
   }
   if (understanding.intent === "seller_availability") {
@@ -404,17 +407,18 @@ export function runIncomingBrain(
   if (understanding.intent === "order_help") {
     return respond(
       { order_help: true },
-      "Para mag-order po, sabihin ang item, size, quantity, at delivery area. Iche-check ko ang stock at total bago ko hingin ang confirmation.",
+      input.settings.faq_answers?.order_help?.trim() || "Para mag-order po, sabihin ang item, size, quantity, at delivery area. Iche-check ko ang stock at total bago ko hingin ang confirmation.",
     );
   }
   if (understanding.intent === "payment") {
-    if (!input.settings.payment_instructions.trim())
+    const paymentReply = input.settings.faq_answers?.payment?.trim() || input.settings.payment_instructions.trim();
+    if (!paymentReply)
       return escalate(
         "Wala pa po akong payment instructions. I-check ko muna sa seller po.",
       );
     return respond(
-      { payment_instructions: input.settings.payment_instructions },
-      "Payment instructions po: " + input.settings.payment_instructions,
+      { payment_instructions: paymentReply },
+      "Payment instructions po: " + paymentReply,
     );
   }
   if (understanding.intent === "status") {
@@ -472,7 +476,7 @@ export function runIncomingBrain(
         );
       return respond(
         { shipping_regions: Object.keys(input.settings.shipping_rates) },
-        "Anong area po kayo: Metro Manila, Luzon, Visayas, o Mindanao?",
+      (input.settings.shipping_text?.trim() ? input.settings.shipping_text.trim() + " " : "") + "Anong area po kayo: Metro Manila, Luzon, Visayas, o Mindanao?",
         { ...activePending, clarification: { kind: "location", intent: "shipping" } },
       );
     }
@@ -515,7 +519,7 @@ export function runIncomingBrain(
     }
     return respond(
       { region, shipping: rate, amounts: [rate] },
-      "Shipping to " + region + " po ay " + peso(rate) + ".",
+      (input.settings.shipping_text?.trim() ? input.settings.shipping_text.trim() + " " : "") + "Shipping to " + region + " po ay " + peso(rate) + ".",
     );
   }
 
