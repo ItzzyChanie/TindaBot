@@ -73,7 +73,7 @@ export default function ShopPage() {
       <header className="shop-header">
         <Link href="/shop" className="brand"><span className="brand-mark" aria-hidden="true">t</span><span>Tinda<span className="brand-accent">Bot</span></span></Link>
         <p>Mga available na item po</p>
-        <label className="shop-search"><span className="sr-only">Search products</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Maghanap ng item…" /></label>
+        <label className="shop-search"><span className="sr-only">Search products</span><input suppressHydrationWarning value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Maghanap ng item…" /></label>
       </header>
       {error && <p className="shop-error" role="alert">{error}</p>}
       {loading ? <p className="shop-state">Loading catalog…</p> : filtered.length === 0 ? <p className="shop-state">{search ? "Walang matching item po." : "Wala pang available na item sa shop."}</p> : (
