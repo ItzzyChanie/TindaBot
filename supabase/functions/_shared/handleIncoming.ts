@@ -117,6 +117,14 @@ export async function handleIncoming(
 ) {
   if (text.length > 4000) throw new Error("Message is too long");
 
+  let productId: string | null = null;
+  if (context.productId && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(context.productId)) {
+    const { data: contextProduct, error } = await supabase.from("products")
+      .select("id").eq("id", context.productId).eq("active", true).maybeSingle();
+    if (error) throw error;
+    productId = contextProduct?.id ?? null;
+  }
+
   const { data: customer, error: customerError } = await supabase
     .from("customers")
     .upsert({ channel, external_id: externalId, name: context.name ?? null }, { onConflict: "channel,external_id" })
@@ -126,7 +134,7 @@ export async function handleIncoming(
 
   const { data: existing, error: conversationError } = await supabase
     .from("conversations")
-    .select("id, status, ai_mode, pending")
+    .select("id, status, ai_mode, pending, context_product_id")
     .eq("customer_id", customer.id)
     .in("status", ["open", "needs_seller"])
     .order("last_message_at", { ascending: false })
@@ -139,13 +147,18 @@ export async function handleIncoming(
   if (!conversationId) {
     const { data: created, error } = await supabase
       .from("conversations")
-      .insert({ customer_id: customer.id, context_product_id: context.productId ?? null })
+      .insert({ customer_id: customer.id, context_product_id: productId })
       .select("id, status, ai_mode, pending")
       .single();
     if (error) throw error;
     conversationId = created.id;
   }
   if (!conversationId) throw new Error("Could not create a conversation");
+  if (existing && productId) {
+    const { error } = await supabase.from("conversations")
+      .update({ context_product_id: productId }).eq("id", conversationId);
+    if (error) throw error;
+  }
 
   const { error: messageError } = await supabase.from("messages").insert({
     conversation_id: conversationId,
@@ -213,6 +226,7 @@ export async function handleIncoming(
 
   const brain = await runIncomingBrain({
     message: text,
+    contextProductId: productId ?? (existing?.context_product_id as string | null | undefined) ?? null,
     aiMode,
     status: conversation.status as "open" | "needs_seller" | "resolved",
     firstContact,

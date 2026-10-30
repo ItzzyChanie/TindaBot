@@ -25,3 +25,13 @@
 - Send `/seller`, then an acknowledgment such as `ok`; confirm the assistant does not reply to the acknowledgment. Ask a new supported question and confirm the assistant can still answer it.
 - In Human mode, send `/start` and a regular message; confirm the assistant does not send an automatic reply.
 - Reply from the seller inbox to a Telegram conversation and confirm Telegram delivery still works.
+
+## Day 9 public shop
+
+1. Apply the Day 9 migration, deploy the Telegram webhook, and open `/shop` while signed out.
+2. Run `deno run --allow-env=NEXT_PUBLIC_SUPABASE_URL,NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,NEXT_PUBLIC_SUPABASE_ANON_KEY --allow-net --env-file=.env.local scripts/check-public-catalog.mts`. It must report that the anon key reads `public_catalog` and is denied from `products`.
+3. Confirm only active products appear. Compare displayed price and old price against catalog preview for regular discounts; verify quantity offers have badges without changing the displayed single-unit price.
+4. Search by a product name and partial description. Check images, availability labels, sizes, and crossed-out sold-out sizes. The public result must never reveal exact stock counts.
+5. Click **Ask about this**. The URL should open `/chat?product=ID`; ask “magkano po ito?” and confirm the reply uses that product context. Refresh and confirm the context remains.
+6. Click **Ask on Telegram**. `/start product_ID` should greet the customer with the item name, current `quote()` price, and in-stock sizes, with the FAQ keyboard visible.
+7. In the seller app, open **Storefront**, copy the shop link, and verify it ends in `/shop`.

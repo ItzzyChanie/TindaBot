@@ -49,6 +49,7 @@ export default function ChatPage() {
   const cursorRef = useRef<string | null>(null);
   const seenRef = useRef(new Set<string>());
   const requestBusyRef = useRef(false);
+  const productIdRef = useRef<string | null>(null);
 
   const getToken = useCallback((): Promise<string> => {
     if (tokenRef.current) return Promise.resolve(tokenRef.current);
@@ -56,7 +57,7 @@ export default function ChatPage() {
     initRef.current = (async () => {
       const cached = localStorage.getItem(tokenKey);
       if (cached) return cached;
-      const result = await widgetRequest("widget-session", {});
+      const result = await widgetRequest("widget-session", { product_id: productIdRef.current });
       if (!result.token) throw new Error("Could not start chat. Please refresh the page.");
       localStorage.setItem(tokenKey, result.token);
       return result.token;
@@ -71,6 +72,7 @@ export default function ChatPage() {
     try {
       const result = await widgetRequest("widget-message", {
         token: sessionToken,
+        product_id: productIdRef.current,
         ...(text ? { text } : {}),
         cursor: cursorRef.current,
       });
@@ -96,6 +98,10 @@ export default function ChatPage() {
   useEffect(() => {
     let cancelled = false;
     let interval: number | undefined;
+    const productId = new URLSearchParams(window.location.search).get("product");
+    productIdRef.current = productId && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(productId)
+      ? productId
+      : null;
     void getToken().then((sessionToken) => {
       if (cancelled) return;
       tokenRef.current = sessionToken;

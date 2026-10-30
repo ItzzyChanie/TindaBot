@@ -12,6 +12,7 @@
     "seed": "node scripts/seed.mjs",
     "eval:understand": "deno run --allow-env=EVAL_LIMIT,EVAL_DIAGNOSE --allow-read=eval/messages.json scripts/eval-understand.mts",
     "test:order-concurrency": "deno run --allow-env --allow-run=psql scripts/test-order-concurrency.mts",
+    "check:public-catalog": "deno run --allow-env=NEXT_PUBLIC_SUPABASE_URL,NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,NEXT_PUBLIC_SUPABASE_ANON_KEY --allow-net --env-file=.env.local scripts/check-public-catalog.mts",
     "check:staged-secrets": "node scripts/check-staged-secrets.mjs"
   },
   "dependencies": {

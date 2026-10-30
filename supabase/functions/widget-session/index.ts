@@ -36,6 +36,15 @@ Deno.serve(async (request: Request) => {
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
   if (request.method !== "POST") return json({ error: "Method not allowed" }, 405, cors);
 
+  let body: { product_id?: unknown } = {};
+  try {
+    const rawBody = await request.text();
+    if (rawBody.length > 2048) return json({ error: "Request is too large" }, 413, cors);
+    if (rawBody) body = JSON.parse(rawBody);
+  } catch {
+    return json({ error: "Invalid JSON" }, 400, cors);
+  }
+
   const ip = request.headers.get("cf-connecting-ip") ??
     request.headers.get("x-real-ip") ??
     request.headers.get("x-forwarded-for")?.split(",")[0].trim() ??
@@ -49,6 +58,17 @@ Deno.serve(async (request: Request) => {
     return json({ error: "Could not start chat. Please try again shortly." }, 503, cors);
   }
   if (allowed !== true) return json({ error: "Too many new chats. Please try again later." }, 429, cors);
+
+  let productId: string | null = null;
+  if (body.product_id !== undefined && body.product_id !== null) {
+    if (typeof body.product_id !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(body.product_id))
+      return json({ error: "Invalid product" }, 400, cors);
+    const { data: product, error } = await supabase.from("products")
+      .select("id").eq("id", body.product_id).eq("active", true).maybeSingle();
+    if (error) return json({ error: "Could not load this product" }, 503, cors);
+    if (!product) return json({ error: "This product is no longer available" }, 404, cors);
+    productId = product.id;
+  }
 
   const rawToken = [...crypto.getRandomValues(new Uint8Array(32))]
     .map((byte) => byte.toString(16).padStart(2, "0")).join("");
@@ -68,6 +88,7 @@ Deno.serve(async (request: Request) => {
   const { error: conversationError } = await supabase.from("conversations").insert({
     id: conversationId,
     customer_id: customerId,
+    context_product_id: productId,
   });
   if (conversationError) {
     await supabase.from("customers").delete().eq("id", customerId);

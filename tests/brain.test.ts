@@ -74,6 +74,29 @@ describe("grounded incoming conversation brain", () => {
     expect(human.action).toBe("none");
   });
 
+  it("includes quote-based product details in a Telegram product deep-link welcome", async () => {
+    const result = await runIncomingBrain({
+      ...baseInput,
+      message: "/start product_10000000-0000-4000-8000-000000000009",
+      firstContact: true,
+      contextProductId: product.id,
+    });
+    expect(result.reply).toContain(product.name);
+    expect(result.reply).toContain("₱33.33");
+    expect(result.reply).toContain("Available sizes: S");
+  });
+
+  it("uses the linked product for a short follow-up price question", async () => {
+    const result = await runIncomingBrain({
+      ...baseInput,
+      message: "magkano po ito?",
+      contextProductId: product.id,
+    }, ai(understanding({ product_query: null, confidence: 0.85 })));
+
+    expect(result.reply).toContain(product.name);
+    expect(result.reply).toContain("₱99.99");
+  });
+
   it("returns to assistant mode on /assistant and clears the handoff wait", async () => {
     const result = await runIncomingBrain({
       ...baseInput,

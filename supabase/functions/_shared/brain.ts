@@ -30,6 +30,7 @@ export type BrainPending = Record<string, unknown> & {
 };
 export type BrainInput = {
   message: string;
+  contextProductId?: string | null;
   aiMode: "auto" | "suggest" | "human";
   status: "open" | "needs_seller" | "resolved";
   firstContact: boolean;
@@ -170,10 +171,20 @@ export function runIncomingBrain(
   }
   if (/^\s*\/start(?:@[a-z0-9_]+)?(?:\s+.*)?\s*$/i.test(input.message)) {
     if (input.aiMode !== "auto") return base;
+    const contextProduct = input.products.find((product) =>
+      product.active && product.id === input.contextProductId
+    );
+    const productWelcome = contextProduct
+      ? (() => {
+        const pricing = quote(contextProduct, 1, input.now ?? new Date(), contextProduct.promos);
+        const sizes = contextProduct.variants.filter((variant) => variant.stock > 0).map((variant) => variant.size);
+        return ` Tungkol sa ${contextProduct.name}: ${peso(pricing.unit)} po. Available sizes: ${sizes.length ? sizes.join(", ") : "sold out po lahat sa ngayon"}.`;
+      })()
+      : "";
     return {
       ...base,
       action: "reply",
-      reply: "Kumusta po! Ako ang automated assistant ng shop, kaya assistant po ang kausap ninyo ngayon. Maaari akong sumagot ng basic questions tungkol sa catalog items, presyo, sizes at stock, shipping, payment, at paano mag-order. Mag-type ng /assistant para magpatuloy sa assistant o /seller para makausap ang seller; kapag nag-switch po kayo sa seller, pakihintay ang reply niya rito.",
+      reply: "Kumusta po! Ako ang automated assistant ng shop, kaya assistant po ang kausap ninyo ngayon." + productWelcome + " Maaari akong sumagot ng basic questions tungkol sa catalog items, presyo, sizes at stock, shipping, payment, at paano mag-order. Mag-type ng /assistant para magpatuloy sa assistant o /seller para makausap ang seller; kapag nag-switch po kayo sa seller, pakihintay ang reply niya rito.",
     };
   }
 
@@ -196,6 +207,17 @@ export function runIncomingBrain(
       failure: "rule_evaluation_error",
     });
     return escalate(unknownMessageReply);
+  }
+  const contextProduct = input.products.find((product) =>
+    product.active && product.id === input.contextProductId
+  );
+  if (contextProduct && !understanding.product_query &&
+    ["price", "availability", "question", "order_confirm"].includes(understanding.intent)) {
+    understanding = {
+      ...understanding,
+      product_query: contextProduct.name,
+      confidence: Math.max(understanding.confidence, 0.9),
+    };
   }
   const clarificationProduct = input.products.find((item) =>
     item.active && item.id === clarification.product_id

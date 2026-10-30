@@ -108,8 +108,10 @@ async function processTelegramUpdate(
     const name = [message.from?.first_name, message.from?.last_name]
       .filter(Boolean)
       .join(" ") || message.from?.username || null;
+    const startPayload = text.match(/^\/start(?:@[a-z0-9_]+)?\s+product_([0-9a-f-]{36})\s*$/i);
     const incoming = await handleIncoming("telegram", String(chatId), text, {
       name,
+      productId: startPayload?.[1] ?? null,
       paymentProof: hasProof
         ? {
           kind: photo ? "photo" : "document",

@@ -39,7 +39,7 @@ export function AppShell({
   }, []);
 
   useEffect(() => {
-    if (pathname === "/chat" || pathname === "/login") return;
+    if (pathname === "/chat" || pathname === "/shop" || pathname === "/login") return;
     void refreshUnread();
     const supabase = createSupabaseBrowserClient();
     const channel = supabase.channel("sidebar-unread-count")
@@ -60,7 +60,7 @@ export function AppShell({
     }
   }
 
-  if (pathname === "/login" || pathname === "/chat") return <>{children}</>;
+  if (pathname === "/login" || pathname === "/chat" || pathname === "/shop") return <>{children}</>;
 
   return (
     <div className="app-layout">

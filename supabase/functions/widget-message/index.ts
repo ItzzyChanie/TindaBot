@@ -38,7 +38,7 @@ Deno.serve(async (request: Request) => {
 
   const contentLength = Number(request.headers.get("content-length") ?? 0);
   if (contentLength > 4096) return json({ error: "Request is too large" }, 413, cors);
-  let body: { token?: unknown; text?: unknown; cursor?: unknown };
+  let body: { token?: unknown; text?: unknown; cursor?: unknown; product_id?: unknown };
   try {
     const rawBody = await request.text();
     if (rawBody.length > 4096) return json({ error: "Request is too large" }, 413, cors);
@@ -50,6 +50,9 @@ Deno.serve(async (request: Request) => {
   const token = typeof body.token === "string" ? body.token : "";
   if (!/^[a-f0-9]{64}$/i.test(token)) return json({ error: "Invalid chat session" }, 401, cors);
   if (body.text !== undefined && typeof body.text !== "string") return json({ error: "Message must be text" }, 400, cors);
+  if (body.product_id !== undefined && body.product_id !== null &&
+    (typeof body.product_id !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(body.product_id)))
+    return json({ error: "Invalid product" }, 400, cors);
   const text = typeof body.text === "string" ? body.text : "";
   if ([...text].length > 500) return json({ error: "Messages can be up to 500 characters" }, 413, cors);
   const message = text.trim();
@@ -79,8 +82,19 @@ Deno.serve(async (request: Request) => {
   if (allowed !== true) return json({ error: "Sending messages too quickly. Please wait a moment." }, 429, cors);
 
   let conversationId = session.conversation_id as string;
+  let productId = typeof body.product_id === "string" ? body.product_id : null;
+  if (productId) {
+    const { data: product, error } = await supabase.from("products")
+      .select("id").eq("id", productId).eq("active", true).maybeSingle();
+    if (error) return json({ error: "Could not load this product" }, 503, cors);
+    if (!product) return json({ error: "This product is no longer available" }, 404, cors);
+    productId = product.id;
+    const { error: contextError } = await supabase.from("conversations")
+      .update({ context_product_id: productId }).eq("id", conversationId);
+    if (contextError) throw contextError;
+  }
   if (message) {
-    const incoming = await handleIncoming("web", session.customer_id, message, { name: "Web chat visitor" });
+    const incoming = await handleIncoming("web", session.customer_id, message, { name: "Web chat visitor", productId });
     conversationId = incoming.conversationId;
     if (conversationId !== session.conversation_id) {
       const { error: updateError } = await supabase.from("widget_sessions")
