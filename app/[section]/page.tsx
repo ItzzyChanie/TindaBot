@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+﻿import { notFound } from "next/navigation";
 
 const pages: Record<
   string,
@@ -7,27 +7,22 @@ const pages: Record<
   inbox: {
     title: "Inbox",
     description: "All your customer conversations, together.",
-    icon: "▤",
+    icon: "â–¤",
   },
   catalog: {
     title: "Catalog",
     description: "Manage your products, sizes, and availability.",
-    icon: "◫",
+    icon: "â—«",
   },
   orders: {
     title: "Orders",
     description: "Keep track of customer orders from chat to checkout.",
-    icon: "▣",
-  },
-  insights: {
-    title: "Insights",
-    description: "A clear view of how your shop is doing.",
-    icon: "▥",
+    icon: "â–£",
   },
   storefront: {
     title: "Storefront",
     description: "A simple place for customers to browse your products.",
-    icon: "↗",
+    icon: "â†—",
   },
 };
 

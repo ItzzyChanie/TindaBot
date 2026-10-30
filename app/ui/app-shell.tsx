@@ -1,17 +1,17 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 
 const links = [
-  { href: "/", label: "Overview", icon: "⌂" },
-  { href: "/inbox", label: "Inbox", icon: "▤" },
-  { href: "/catalog", label: "Catalog", icon: "◫" },
-  { href: "/orders", label: "Orders", icon: "▣" },
-  { href: "/insights", label: "Insights", icon: "▥" },
-  { href: "/storefront", label: "Storefront", icon: "↗" },
-  { href: "/settings", label: "Settings", icon: "⚙" },
+  { href: "/", label: "Overview", icon: "âŒ‚" },
+  { href: "/insights", label: "Insights", icon: "\u25A5" },
+  { href: "/inbox", label: "Inbox", icon: "â–¤" },
+  { href: "/catalog", label: "Catalog", icon: "â—«" },
+  { href: "/orders", label: "Orders", icon: "â–£" },
+  { href: "/storefront", label: "Storefront", icon: "â†—" },
+  { href: "/settings", label: "Settings", icon: "âš™" },
 ];
 
 export function AppShell({
@@ -124,7 +124,7 @@ export function AppShell({
               aria-label="Sign out"
               title="Sign out"
             >
-              ↗
+              â†—
             </button>
           </div>
         </div>
@@ -141,7 +141,7 @@ export function AppShell({
           </Link>
           <button className="mobile-menu" aria-label={menuOpen ? "Close menu" : "Open menu"}
             aria-expanded={menuOpen} aria-controls="primary-navigation" onClick={() => setMenuOpen((open) => !open)}>
-            {menuOpen ? "×" : "☰"}
+            {menuOpen ? "Ã—" : "â˜°"}
           </button>
         </header>
         {menuOpen && <button className="menu-backdrop" aria-label="Close navigation" onClick={() => setMenuOpen(false)} />}

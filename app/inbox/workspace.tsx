@@ -50,6 +50,17 @@ function formatTime(value: string) {
   }).format(new Date(value));
 }
 
+function isSimulatedChannel(channel?: string) {
+  return channel === "messenger_simulated" || channel === "instagram_simulated";
+}
+
+function channelLabel(channel?: string | null) {
+  if (channel === "web") return "Web chat";
+  if (channel === "messenger_simulated") return "Messenger · Coming soon (simulated)";
+  if (channel === "instagram_simulated") return "Instagram · Coming soon (simulated)";
+  return channel ?? "Unknown channel";
+}
+
 export function InboxWorkspace() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -220,7 +231,7 @@ export function InboxWorkspace() {
 
   async function sendReply(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!selected || !draft.trim() || sending) return;
+    if (!selected || isSimulatedChannel(selected.customers?.channel) || !draft.trim() || sending) return;
     const text = draft.trim();
     if (text.length > 4000) {
       setError("Hanggang 4,000 characters lang po bawat reply.");
@@ -252,7 +263,7 @@ export function InboxWorkspace() {
   }
 
   async function sendDraft() {
-    if (!selected?.pending.ai_draft || sending) return;
+    if (!selected?.pending.ai_draft || isSimulatedChannel(selected.customers?.channel) || sending) return;
     setSending(true);
     setError("");
     try {
@@ -337,6 +348,7 @@ export function InboxWorkspace() {
         <button className="text-button" onClick={() => setShowHidden((value) => !value)}>
           {showHidden ? "Show active conversations" : "View hidden conversations"}
         </button>
+        <p className="simulated-note">Messenger and Instagram examples are coming soon (simulated). No channel API is connected.</p>
         {loading ? (
           <p className="inbox-state">Loading conversations…</p>
         ) : error && conversations.length === 0 ? (
@@ -382,7 +394,7 @@ export function InboxWorkspace() {
                       {latest?.body ?? "No messages yet"}
                     </span>
                     <span className="channel-badge">
-                      {contact?.channel === "web" ? "Web chat" : contact?.channel ?? "unknown"}
+                      {channelLabel(contact?.channel)}
                     </span>
                   </span>
                   <time className="conversation-time">
@@ -413,7 +425,7 @@ export function InboxWorkspace() {
               </span>
               <div className="thread-contact">
                 <strong>{customer?.name || customer?.external_id}</strong>
-                <span>{customer?.channel ?? "Unknown channel"}</span>
+                <span>{channelLabel(customer?.channel)}</span>
               </div>
               {selected.status === "needs_seller" && (
                 <span className="needs-badge thread-needs">Needs you</span>
@@ -480,7 +492,9 @@ export function InboxWorkspace() {
                 </div>
               </div>
             )}
-            <form className="reply-form" onSubmit={sendReply}>
+            {isSimulatedChannel(customer?.channel) ? (
+              <p className="simulated-note thread-simulated-note">Coming soon (simulated) po ito. This sample thread is read-only and sends no message to Messenger or Instagram.</p>
+            ) : <form className="reply-form" onSubmit={sendReply}>
               <label className="sr-only" htmlFor="seller-reply">
                 Write a reply
               </label>
@@ -502,7 +516,7 @@ export function InboxWorkspace() {
                   {sending ? "Sending…" : "Send reply"}
                 </button>
               </div>
-            </form>
+            </form>}
           </>
         ) : (
           <div className="thread-placeholder">
@@ -528,7 +542,7 @@ export function InboxWorkspace() {
                   .toUpperCase()}
               </span>
               <h2>{customer.name || "Customer"}</h2>
-              <span className="channel-badge">{customer.channel === "web" ? "Web chat" : customer.channel}</span>
+              <span className="channel-badge">{channelLabel(customer.channel)}</span>
             </div>
             <dl className="customer-details">
               <div>

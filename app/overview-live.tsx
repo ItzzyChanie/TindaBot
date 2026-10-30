@@ -25,8 +25,8 @@ function ago(value: string, now: number) {
   return `${Math.floor(hours / 24)} days ago`;
 }
 
-export function OverviewLive({ name, openCount, orderCount, sales, inStock, productCount, activities, children }: {
-  name: string; openCount: number; orderCount: number; sales: number; inStock: number;
+export function OverviewLive({ name, openCount, needsSeller, orderCount, sales, inStock, productCount, activities, children }: {
+  name: string; openCount: number; needsSeller: number; orderCount: number; sales: number; inStock: number;
   productCount: number; activities: Activity[]; children: ReactNode;
 }) {
   const router = useRouter();
@@ -51,6 +51,7 @@ export function OverviewLive({ name, openCount, orderCount, sales, inStock, prod
   const date = new Intl.DateTimeFormat("en-PH", { timeZone: "Asia/Manila", weekday: "long", month: "long", day: "numeric" }).format(now);
   const stats = [
     { label: "Open conversations", value: String(openCount), note: "Current shop conversations" },
+    { label: "Needs you", value: String(needsSeller), note: "Open seller escalations" },
     { label: "Orders this week", value: String(orderCount), note: `₱${sales.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} total sales` },
     { label: "Products in stock", value: String(inStock), note: `Across ${productCount} active styles` },
   ];
@@ -60,5 +61,11 @@ export function OverviewLive({ name, openCount, orderCount, sales, inStock, prod
     <section className="overview-grid"><article className="panel activity-panel"><div className="panel-heading"><div><p className="eyebrow">Your shop</p><h2>Recent activity</h2></div><Link className="text-button" href="/inbox">View all <span aria-hidden="true">→</span></Link></div>
       {activities.length ? activities.map((activity, index) => <Link className="activity-row" href={`/inbox?conversation=${encodeURIComponent(activity.conversationId)}`} key={`${activity.conversationId}-${activity.id}-${index}`}><span className="avatar avatar-mint" aria-hidden="true">{activity.name.slice(0, 1).toUpperCase()}</span><div><strong>{activity.name}</strong><p>{activity.body}</p></div><time dateTime={activity.time}>{ago(activity.time, now.getTime())}</time></Link>) : <p className="muted">No conversations yet.</p>}
     </article><article className="panel storefront-card"><div className="store-icon" aria-hidden="true">✳</div><p className="eyebrow">Your storefront</p><h2>Looking good, {name}!</h2><p className="muted">Your customers can browse what&apos;s available right now.</p><Link className="button button-light" href="/storefront">View storefront <span aria-hidden="true">↗</span></Link></article></section>
+    <section className="overview-about" aria-label="About TindaBot">
+      <article className="panel"><p className="eyebrow">THE GOAL</p><h2>Make chat selling easier to manage</h2><p className="muted">TindaBot helps Filipino clothing sellers answer common customer questions and manage orders in one workspace.</p></article>
+      <article className="panel"><p className="eyebrow">THE PROBLEM</p><h2>Chats and stock are easy to lose track of</h2><p className="muted">When customers message across channels, repeated questions and changing stock can make every sale harder to follow.</p></article>
+      <article className="panel"><p className="eyebrow">HOW IT WORKS</p><h2>One inbox, catalog-grounded replies</h2><p className="muted">Keep products, sizes, stock, shipping, and payment details current. TindaBot matches questions to those shop records, answers known topics, and flags the rest for you.</p></article>
+      <article className="panel"><p className="eyebrow">SUPPORTED QUESTIONS</p><h2>What the assistant can answer</h2><ul className="supported-questions"><li>Product catalog, prices, sizes, and stock</li><li>Shipping rates for saved delivery areas</li><li>Payment instructions and order steps</li><li>Order status for a customer&apos;s latest order</li><li>Uploaded size chart questions</li></ul></article>
+    </section>
   </div>;
 }

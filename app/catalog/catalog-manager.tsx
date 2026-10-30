@@ -1,7 +1,7 @@
 "use client";
 /* eslint-disable @next/next/no-img-element -- Storage image URLs are configured per Supabase project. */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { quote, type QuotePromo } from "@/supabase/functions/_shared/quote";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
@@ -51,10 +51,12 @@ export function CatalogManager({
   initialProducts,
   initialPromos,
   loadError,
+  initialName,
 }: {
   initialProducts: Product[];
   initialPromos: ProductPromo[];
   loadError: string;
+  initialName: string;
 }) {
   const [products, setProducts] = useState(
     initialProducts.map((product) => ({
@@ -69,7 +71,7 @@ export function CatalogManager({
   const [previewQty, setPreviewQty] = useState(1);
   const [photo, setPhoto] = useState<File | null>(null);
   const [form, setForm] = useState({
-    name: "",
+    name: initialName,
     aliases: "",
     description: "",
     price: "",
@@ -78,6 +80,9 @@ export function CatalogManager({
     discountType: "" as "" | "percent" | "fixed",
     discountValue: "",
   });
+  useEffect(() => {
+    if (initialName) document.querySelector(".catalog-form")?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [initialName]);
   const preview = useMemo(
     () =>
       quote(
@@ -229,6 +234,7 @@ export function CatalogManager({
       }
       setNotice(editingId ? "Product updated po." : "Product added po.");
       resetForm();
+      window.history.replaceState(null, "", "/catalog");
       window.location.reload();
     } catch (cause) {
       setError(
