@@ -102,7 +102,7 @@ export default function ShopPage() {
                     {sizes.map((item) => <span className={`shop-size ${item.availability}`} key={item.size}><b>{item.size}</b><small>{item.availability === "sold_out" ? "Sold out" : item.availability === "low_stock" ? "Low stock" : "Available"}</small></span>)}
                   </div>
                   <div className="shop-product-actions">
-                    <Link className="button button-primary" href={`/chat?product=${encodeURIComponent(product.id)}`}>Ask about this</Link>
+                    <Link className="button button-primary" href={`/chat?product=${encodeURIComponent(product.id)}&new=1`}>Ask about this</Link>
                     <a className="shop-telegram-link" href={`https://t.me/TindaBotPH_bot?start=product_${product.id}`} target="_blank" rel="noreferrer">Ask on Telegram</a>
                   </div>
                 </div>

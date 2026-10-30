@@ -45,6 +45,7 @@ export default function ChatPage() {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const tokenRef = useRef("");
+  const storageKeyRef = useRef(tokenKey);
   const initRef = useRef<Promise<string> | null>(null);
   const cursorRef = useRef<string | null>(null);
   const seenRef = useRef(new Set<string>());
@@ -55,11 +56,11 @@ export default function ChatPage() {
     if (tokenRef.current) return Promise.resolve(tokenRef.current);
     if (initRef.current) return initRef.current;
     initRef.current = (async () => {
-      const cached = localStorage.getItem(tokenKey);
+      const cached = localStorage.getItem(storageKeyRef.current);
       if (cached) return cached;
       const result = await widgetRequest("widget-session", { product_id: productIdRef.current });
       if (!result.token) throw new Error("Could not start chat. Please refresh the page.");
-      localStorage.setItem(tokenKey, result.token);
+      localStorage.setItem(storageKeyRef.current, result.token);
       return result.token;
     })();
     return initRef.current;
@@ -84,7 +85,7 @@ export default function ChatPage() {
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : "Chat is unavailable. Please try again.";
       if (/session expired|invalid chat session/i.test(message)) {
-        localStorage.removeItem(tokenKey);
+        localStorage.removeItem(storageKeyRef.current);
         tokenRef.current = "";
         initRef.current = null;
       }
@@ -98,10 +99,23 @@ export default function ChatPage() {
   useEffect(() => {
     let cancelled = false;
     let interval: number | undefined;
-    const productId = new URLSearchParams(window.location.search).get("product");
+    const params = new URLSearchParams(window.location.search);
+    const productId = params.get("product");
     productIdRef.current = productId && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(productId)
       ? productId
       : null;
+    if (params.get("new") === "1") {
+      const sessionId = crypto.randomUUID();
+      storageKeyRef.current = `${tokenKey}:${sessionId}`;
+      params.delete("new");
+      params.set("session", sessionId);
+      window.history.replaceState(window.history.state, "", `/chat?${params.toString()}`);
+    } else {
+      const sessionId = params.get("session");
+      storageKeyRef.current = sessionId && /^[0-9a-f-]{36}$/i.test(sessionId)
+        ? `${tokenKey}:${sessionId}`
+        : tokenKey;
+    }
     void getToken().then((sessionToken) => {
       if (cancelled) return;
       tokenRef.current = sessionToken;
