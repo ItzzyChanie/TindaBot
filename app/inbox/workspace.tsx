@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type FormEvent,
 } from "react";
@@ -56,8 +57,10 @@ function isSimulatedChannel(channel?: string) {
 
 function channelLabel(channel?: string | null) {
   if (channel === "web") return "Web chat";
-  if (channel === "messenger_simulated") return "Messenger · Coming soon (simulated)";
-  if (channel === "instagram_simulated") return "Instagram · Coming soon (simulated)";
+  if (channel === "messenger_simulated")
+    return "Messenger · Coming soon (simulated)";
+  if (channel === "instagram_simulated")
+    return "Instagram · Coming soon (simulated)";
   return channel ?? "Unknown channel";
 }
 
@@ -67,72 +70,119 @@ export function InboxWorkspace() {
   const [orders, setOrders] = useState<CustomerOrder[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
+  const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [savingMode, setSavingMode] = useState(false);
   const [error, setError] = useState("");
   const [liveError, setLiveError] = useState("");
   const [showHidden, setShowHidden] = useState(false);
+  const customerIdsRef = useRef<string[]>([]);
 
-  const loadInbox = useCallback(async (showLoading = false) => {
-    if (showLoading) setLoading(true);
-    try {
-      const supabase = createSupabaseBrowserClient();
-      const { data, error: conversationError } = await supabase
-        .from("conversations")
-        .select(
-          "id, customer_id, status, ai_mode, pending, last_message_at, seller_read_at, is_hidden, created_at, customers(channel, external_id, name)",
-        )
-        .eq("is_hidden", showHidden)
-        .order("last_message_at", { ascending: false });
-      if (conversationError) throw conversationError;
-
-      const rows = (data ?? []) as unknown as Conversation[];
-      const ids = rows.map((row) => row.id);
-      let nextMessages: Message[] = [];
-      if (ids.length) {
-        const { data: messageData, error: messageError } = await supabase
-          .from("messages")
-          .select("id, conversation_id, sender, body, created_at")
-          .in("conversation_id", ids)
-          .order("created_at", { ascending: true });
-        if (messageError) throw messageError;
-        nextMessages = (messageData ?? []) as Message[];
-      }
-      const customerIds = [...new Set(rows.map((row) => row.customer_id))];
-      let nextOrders: CustomerOrder[] = [];
-      if (customerIds.length) {
-        const { data: orderData, error: orderError } = await supabase
-          .from("orders")
-          .select("id, customer_id, total, status, payment_proof, created_at, order_items(qty, unit_price, variants(size, products(name)))")
-          .in("customer_id", customerIds)
-          .order("created_at", { ascending: false });
-        if (orderError) throw orderError;
-        nextOrders = (orderData ?? []) as unknown as CustomerOrder[];
-      }
-
-      setConversations(rows);
-      setMessages(nextMessages);
-      setOrders(nextOrders);
-      const isNarrow = window.matchMedia("(max-width: 700px)").matches;
-      setSelectedId((current) =>
-        rows.some((row) => row.id === current)
-          ? current
-          : isNarrow
-            ? null
-            : (rows[0]?.id ?? null),
-      );
-      setError("");
-    } catch (cause) {
-      setError(
-        cause instanceof Error
-          ? cause.message
-          : "Hindi ma-load ang inbox. Pakisubukan ulit po.",
-      );
-    } finally {
-      if (showLoading) setLoading(false);
+  const refreshConversationList = useCallback(async () => {
+    const { data, error: queryError } = await createSupabaseBrowserClient()
+      .from("conversations")
+      .select(
+        "id, customer_id, status, ai_mode, pending, last_message_at, seller_read_at, is_hidden, created_at, customers(channel, external_id, name)",
+      )
+      .eq("is_hidden", showHidden)
+      .order("last_message_at", { ascending: false });
+    if (queryError) {
+      setLiveError("Live updates paused. Refresh to reconnect po.");
+      return;
     }
+    const rows = (data ?? []) as unknown as Conversation[];
+    customerIdsRef.current = [...new Set(rows.map((row) => row.customer_id))];
+    setConversations(rows);
+    setSelectedId((current) =>
+      rows.some((row) => row.id === current) ? current : null,
+    );
   }, [showHidden]);
+
+  const refreshOrders = useCallback(async () => {
+    const customerIds = customerIdsRef.current;
+    if (!customerIds.length) {
+      setOrders([]);
+      return;
+    }
+    const { data, error: queryError } = await createSupabaseBrowserClient()
+      .from("orders")
+      .select(
+        "id, customer_id, total, status, payment_proof, created_at, order_items(qty, unit_price, variants(size, products(name)))",
+      )
+      .in("customer_id", customerIds)
+      .order("created_at", { ascending: false });
+    if (!queryError) setOrders((data ?? []) as unknown as CustomerOrder[]);
+  }, []);
+
+  const loadInbox = useCallback(
+    async (showLoading = false) => {
+      if (showLoading) setLoading(true);
+      try {
+        const supabase = createSupabaseBrowserClient();
+        const { data, error: conversationError } = await supabase
+          .from("conversations")
+          .select(
+            "id, customer_id, status, ai_mode, pending, last_message_at, seller_read_at, is_hidden, created_at, customers(channel, external_id, name)",
+          )
+          .eq("is_hidden", showHidden)
+          .order("last_message_at", { ascending: false });
+        if (conversationError) throw conversationError;
+
+        const rows = (data ?? []) as unknown as Conversation[];
+        customerIdsRef.current = [
+          ...new Set(rows.map((row) => row.customer_id)),
+        ];
+        const ids = rows.map((row) => row.id);
+        const customerIds = [...new Set(rows.map((row) => row.customer_id))];
+        const [messageResult, orderResult] = await Promise.all([
+          ids.length
+            ? supabase
+                .from("messages")
+                .select("id, conversation_id, sender, body, created_at")
+                .in("conversation_id", ids)
+                .order("created_at", { ascending: true })
+            : Promise.resolve({ data: [], error: null }),
+          customerIds.length
+            ? supabase
+                .from("orders")
+                .select(
+                  "id, customer_id, total, status, payment_proof, created_at, order_items(qty, unit_price, variants(size, products(name)))",
+                )
+                .in("customer_id", customerIds)
+                .order("created_at", { ascending: false })
+            : Promise.resolve({ data: [], error: null }),
+        ]);
+        if (messageResult.error) throw messageResult.error;
+        if (orderResult.error) throw orderResult.error;
+        const nextMessages = (messageResult.data ?? []) as Message[];
+        const nextOrders = (orderResult.data ??
+          []) as unknown as CustomerOrder[];
+
+        setConversations(rows);
+        setMessages(nextMessages);
+        setOrders(nextOrders);
+        const isNarrow = window.matchMedia("(max-width: 700px)").matches;
+        setSelectedId((current) =>
+          rows.some((row) => row.id === current)
+            ? current
+            : isNarrow
+              ? null
+              : (rows[0]?.id ?? null),
+        );
+        setError("");
+      } catch (cause) {
+        setError(
+          cause instanceof Error
+            ? cause.message
+            : "Hindi ma-load ang inbox. Pakisubukan ulit po.",
+        );
+      } finally {
+        if (showLoading) setLoading(false);
+      }
+    },
+    [showHidden],
+  );
 
   useEffect(() => {
     void loadInbox(true);
@@ -145,50 +195,92 @@ export function InboxWorkspace() {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "conversations" },
-        () => {
-          void loadInbox();
-        },
+        () => void refreshConversationList(),
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "messages" },
-        () => {
-          void loadInbox();
+        (payload: {
+          eventType: "INSERT" | "UPDATE" | "DELETE";
+          new: Record<string, unknown>;
+          old: Record<string, unknown>;
+        }) => {
+          const record = (
+            payload.eventType === "DELETE" ? payload.old : payload.new
+          ) as Record<string, unknown>;
+          const messageId = typeof record.id === "string" ? record.id : null;
+          if (payload.eventType === "DELETE") {
+            if (messageId)
+              setMessages((current) =>
+                current.filter((message) => message.id !== messageId),
+              );
+            return;
+          }
+          if (!messageId) return;
+          void (async () => {
+            const { data } = await createSupabaseBrowserClient()
+              .from("messages")
+              .select("id, conversation_id, sender, body, created_at")
+              .eq("id", messageId)
+              .maybeSingle();
+            if (data) {
+              const message = data as Message;
+              setMessages((current) =>
+                [
+                  ...current.filter((item) => item.id !== message.id),
+                  message,
+                ].sort((a, b) => a.created_at.localeCompare(b.created_at)),
+              );
+            }
+            void refreshConversationList();
+          })();
         },
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "orders" },
-        () => {
-          void loadInbox();
-        },
+        () => void refreshOrders(),
       )
       .subscribe((status: string) => {
         if (status === "CHANNEL_ERROR" || status === "TIMED_OUT")
           setLiveError("Live updates paused. Refresh to reconnect po.");
         if (status === "SUBSCRIBED") {
           setLiveError("");
-          void loadInbox();
         }
       });
 
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [loadInbox]);
+  }, [loadInbox, refreshConversationList, refreshOrders]);
 
   const selected =
     conversations.find((conversation) => conversation.id === selectedId) ??
     null;
 
   useEffect(() => {
-    if (!selected || selected.status !== "needs_seller" || selected.seller_read_at) return;
+    if (
+      !selected ||
+      selected.status !== "needs_seller" ||
+      selected.seller_read_at
+    )
+      return;
     const readAt = new Date().toISOString();
     void (async () => {
       const { error: readError } = await createSupabaseBrowserClient()
-        .from("conversations").update({ seller_read_at: readAt }).eq("id", selected.id);
-      if (readError) setError("Hindi ma-update ang unread status: " + readError.message);
-      else setConversations((current) => current.map((item) => item.id === selected.id ? { ...item, seller_read_at: readAt } : item));
+        .from("conversations")
+        .update({ seller_read_at: readAt })
+        .eq("id", selected.id);
+      if (readError)
+        setError("Hindi ma-update ang unread status: " + readError.message);
+      else
+        setConversations((current) =>
+          current.map((item) =>
+            item.id === selected.id
+              ? { ...item, seller_read_at: readAt }
+              : item,
+          ),
+        );
     })();
   }, [selected]);
   const threadMessages = useMemo(
@@ -201,6 +293,17 @@ export function InboxWorkspace() {
       latest.set(message.conversation_id, message);
     return latest;
   }, [messages]);
+  const visibleConversations = useMemo(() => {
+    const normalized = search.trim().toLocaleLowerCase();
+    if (!normalized) return conversations;
+    return conversations.filter((conversation) => {
+      const latest = lastMessages.get(conversation.id)?.body ?? "";
+      const customer = conversation.customers;
+      return `${customer?.name ?? ""} ${customer?.external_id ?? ""} ${latest}`
+        .toLocaleLowerCase()
+        .includes(normalized);
+    });
+  }, [conversations, lastMessages, search]);
 
   async function changeMode(mode: Conversation["ai_mode"]) {
     if (!selected) return;
@@ -231,7 +334,13 @@ export function InboxWorkspace() {
 
   async function sendReply(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!selected || isSimulatedChannel(selected.customers?.channel) || !draft.trim() || sending) return;
+    if (
+      !selected ||
+      isSimulatedChannel(selected.customers?.channel) ||
+      !draft.trim() ||
+      sending
+    )
+      return;
     const text = draft.trim();
     if (text.length > 4000) {
       setError("Hanggang 4,000 characters lang po bawat reply.");
@@ -250,7 +359,6 @@ export function InboxWorkspace() {
       );
       if (replyError) throw replyError;
       setDraft("");
-      await loadInbox();
     } catch (cause) {
       setError(
         cause instanceof Error
@@ -263,18 +371,33 @@ export function InboxWorkspace() {
   }
 
   async function sendDraft() {
-    if (!selected?.pending.ai_draft || isSimulatedChannel(selected.customers?.channel) || sending) return;
+    if (
+      !selected?.pending.ai_draft ||
+      isSimulatedChannel(selected.customers?.channel) ||
+      sending
+    )
+      return;
     setSending(true);
     setError("");
     try {
       const supabase = createSupabaseBrowserClient();
-      const { error: replyError } = await supabase.functions.invoke("seller-reply", {
-        body: { conversationId: selected.id, text: selected.pending.ai_draft, sendDraft: true },
-      });
+      const { error: replyError } = await supabase.functions.invoke(
+        "seller-reply",
+        {
+          body: {
+            conversationId: selected.id,
+            text: selected.pending.ai_draft,
+            sendDraft: true,
+          },
+        },
+      );
       if (replyError) throw replyError;
-      await loadInbox();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Hindi naipadala ang draft po.");
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "Hindi naipadala ang draft po.",
+      );
     } finally {
       setSending(false);
     }
@@ -285,49 +408,72 @@ export function InboxWorkspace() {
     const pending = { ...selected.pending };
     delete pending.ai_draft;
     const { error: updateError } = await createSupabaseBrowserClient()
-      .from("conversations").update({ pending }).eq("id", selected.id);
+      .from("conversations")
+      .update({ pending })
+      .eq("id", selected.id);
     if (updateError) {
       setError(updateError.message);
       return;
     }
-    setConversations((current) => current.map((item) => item.id === selected.id ? { ...item, pending } : item));
+    setConversations((current) =>
+      current.map((item) =>
+        item.id === selected.id ? { ...item, pending } : item,
+      ),
+    );
   }
 
   async function markResolved() {
     if (!selected) return;
     const { error: updateError } = await createSupabaseBrowserClient()
-      .from("conversations").update({ status: "resolved", pending: {} }).eq("id", selected.id);
+      .from("conversations")
+      .update({ status: "resolved", pending: {} })
+      .eq("id", selected.id);
     if (updateError) {
       setError(updateError.message);
       return;
     }
-    setConversations((current) => current.map((item) => item.id === selected.id
-      ? { ...item, status: "resolved", pending: {} }
-      : item));
+    setConversations((current) =>
+      current.map((item) =>
+        item.id === selected.id
+          ? { ...item, status: "resolved", pending: {} }
+          : item,
+      ),
+    );
   }
 
   async function setHidden(hidden: boolean) {
     if (!selected) return;
     const { error: updateError } = await createSupabaseBrowserClient()
-      .from("conversations").update({ is_hidden: hidden }).eq("id", selected.id);
+      .from("conversations")
+      .update({ is_hidden: hidden })
+      .eq("id", selected.id);
     if (updateError) {
       setError(updateError.message);
       return;
     }
     setSelectedId(null);
-    await loadInbox();
+    await refreshConversationList();
   }
 
   async function deleteConversation() {
-    if (!selected || !window.confirm("Permanently delete this conversation and its messages?")) return;
+    if (
+      !selected ||
+      !window.confirm("Permanently delete this conversation and its messages?")
+    )
+      return;
     const { error: deleteError } = await createSupabaseBrowserClient()
-      .from("conversations").delete().eq("id", selected.id);
+      .from("conversations")
+      .delete()
+      .eq("id", selected.id);
     if (deleteError) {
-      setError("Hindi mabura ang conversation. Kung may order ito, itago na lang po: " + deleteError.message);
+      setError(
+        "Hindi mabura ang conversation. Kung may order ito, itago na lang po: " +
+          deleteError.message,
+      );
       return;
     }
     setSelectedId(null);
-    await loadInbox();
+    await refreshConversationList();
   }
 
   const customer = selected?.customers;
@@ -339,16 +485,35 @@ export function InboxWorkspace() {
     <div className={`inbox-page${selectedId ? " has-selection" : ""}`}>
       <aside className="inbox-list-panel">
         <div className="inbox-list-heading">
-          <div>
-            <p className="eyebrow">CUSTOMER MESSAGES</p>
+          <div className="inbox-page-title">
+            <p className="eyebrow">CUSTOMER SUPPORT</p>
             <h1>Inbox</h1>
+            <p>Keep customer conversations moving.</p>
           </div>
-          <span className="inbox-total">{conversations.length}</span>
+          <span className="inbox-total">
+            <strong>{conversations.length}</strong>
+            <small>threads</small>
+          </span>
         </div>
-        <button className="text-button" onClick={() => setShowHidden((value) => !value)}>
-          {showHidden ? "Show active conversations" : "View hidden conversations"}
-        </button>
-        <p className="simulated-note">Messenger and Instagram examples are coming soon (simulated). No channel API is connected.</p>
+        <div className="inbox-toolbar">
+          <span className="inbox-filter-label">
+            {showHidden ? "Hidden conversations" : "All conversations"}
+          </span>
+          <button
+            className="inbox-filter-button"
+            onClick={() => setShowHidden((value) => !value)}
+          >
+            {showHidden ? "Show active" : "View hidden"}
+          </button>
+        </div>
+        <label className="inbox-search">
+          <span className="sr-only">Search conversations</span>
+          <input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search people or messages"
+          />
+        </label>
         {loading ? (
           <p className="inbox-state">Loading conversations…</p>
         ) : error && conversations.length === 0 ? (
@@ -363,15 +528,17 @@ export function InboxWorkspace() {
           </div>
         ) : conversations.length === 0 ? (
           <p className="inbox-state">Wala pang conversations po.</p>
+        ) : visibleConversations.length === 0 ? (
+          <p className="inbox-state">No conversations match your search.</p>
         ) : (
           <div className="conversation-list">
-            {conversations.map((conversation) => {
+            {visibleConversations.map((conversation) => {
               const latest = lastMessages.get(conversation.id);
               const contact = conversation.customers;
               return (
                 <button
                   key={conversation.id}
-                  className={`conversation-card${selectedId === conversation.id ? " selected" : ""}`}
+                  className={`conversation-card${selectedId === conversation.id ? " selected" : ""}${conversation.status === "needs_seller" && !conversation.seller_read_at ? " unread" : ""}`}
                   onClick={() => setSelectedId(conversation.id)}
                 >
                   <span className="conversation-avatar">
@@ -427,20 +594,31 @@ export function InboxWorkspace() {
                 <strong>{customer?.name || customer?.external_id}</strong>
                 <span>{channelLabel(customer?.channel)}</span>
               </div>
-              {selected.status === "needs_seller" && (
-                <span className="needs-badge thread-needs">Needs you</span>
-              )}
-            {selected.status === "needs_seller" && (
-              <button className="text-button" onClick={() => void markResolved()}>
-                Mark resolved
-              </button>
-            )}
-            <button className="text-button" onClick={() => void setHidden(!selected.is_hidden)}>
-              {selected.is_hidden ? "Unhide" : "Hide"}
-            </button>
-            <button className="text-button" onClick={() => void deleteConversation()}>
-              Delete
-            </button>
+              <div className="thread-header-actions">
+                {selected.status === "needs_seller" && (
+                  <span className="needs-badge thread-needs">Needs you</span>
+                )}
+                {selected.status === "needs_seller" && (
+                  <button
+                    className="text-button"
+                    onClick={() => void markResolved()}
+                  >
+                    Mark resolved
+                  </button>
+                )}
+                <button
+                  className="text-button"
+                  onClick={() => void setHidden(!selected.is_hidden)}
+                >
+                  {selected.is_hidden ? "Unhide" : "Hide"}
+                </button>
+                <button
+                  className="text-button"
+                  onClick={() => void deleteConversation()}
+                >
+                  Delete
+                </button>
+              </div>
             </header>
             {liveError && (
               <p className="inbox-alert" role="status">
@@ -483,40 +661,53 @@ export function InboxWorkspace() {
                 <p className="eyebrow">AI DRAFT · REVIEW BEFORE SENDING</p>
                 <p>{selected.pending.ai_draft}</p>
                 <div className="reply-actions">
-                  <button className="button button-primary" onClick={() => void sendDraft()} disabled={sending}>
+                  <button
+                    className="button button-primary"
+                    onClick={() => void sendDraft()}
+                    disabled={sending}
+                  >
                     {sending ? "Sending…" : "Send draft"}
                   </button>
-                  <button className="text-button" onClick={() => void discardDraft()} disabled={sending}>
+                  <button
+                    className="text-button"
+                    onClick={() => void discardDraft()}
+                    disabled={sending}
+                  >
                     Discard
                   </button>
                 </div>
               </div>
             )}
             {isSimulatedChannel(customer?.channel) ? (
-              <p className="simulated-note thread-simulated-note">Coming soon (simulated) po ito. This sample thread is read-only and sends no message to Messenger or Instagram.</p>
-            ) : <form className="reply-form" onSubmit={sendReply}>
-              <label className="sr-only" htmlFor="seller-reply">
-                Write a reply
-              </label>
-              <textarea
-                id="seller-reply"
-                value={draft}
-                onChange={(event) => setDraft(event.target.value)}
-                maxLength={4000}
-                placeholder="Write a reply…"
-                rows={2}
-              />
-              <div className="reply-actions">
-                <span>{draft.length}/4000</span>
-                <button
-                  className="button button-primary"
-                  type="submit"
-                  disabled={sending || !draft.trim()}
-                >
-                  {sending ? "Sending…" : "Send reply"}
-                </button>
-              </div>
-            </form>}
+              <p className="simulated-note thread-simulated-note">
+                Coming soon (simulated) po ito. This sample thread is read-only
+                and sends no message to Messenger or Instagram.
+              </p>
+            ) : (
+              <form className="reply-form" onSubmit={sendReply}>
+                <label className="sr-only" htmlFor="seller-reply">
+                  Write a reply
+                </label>
+                <textarea
+                  id="seller-reply"
+                  value={draft}
+                  onChange={(event) => setDraft(event.target.value)}
+                  maxLength={4000}
+                  placeholder="Write a reply…"
+                  rows={2}
+                />
+                <div className="reply-actions">
+                  <span>{draft.length}/4000</span>
+                  <button
+                    className="button button-primary"
+                    type="submit"
+                    disabled={sending || !draft.trim()}
+                  >
+                    {sending ? "Sending…" : "Send reply"}
+                  </button>
+                </div>
+              </form>
+            )}
           </>
         ) : (
           <div className="thread-placeholder">
@@ -534,7 +725,12 @@ export function InboxWorkspace() {
       <aside className="inbox-details-panel">
         {selected && customer ? (
           <>
-            <p className="eyebrow">CUSTOMER</p>
+            <div className="details-heading">
+              <p className="eyebrow">CUSTOMER PROFILE</p>
+              <span className="details-more" aria-hidden="true">
+                •••
+              </span>
+            </div>
             <div className="customer-profile">
               <span className="customer-avatar">
                 {(customer.name ?? customer.external_id)
@@ -542,7 +738,9 @@ export function InboxWorkspace() {
                   .toUpperCase()}
               </span>
               <h2>{customer.name || "Customer"}</h2>
-              <span className="channel-badge">{channelLabel(customer.channel)}</span>
+              <span className="channel-badge">
+                {channelLabel(customer.channel)}
+              </span>
             </div>
             <dl className="customer-details">
               <div>
@@ -566,21 +764,44 @@ export function InboxWorkspace() {
               <p className="eyebrow">ORDERS</p>
               {customerOrders.length === 0 ? (
                 <p className="muted">No orders yet.</p>
-              ) : customerOrders.map((order) => (
-                <article className="customer-order-card" key={order.id}>
-                  <div>
-                    <strong>#{order.id}</strong>
-                    <span className={"order-status " + order.status}>{order.status.replace("_", " ")}</span>
-                  </div>
-                  <p>{order.order_items.map((item) =>
-                    (item.qty + " × " + (item.variants?.products?.name ?? "Product") + " (" + (item.variants?.size ?? "Size") + ")")
-                  ).join(", ")}</p>
-                  <strong>₱{Number(order.total).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
-                  {Array.isArray(order.payment_proof) && order.payment_proof.length > 0 && (
-                    <span className="proof-received">Payment proof received</span>
-                  )}
-                </article>
-              ))}
+              ) : (
+                customerOrders.map((order) => (
+                  <article className="customer-order-card" key={order.id}>
+                    <div>
+                      <strong>#{order.id}</strong>
+                      <span className={"order-status " + order.status}>
+                        {order.status.replace("_", " ")}
+                      </span>
+                    </div>
+                    <p>
+                      {order.order_items
+                        .map(
+                          (item) =>
+                            item.qty +
+                            " × " +
+                            (item.variants?.products?.name ?? "Product") +
+                            " (" +
+                            (item.variants?.size ?? "Size") +
+                            ")",
+                        )
+                        .join(", ")}
+                    </p>
+                    <strong>
+                      ₱
+                      {Number(order.total).toLocaleString("en-PH", {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}
+                    </strong>
+                    {Array.isArray(order.payment_proof) &&
+                      order.payment_proof.length > 0 && (
+                        <span className="proof-received">
+                          Payment proof received
+                        </span>
+                      )}
+                  </article>
+                ))
+              )}
             </section>
             <label className="mode-label" htmlFor="ai-mode">
               Assistant mode

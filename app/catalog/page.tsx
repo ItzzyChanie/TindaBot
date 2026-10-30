@@ -1,7 +1,11 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { CatalogManager } from "./catalog-manager";
 
-export default async function CatalogPage({ searchParams }: { searchParams: Promise<{ newProduct?: string }> }) {
+export default async function CatalogPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ newProduct?: string }>;
+}) {
   const params = await searchParams;
   const supabase = await createSupabaseServerClient();
   const [{ data: products, error }, { data: promos }] = await Promise.all([

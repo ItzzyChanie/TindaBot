@@ -17,7 +17,8 @@ type Settings = {
 };
 
 async function compressSizeChart(file: File): Promise<File> {
-  if (!file.type.startsWith("image/")) throw new Error("Please choose an image file.");
+  if (!file.type.startsWith("image/"))
+    throw new Error("Please choose an image file.");
   const image = await createImageBitmap(file);
   const scale = Math.min(1, 1600 / Math.max(image.width, image.height));
   const canvas = document.createElement("canvas");
@@ -29,13 +30,15 @@ async function compressSizeChart(file: File): Promise<File> {
   image.close();
   for (const quality of [0.86, 0.72, 0.58, 0.44, 0.3]) {
     const blob = await new Promise<Blob | null>((resolve) =>
-      canvas.toBlob(resolve, "image/webp", quality)
+      canvas.toBlob(resolve, "image/webp", quality),
     );
     if (blob && blob.size <= 300_000) {
       return new File([blob], "size-chart.webp", { type: "image/webp" });
     }
   }
-  throw new Error("Choose a simpler or smaller size chart image (maximum 300 KB after compression).");
+  throw new Error(
+    "Choose a simpler or smaller size chart image (maximum 300 KB after compression).",
+  );
 }
 
 function storagePathFromPublicUrl(value: string | null): string | null {
@@ -44,7 +47,9 @@ function storagePathFromPublicUrl(value: string | null): string | null {
     const marker = "/storage/v1/object/public/product-images/";
     const pathname = new URL(value).pathname;
     const index = pathname.indexOf(marker);
-    return index < 0 ? null : decodeURIComponent(pathname.slice(index + marker.length));
+    return index < 0
+      ? null
+      : decodeURIComponent(pathname.slice(index + marker.length));
   } catch {
     return null;
   }
@@ -72,7 +77,9 @@ export function SettingsForm({
   });
   const [name, setName] = useState(sellerName);
   const [sizeChartFile, setSizeChartFile] = useState<File | null>(null);
-  const [storedChartUrl, setStoredChartUrl] = useState(initialSettings?.size_chart_url ?? null);
+  const [storedChartUrl, setStoredChartUrl] = useState(
+    initialSettings?.size_chart_url ?? null,
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(initialError);
   const [notice, setNotice] = useState("");
@@ -84,7 +91,9 @@ export function SettingsForm({
     setNotice("");
     try {
       const supabase = createSupabaseBrowserClient();
-      const { error: profileError } = await supabase.auth.updateUser({ data: { full_name: name.trim() } });
+      const { error: profileError } = await supabase.auth.updateUser({
+        data: { full_name: name.trim() },
+      });
       if (profileError) throw profileError;
       const previousUrl = storedChartUrl;
       let sizeChartUrl = settings.size_chart_url;
@@ -96,13 +105,19 @@ export function SettingsForm({
           .from("product-images")
           .upload(uploadedPath, compressed, { contentType: "image/webp" });
         if (uploadError) throw uploadError;
-        sizeChartUrl = supabase.storage.from("product-images")
+        sizeChartUrl = supabase.storage
+          .from("product-images")
           .getPublicUrl(uploadedPath).data.publicUrl;
       }
-      const { error: saveError } = await supabase.from("shop_settings")
-        .upsert({ shop_id: SHOP_ID, ...settings, size_chart_url: sizeChartUrl }, { onConflict: "shop_id" });
+      const { error: saveError } = await supabase
+        .from("shop_settings")
+        .upsert(
+          { shop_id: SHOP_ID, ...settings, size_chart_url: sizeChartUrl },
+          { onConflict: "shop_id" },
+        );
       if (saveError) {
-        if (uploadedPath) await supabase.storage.from("product-images").remove([uploadedPath]);
+        if (uploadedPath)
+          await supabase.storage.from("product-images").remove([uploadedPath]);
         throw saveError;
       }
       const previousPath = storagePathFromPublicUrl(previousUrl);
@@ -114,23 +129,29 @@ export function SettingsForm({
       setSizeChartFile(null);
       setNotice("Shop settings saved po.");
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not save shop settings.");
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "Could not save shop settings.",
+      );
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <div className="page-content">
-      <div className="page-heading">
+    <div className="page-content settings-page">
+      <section className="settings-hero">
         <div>
-          <p className="eyebrow">YOUR SHOP</p>
+          <p className="eyebrow">SHOP CONFIGURATION</p>
           <h1>Settings</h1>
-          <p className="muted">
-            Keep delivery, payment, and shop policies up to date po.
-          </p>
+          <p>Keep your customer-facing answers accurate and useful.</p>
         </div>
-      </div>
+        <span className="settings-hero-note">
+          <span className="online-dot" />
+          Changes save to your live shop
+        </span>
+      </section>
       {(error || notice) && (
         <p
           className={error ? "form-error" : "catalog-notice"}
@@ -143,22 +164,108 @@ export function SettingsForm({
         className="panel settings-form"
         onSubmit={(event) => void save(event)}
       >
+        <nav className="settings-index" aria-label="Settings sections">
+          <a href="#seller-profile">Profile</a>
+          <a href="#assistant-replies">Assistant replies</a>
+          <a href="#delivery-rates">Delivery</a>
+          <a href="#customer-help">Size chart</a>
+          <a href="#payment-details">Payment</a>
+          <a href="#shop-policies">Policies</a>
+        </nav>
         <section>
+          <div id="seller-profile" className="settings-anchor" />
           <p className="eyebrow">SELLER PROFILE</p>
           <h2>General information</h2>
-          <label className="settings-label">Full name<input required maxLength={120} value={name} onChange={(event) => setName(event.target.value)} /></label>
-          <label className="settings-label">Account email<input type="email" value={sellerEmail} readOnly aria-readonly="true" /></label>
+          <label className="settings-label">
+            Full name
+            <input
+              required
+              maxLength={120}
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+            />
+          </label>
+          <label className="settings-label">
+            Account email
+            <input
+              type="email"
+              value={sellerEmail}
+              readOnly
+              aria-readonly="true"
+            />
+          </label>
         </section>
         <section>
+          <div id="assistant-replies" className="settings-anchor" />
           <p className="eyebrow">AUTOMATED REPLIES</p>
           <h2>Seller-editable answers</h2>
-          <p className="muted">These answers are used for matching questions. Replies stay limited to the catalog and shop details.</p>
-          <label className="settings-label">Greeting<textarea rows={3} maxLength={1000} value={settings.greeting_text} onChange={(event) => setSettings({ ...settings, greeting_text: event.target.value })} placeholder="Kumusta po! Ano pong item ang gusto ninyong itanong?" /></label>
-          <label className="settings-label">Shipping details<textarea rows={3} maxLength={1500} value={settings.shipping_text} onChange={(event) => setSettings({ ...settings, shipping_text: event.target.value })} placeholder="Add dispatch timing and delivery details that apply to your shop." /></label>
-          <label className="settings-label">How to order<textarea rows={3} maxLength={1000} value={settings.faq_answers.order_help ?? ""} onChange={(event) => setSettings({ ...settings, faq_answers: { ...settings.faq_answers, order_help: event.target.value } })} placeholder="Tell customers what details they should send to place an order." /></label>
-          <label className="settings-label">Payment FAQ answer<textarea rows={3} maxLength={1000} value={settings.faq_answers.payment ?? ""} onChange={(event) => setSettings({ ...settings, faq_answers: { ...settings.faq_answers, payment: event.target.value } })} placeholder="Leave blank to use the payment instructions below." /></label>
+          <p className="muted">
+            These answers are used for matching questions. Replies stay limited
+            to the catalog and shop details.
+          </p>
+          <label className="settings-label">
+            Greeting
+            <textarea
+              rows={3}
+              maxLength={1000}
+              value={settings.greeting_text}
+              onChange={(event) =>
+                setSettings({ ...settings, greeting_text: event.target.value })
+              }
+              placeholder="Kumusta po! Ano pong item ang gusto ninyong itanong?"
+            />
+          </label>
+          <label className="settings-label">
+            Shipping details
+            <textarea
+              rows={3}
+              maxLength={1500}
+              value={settings.shipping_text}
+              onChange={(event) =>
+                setSettings({ ...settings, shipping_text: event.target.value })
+              }
+              placeholder="Add dispatch timing and delivery details that apply to your shop."
+            />
+          </label>
+          <label className="settings-label">
+            How to order
+            <textarea
+              rows={3}
+              maxLength={1000}
+              value={settings.faq_answers.order_help ?? ""}
+              onChange={(event) =>
+                setSettings({
+                  ...settings,
+                  faq_answers: {
+                    ...settings.faq_answers,
+                    order_help: event.target.value,
+                  },
+                })
+              }
+              placeholder="Tell customers what details they should send to place an order."
+            />
+          </label>
+          <label className="settings-label">
+            Payment FAQ answer
+            <textarea
+              rows={3}
+              maxLength={1000}
+              value={settings.faq_answers.payment ?? ""}
+              onChange={(event) =>
+                setSettings({
+                  ...settings,
+                  faq_answers: {
+                    ...settings.faq_answers,
+                    payment: event.target.value,
+                  },
+                })
+              }
+              placeholder="Leave blank to use the payment instructions below."
+            />
+          </label>
         </section>
         <section>
+          <div id="delivery-rates" className="settings-anchor" />
           <p className="eyebrow">DELIVERY</p>
           <h2>Shipping rates</h2>
           <p className="muted">
@@ -193,42 +300,63 @@ export function SettingsForm({
             ))}
           </div>
         </section>
-        <p className="muted settings-privacy-note">Chat messages are retained for 90 days. Customers see a privacy notice when chat starts.</p>
+        <p className="muted settings-privacy-note">
+          Chat messages are retained for 90 days. Customers see a privacy notice
+          when chat starts.
+        </p>
         <section>
+          <div id="customer-help" className="settings-anchor" />
           <p className="eyebrow">CUSTOMER HELP</p>
           <h2>Size chart</h2>
           <p className="muted">
-            Upload a size chart image. The assistant will send it when customers ask to see the chart.
+            Upload a size chart image. The assistant will send it when customers
+            ask to see the chart.
           </p>
           {settings.size_chart_url && !sizeChartFile && (
             <div className="size-chart-preview">
               {/* eslint-disable-next-line @next/next/no-img-element -- Supabase Storage image URL. */}
-              <img src={settings.size_chart_url} alt="Uploaded shop size chart" />
+              <img
+                src={settings.size_chart_url}
+                alt="Uploaded shop size chart"
+              />
               <button
                 className="text-button"
                 type="button"
-                onClick={() => setSettings({ ...settings, size_chart_url: null })}
+                onClick={() =>
+                  setSettings({ ...settings, size_chart_url: null })
+                }
               >
                 Remove size chart
               </button>
             </div>
           )}
           <label className="settings-label">
-            {sizeChartFile ? `Selected: ${sizeChartFile.name}` : "Upload size chart image"}
+            {sizeChartFile
+              ? `Selected: ${sizeChartFile.name}`
+              : "Upload size chart image"}
             <input
               type="file"
               accept="image/jpeg,image/png,image/webp"
-              onChange={(event) => setSizeChartFile(event.target.files?.[0] ?? null)}
+              onChange={(event) =>
+                setSizeChartFile(event.target.files?.[0] ?? null)
+              }
             />
           </label>
           {sizeChartFile && (
-            <button className="text-button" type="button" onClick={() => setSizeChartFile(null)}>
+            <button
+              className="text-button"
+              type="button"
+              onClick={() => setSizeChartFile(null)}
+            >
               Cancel selected image
             </button>
           )}
-          <p className="muted">Images are compressed to fit the shop storage limit.</p>
+          <p className="muted">
+            Images are compressed to fit the shop storage limit.
+          </p>
         </section>
         <section>
+          <div id="payment-details" className="settings-anchor" />
           <p className="eyebrow">PAYMENT</p>
           <h2>Payment instructions</h2>
           <label className="settings-label">
@@ -247,6 +375,7 @@ export function SettingsForm({
           </label>
         </section>
         <section>
+          <div id="shop-policies" className="settings-anchor" />
           <p className="eyebrow">SHOP POLICIES</p>
           <h2>Policies</h2>
           <label className="settings-label">

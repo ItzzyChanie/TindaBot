@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 type OrderItem = {
@@ -45,6 +45,7 @@ export function OrdersManager() {
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<number | null>(null);
   const [error, setError] = useState("");
+  const refreshTimer = useRef<number | undefined>(undefined);
 
   const loadOrders = useCallback(async (showLoading = false) => {
     if (showLoading) setLoading(true);
@@ -60,11 +61,18 @@ export function OrdersManager() {
   useEffect(() => {
     void loadOrders(true);
     const supabase = createSupabaseBrowserClient();
+    const scheduleRefresh = () => {
+      if (refreshTimer.current !== undefined) window.clearTimeout(refreshTimer.current);
+      refreshTimer.current = window.setTimeout(() => void loadOrders(), 300);
+    };
     const channel = supabase.channel("seller-orders-live")
-      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, () => void loadOrders())
-      .on("postgres_changes", { event: "*", schema: "public", table: "order_items" }, () => void loadOrders())
+      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, scheduleRefresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "order_items" }, scheduleRefresh)
       .subscribe();
-    return () => { void supabase.removeChannel(channel); };
+    return () => {
+      if (refreshTimer.current !== undefined) window.clearTimeout(refreshTimer.current);
+      void supabase.removeChannel(channel);
+    };
   }, [loadOrders]);
 
   async function setStatus(order: Order, status: Order["status"]) {
@@ -81,13 +89,13 @@ export function OrdersManager() {
 
   return (
     <div className="page-content orders-page">
-      <div className="page-heading">
+      <section className="orders-hero">
         <div>
-          <p className="eyebrow">SALES</p>
+          <p className="eyebrow">SHOP OPERATIONS</p>
           <h1>Orders</h1>
-          <p className="muted">Review orders and update payment or delivery status.</p>
+          <p>Keep payments and delivery status moving in one place.</p>
         </div>
-        <label className="order-filter">
+        <label className="order-filter orders-filter">
           <span className="sr-only">Filter orders by status</span>
           <select value={filter} onChange={(event) => setFilter(event.target.value as Filter)}>
             <option value="all">All orders</option>
@@ -96,8 +104,15 @@ export function OrdersManager() {
             <option value="shipped">Shipped</option>
           </select>
         </label>
-      </div>
+      </section>
       {error && <p className="inbox-alert error-state" role="alert">{error}</p>}
+      {!loading && <section className="orders-summary" aria-label="Order totals">
+        {(["all", "awaiting_payment", "paid", "shipped"] as const).map((status) => {
+          const count = status === "all" ? orders.length : orders.filter((order) => order.status === status).length;
+          const label = status === "all" ? "All orders" : statusLabels[status];
+          return <button key={status} type="button" className={`order-summary-card${filter === status ? " active" : ""}`} onClick={() => setFilter(status)}><span>{label}</span><strong>{count}</strong></button>;
+        })}
+      </section>}
       {loading ? (
         <p className="muted">Loading orders…</p>
       ) : visible.length === 0 ? (

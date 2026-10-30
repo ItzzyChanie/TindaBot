@@ -58,7 +58,7 @@ export function CatalogManager({
   loadError: string;
   initialName: string;
 }) {
-  const [products, setProducts] = useState(
+  const [products, setProducts] = useState<Product[]>(
     initialProducts.map((product) => ({
       ...product,
       promos: initialPromos.filter((promo) => promo.product_id === product.id),
@@ -68,6 +68,7 @@ export function CatalogManager({
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState(loadError);
+  const [query, setQuery] = useState("");
   const [previewQty, setPreviewQty] = useState(1);
   const [photo, setPhoto] = useState<File | null>(null);
   const [form, setForm] = useState({
@@ -81,7 +82,10 @@ export function CatalogManager({
     discountValue: "",
   });
   useEffect(() => {
-    if (initialName) document.querySelector(".catalog-form")?.scrollIntoView({ behavior: "smooth", block: "center" });
+    if (initialName)
+      document
+        .querySelector(".catalog-form")
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
   }, [initialName]);
   const preview = useMemo(
     () =>
@@ -96,6 +100,15 @@ export function CatalogManager({
       ),
     [form.price, form.discountType, form.discountValue, previewQty],
   );
+  const visibleProducts = useMemo(() => {
+    const normalized = query.trim().toLocaleLowerCase();
+    if (!normalized) return products;
+    return products.filter((product) =>
+      `${product.name} ${product.description} ${product.aliases.join(" ")}`
+        .toLocaleLowerCase()
+        .includes(normalized),
+    );
+  }, [products, query]);
 
   function resetForm() {
     setEditingId(null);
@@ -224,7 +237,9 @@ export function CatalogManager({
         (variant) => !retainedSizes.has(variant.size),
       );
       if (removedVariants.some((variant) => variant.stock > 0))
-        throw new Error("Set removed sizes to zero stock before removing them po.");
+        throw new Error(
+          "Set removed sizes to zero stock before removing them po.",
+        );
       for (const variant of removedVariants) {
         const { error: removeError } = await supabase
           .from("variants")
@@ -233,9 +248,17 @@ export function CatalogManager({
         if (removeError) throw removeError;
       }
       setNotice(editingId ? "Product updated po." : "Product added po.");
+      const { data: refreshedProducts, error: refreshError } = await supabase
+        .from("products")
+        .select(
+          "*, variants(id,size,stock), promos(label,kind,min_qty,value,starts_at,ends_at,active)",
+        )
+        .order("created_at", { ascending: false });
+      if (refreshError)
+        setNotice("Saved po. Refresh this page to update the product list.");
+      else setProducts((refreshedProducts ?? []) as unknown as Product[]);
       resetForm();
       window.history.replaceState(null, "", "/catalog");
-      window.location.reload();
     } catch (cause) {
       setError(
         cause instanceof Error ? cause.message : "Could not save this product.",
@@ -253,7 +276,10 @@ export function CatalogManager({
         p_delta: change,
       });
     if (updateError || stock === null) {
-      setError(updateError?.message ?? "Stock could not be changed. Refresh and try again po.");
+      setError(
+        updateError?.message ??
+          "Stock could not be changed. Refresh and try again po.",
+      );
       return;
     }
     setProducts((current) =>
@@ -280,19 +306,21 @@ export function CatalogManager({
   }
 
   return (
-    <div className="page-content">
-      <div className="page-heading">
+    <div className="page-content catalog-page">
+      <section className="catalog-hero">
         <div>
-          <p className="eyebrow">YOUR SHOP</p>
-          <h1>Catalog</h1>
-          <p className="muted">
-            Manage products, sizes, and live customer prices po.
+          <p className="eyebrow">PRODUCT MANAGEMENT</p>
+          <h1>Your catalog</h1>
+          <p>
+            Keep product details, sizes, and stock accurate. Changes update the
+            customer shop.
           </p>
         </div>
-        <button className="button button-primary" onClick={resetForm}>
-          + Add product
-        </button>
-      </div>
+        <div className="catalog-hero-count">
+          <strong>{products.length}</strong>
+          <span>listed styles</span>
+        </div>
+      </section>
       {(error || notice) && (
         <p
           className={error ? "form-error" : "catalog-notice"}
@@ -301,6 +329,19 @@ export function CatalogManager({
           {error || notice}
         </p>
       )}
+      <div className="panel catalog-toolbar">
+        <label>
+          <span className="sr-only">Search products</span>
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search products and aliases"
+          />
+        </label>
+        <span className="muted">
+          {visibleProducts.length} of {products.length} products
+        </span>
+      </div>
       <section className="catalog-grid">
         <div className="catalog-products">
           {products.length === 0 ? (
@@ -309,8 +350,12 @@ export function CatalogManager({
                 ? "Could not load products. Check your connection and try again po."
                 : "No products yet. Add your first item po."}
             </div>
+          ) : visibleProducts.length === 0 ? (
+            <div className="panel catalog-empty">
+              No products match “{query}”.
+            </div>
           ) : (
-            products.map((product) => {
+            visibleProducts.map((product) => {
               const offer = quote(product, 1, new Date(), product.promos ?? []);
               return (
                 <article className="panel product-card" key={product.id}>
@@ -318,7 +363,11 @@ export function CatalogManager({
                     <img
                       className="product-photo"
                       src={product.image_url}
-                      alt=""
+                      alt={product.name}
+                      width={184}
+                      height={208}
+                      loading="lazy"
+                      decoding="async"
                     />
                   ) : (
                     <div
@@ -399,8 +448,11 @@ export function CatalogManager({
         >
           <div className="panel-heading">
             <div>
+              <span className="catalog-form-number">
+                {editingId ? "EDIT" : "NEW"}
+              </span>
               <p className="eyebrow">
-                {editingId ? "UPDATE ITEM" : "NEW ITEM"}
+                {editingId ? "UPDATE ITEM" : "ADD TO YOUR SHOP"}
               </p>
               <h2>{editingId ? "Edit product" : "Add product"}</h2>
             </div>

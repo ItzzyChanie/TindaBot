@@ -113,6 +113,7 @@ export function ChatWidget({ productId: initialProductId, sessionId: initialSess
   useEffect(() => {
     let cancelled = false;
     let interval: number | undefined;
+    let visibilityListener: (() => void) | undefined;
     const params = new URLSearchParams(window.location.search);
     const fromUrl = params.get("product");
     const productId = initialProductId !== undefined ? initialProductId : fromUrl;
@@ -137,7 +138,13 @@ export function ChatWidget({ productId: initialProductId, sessionId: initialSess
       setToken(sessionToken);
       setLoading(false);
       void requestMessages(sessionToken);
-      interval = window.setInterval(() => void requestMessages(sessionToken), 2000);
+      interval = window.setInterval(() => {
+        if (!document.hidden) void requestMessages(sessionToken);
+      }, 2000);
+      visibilityListener = () => {
+        if (!document.hidden) void requestMessages(sessionToken);
+      };
+      document.addEventListener("visibilitychange", visibilityListener);
     }).catch((cause: unknown) => {
       if (!cancelled) {
         setError(cause instanceof Error ? cause.message : "Could not start chat.");
@@ -147,6 +154,7 @@ export function ChatWidget({ productId: initialProductId, sessionId: initialSess
     return () => {
       cancelled = true;
       if (interval !== undefined) window.clearInterval(interval);
+      if (visibilityListener) document.removeEventListener("visibilitychange", visibilityListener);
     };
   }, [getToken, initialProductId, initialSessionId, requestMessages]);
 
