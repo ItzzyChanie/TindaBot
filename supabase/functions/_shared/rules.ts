@@ -116,7 +116,7 @@ const intentPhrases = {
   payment: ["payment", "magbayad", "paano magbayad", "gcash", "bank transfer", "payment details", "cash on delivery", "cod"],
   order_help: ["paano mag order", "paano umorder", "how to order", "how can i order", "how to buy"],
   price: ["magkano", "how much", "price", "presyo", "hm", "total magkano", "cost"],
-  availability: ["available", "availability", "may stock", "in stock", "meron pa", "available pa", "mayroon pa", "anong sizes", "anong size", "available sizes"],
+  availability: ["available", "availability", "avail", "may stock", "in stock", "meron", "mayroon", "anong sizes", "anong size", "available sizes"],
   shipping: ["shipping", "delivery fee", "shipping fee", "pa deliver", "padeliver", "deliver sa", "ship to", "shipping to", "delivery", "deliver", "nagde deliver", "gaano katagal"],
   order_confirm: ["order na", "order ko na", "confirm order", "confirm", "i-confirm", "sige kunin", "kuha ko na", "kukuha", "kunin ko", "pabili", "checkout", "mine", "go na"],
   greeting: ["hi", "hello", "hey", "good morning", "good afternoon", "good evening", "kamusta", "kumusta", "musta"],
@@ -124,12 +124,12 @@ const intentPhrases = {
 
 const stopWords = new Set([
   "magkano", "how", "much", "price", "presyo", "hm", "cost", "available",
-  "availability", "stock", "meron", "may", "ba", "have", "do", "you", "it",
+  "availability", "avail", "stock", "meron", "mayroon", "may", "ba", "have", "do", "you", "it",
   "the", "a", "an", "is", "of", "to", "for", "me", "please", "paki", "po",
   "ang", "yung", "ng", "sa", "pa", "ano", "anong", "deliver", "delivery", "ship", "shipping",
   "fee", "item", "items", "pcs", "pc", "piece", "pieces", "piraso", "qty",
   "quantity", "size", "sizes", "order", "gusto", "ko", "nito", "iyan", "ito", "na",
-  "with", "and", "or", "medium", "med", "small", "large", "extra", "xl", "xxl", "kayo", "kami",
+  "with", "and", "or", "medium", "med", "small", "large", "extra", "xl", "xxl", "kayo", "kayong", "kami", "po",
   ...Object.keys(numberWords),
 ]);
 

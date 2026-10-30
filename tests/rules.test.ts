@@ -99,4 +99,22 @@ describe("catalog-grounded message rules", () => {
     expect(matchQuantityAnswer("dalawa po")).toBe(2);
     expect(matchQuantityAnswer("3 pcs")).toBe(3);
   });
+
+  it("recognizes short price and availability wording around item names", () => {
+    for (const message of ["How much Bayanihan Basic T-Shirt?", "hm po yung bayanihan basic t-shirt?"]) {
+      expect(understandFromRules(message, catalog)).toMatchObject({
+        intent: "price",
+        product_query: "Bayanihan Basic T-Shirt",
+      });
+    }
+    for (const message of [
+      "Meron po ba kayong Bayanihan Basic Tshirt?",
+      "avail po ba yung Bayanihan Basic T-Shirt",
+    ]) {
+      expect(understandFromRules(message, catalog)).toMatchObject({
+        intent: "availability",
+        product_query: expect.any(String),
+      });
+    }
+  });
 });

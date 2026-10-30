@@ -194,6 +194,19 @@ describe("grounded incoming conversation brain", () => {
     expect(answer.reply).toContain("530.00");
   });
 
+  it("explains that an unlisted item is not in the catalog and flags it for the seller", async () => {
+    const result = await runIncomingBrain({
+      ...baseInput,
+      message: "hm po ba yung denim jacket?",
+      products: [product],
+    });
+    expect(result.needsSeller).toBe(true);
+    expect(result.missedRequest).toBe(true);
+    expect(result.reply).toContain("denim jacket");
+    expect(result.reply).toContain("catalog ng shop");
+    expect(result.reply).toContain("seller");
+  });
+
   it("asks the customer to choose when two catalog products share t-shirt", async () => {
     const duplicate: BrainProduct = {
       ...product,

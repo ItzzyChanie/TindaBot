@@ -417,7 +417,8 @@ export function runIncomingBrain(
         },
       );
     return escalate(
-      "Hindi ko makita ang item na iyan sa catalog. I-check ko muna sa seller po.",
+      "Hindi ko makita ang " + understanding.product_query +
+        " sa catalog ng shop, kaya hindi ko ma-confirm ang availability nito. Ipa-check ko muna sa seller po kung mayroon nito.",
     );
   }
   const product = resolution.product;
