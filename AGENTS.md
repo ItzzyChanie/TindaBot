@@ -7,15 +7,15 @@ STACK
 Next.js (App Router) + TypeScript + Tailwind for the seller app and storefront. Supabase: Postgres, Auth, Realtime, Storage, Edge Functions (TypeScript/Deno). Telegram Bot API via webhook. AI through a provider wrapper (AI_PROVIDER=gemini or openai). Vercel for hosting. Vitest for tests. Windows and PowerShell.
 
 NON-NEGOTIABLE RULES
-1. The AI never calculates prices, discounts, shipping or stock. It only extracts intent, product, size and quantity as validated JSON. Code calls quote() and checks stock, then the AI phrases the reply from the exact numbers returned.
+1. There is no AI or external language service. The reply engine normalizes the message (lowercase, punctuation, common typos), matches product aliases, sizes, quantities (digits and Filipino number words) and intent keywords, then builds the reply from hard-coded Taglish templates filled with exact numbers from quote() and the database.
 2. One price function, quote(), in a dependency-free TypeScript file used by chat, storefront, catalog preview and orders. The customer gets the single best offer (no stacking). Money is numeric(10,2) in the database; calculations round to 2 decimals once per line and are unit-tested.
-3. Answer only from catalog and shop-settings data. Unknown product, complaint, refund, custom request, low confidence or AI failure means escalate: set conversation status needs_seller and log a missed_requests row.
+3. Answer only from the catalog and shop settings. Anything the rules do not recognise, and every complaint, refund or custom request, escalates to the seller (needs_seller plus a missed_requests row) with a reply that lists what the bot can answer.
 4. The assistant says it is automated and always lets the customer ask for the seller.
 5. SECURITY (the repo is PUBLIC): never commit secrets, .env files or real customer data. Use blank .env.example files. Secrets live only in .env.local, .env.functions and Supabase secrets. The bot token and service-role key are used only inside Edge Functions. Verify the Telegram webhook secret header. Enable RLS on every table. Public access only through a view that exposes safe columns of active products. Rate limit public endpoints, cap message length, enforce a daily AI call cap, and escape all user text before rendering. Use mock data only.
 6. Stock changes only through an atomic SQL function so the last item cannot be sold twice.
 7. Every channel calls one function, handleIncoming(channel, externalId, text, context). Channels are thin adapters.
 8. Do not add libraries, features or files that the current day does not need. Keep code readable with short comments.
-9. AI model IDs and API syntax change. Read the provider’s current official docs before writing AI calls, and read model IDs from environment variables.
+9. Keep the reply engine in one module with an understand(message, context) function that returns {intent, product, size, quantity, location, confidence}. A language model can be plugged in there later without changing the rest of the app.
 10. After each task run lint, type-check and tests, then summarize what changed, what I should test by hand, and any follow-ups. Commit with a clear message.
 
 CONVENTIONS
