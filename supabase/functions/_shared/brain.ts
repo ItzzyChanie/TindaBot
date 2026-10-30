@@ -68,6 +68,8 @@ export type BrainRules = {
 const defaultRules: BrainRules = { understand: understandFromRules };
 const disclosure =
   "Automated assistant po ito ng shop. I-type ang SELLER para makausap ang seller.";
+const unknownMessageReply =
+  "I-check ko muna ito sa seller po. Kaya kong tumulong sa presyo, size at stock, shipping, bayad, at order status.";
 
 export function labelAutoReply(reply: string, aiMode: BrainInput["aiMode"]): string {
   return aiMode === "auto" ? reply + "\n— Assistant" : reply;
@@ -193,7 +195,7 @@ export function runIncomingBrain(
     console.warn("[reply-rules] could not classify incoming message", {
       failure: "rule_evaluation_error",
     });
-    return escalate("I-check ko muna ito sa seller po.");
+    return escalate(unknownMessageReply);
   }
   const clarificationProduct = input.products.find((item) =>
     item.active && item.id === clarification.product_id
@@ -272,7 +274,7 @@ export function runIncomingBrain(
       catalog_count: input.products.filter((product) => product.active).length,
       product_query_present: Boolean(understanding.product_query),
     });
-    return escalate("I-check ko muna ito sa seller po.");
+    return escalate(unknownMessageReply);
   }
   if (["complaint", "other"].includes(understanding.intent)) {
     return escalate("Pasensya na po. I-check ko muna ito sa seller.");

@@ -53,12 +53,6 @@ Deno.serve(async (request: Request) => {
       { error: "Unauthorized" },
       { status: 401, headers: cors ?? {} },
     );
-  if (!telegramToken)
-    return Response.json(
-      { error: "Telegram is not configured" },
-      { status: 500, headers: cors ?? {} },
-    );
-
   let body: { conversationId?: unknown; text?: unknown; sendDraft?: unknown };
   try {
     body = await request.json();
@@ -106,12 +100,17 @@ Deno.serve(async (request: Request) => {
     .select("channel, external_id")
     .eq("id", conversation.customer_id)
     .maybeSingle();
-  if (customerError || !customer || customer.channel !== "telegram") {
+  if (customerError || !customer || !["telegram", "web"].includes(customer.channel)) {
     return Response.json(
-      { error: "This conversation cannot be replied to through Telegram" },
+      { error: "This conversation channel cannot receive seller replies" },
       { status: 400, headers: cors ?? {} },
     );
   }
+  if (customer.channel === "telegram" && !telegramToken)
+    return Response.json(
+      { error: "Telegram is not configured" },
+      { status: 500, headers: cors ?? {} },
+    );
 
   const { error: messageError } = await supabase.from("messages").insert({
     conversation_id: conversation.id,
@@ -140,6 +139,9 @@ Deno.serve(async (request: Request) => {
       { error: "Reply saved, but conversation mode could not be updated" },
       { status: 500, headers: cors ?? {} },
     );
+
+  if (customer.channel === "web")
+    return Response.json({ ok: true }, { headers: cors ?? {} });
 
   try {
     const telegramResponse = await fetch(

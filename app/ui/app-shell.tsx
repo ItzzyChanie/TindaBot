@@ -39,13 +39,14 @@ export function AppShell({
   }, []);
 
   useEffect(() => {
+    if (pathname === "/chat" || pathname === "/login") return;
     void refreshUnread();
     const supabase = createSupabaseBrowserClient();
     const channel = supabase.channel("sidebar-unread-count")
       .on("postgres_changes", { event: "*", schema: "public", table: "conversations" }, () => void refreshUnread())
       .subscribe();
     return () => { void supabase.removeChannel(channel); };
-  }, [refreshUnread]);
+  }, [refreshUnread, pathname]);
 
   async function signOut() {
     setSignOutError("");
@@ -59,7 +60,7 @@ export function AppShell({
     }
   }
 
-  if (pathname === "/login") return <>{children}</>;
+  if (pathname === "/login" || pathname === "/chat") return <>{children}</>;
 
   return (
     <div className="app-layout">

@@ -96,6 +96,18 @@ describe("grounded incoming conversation brain", () => {
     expect(result.quotedPriceMatches).toBe(true);
   });
 
+  it("uses the supported-topics escalation for unrecognized messages", async () => {
+    const result = await runIncomingBrain(
+      baseInput,
+      ai(understanding({ intent: "unknown", product_query: null, confidence: 0.2 })),
+    );
+
+    expect(result.reply).toContain("I-check ko muna ito sa seller po");
+    expect(result.reply).toContain("presyo, size at stock, shipping, bayad, at order status");
+    expect(result.needsSeller).toBe(true);
+    expect(result.missedRequest).toBe(true);
+  });
+
   it("handles a new customer question even while the conversation awaits the seller", async () => {
     const provider = ai(understanding());
     const result = await runIncomingBrain(

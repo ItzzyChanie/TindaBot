@@ -382,7 +382,7 @@ export function InboxWorkspace() {
                       {latest?.body ?? "No messages yet"}
                     </span>
                     <span className="channel-badge">
-                      {contact?.channel ?? "unknown"}
+                      {contact?.channel === "web" ? "Web chat" : contact?.channel ?? "unknown"}
                     </span>
                   </span>
                   <time className="conversation-time">
@@ -528,7 +528,7 @@ export function InboxWorkspace() {
                   .toUpperCase()}
               </span>
               <h2>{customer.name || "Customer"}</h2>
-              <span className="channel-badge">{customer.channel}</span>
+              <span className="channel-badge">{customer.channel === "web" ? "Web chat" : customer.channel}</span>
             </div>
             <dl className="customer-details">
               <div>
