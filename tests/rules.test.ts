@@ -27,6 +27,7 @@ describe("catalog-grounded message rules", () => {
       quantities_mentioned: [2],
       location: "Metro Manila",
       confidence: 0.95,
+      availability_requested: false,
     });
   });
 

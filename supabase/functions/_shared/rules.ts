@@ -7,6 +7,7 @@ export type UnderstandingIntent =
   | "status"
   | "payment"
   | "order_help"
+  | "catalog"
   | "shipping"
   | "complaint"
   | "other"
@@ -20,6 +21,7 @@ export type Understanding = {
   quantities_mentioned: number[];
   location: string | null;
   confidence: number;
+  availability_requested?: boolean;
 };
 
 export type CatalogProduct = {
@@ -110,6 +112,7 @@ const quantityUnits = new Set([
 ]);
 
 const intentPhrases = {
+  catalog: ["what items do you have", "what items are available", "what products do you have", "what products are available", "show me the products", "show available items", "list of items", "list products", "available items", "ano mga tinda", "anong mga tinda", "ano pong items", "mga available na item", "anong products meron", "ano mga available nyo", "ano mga available ninyo"],
   complaint: ["complaint", "reklamo", "sira", "damaged", "wrong item", "wrong size", "refund", "return", "late delivery", "late parcel", "no updates", "disappointed", "hindi dumating", "did not arrive", "didn't arrive", "not delivered", "received the wrong"],
   other: ["custom", "customize", "customise", "tailor", "alter", "personalized", "personalised", "do you sell", "nagbebenta", "may tinda"],
   status: ["order status", "nasaan order", "asan order", "nasaan na order", "update sa parcel", "track my order", "where is my order", "tracking", "order confirmation", "follow up", "follow-up", "na ship na", "parcel ko"],
@@ -129,7 +132,7 @@ const stopWords = new Set([
   "ang", "yung", "ng", "sa", "pa", "ano", "anong", "deliver", "delivery", "ship", "shipping",
   "fee", "item", "items", "pcs", "pc", "piece", "pieces", "piraso", "qty",
   "quantity", "size", "sizes", "order", "gusto", "ko", "nito", "iyan", "ito", "na",
-  "with", "and", "or", "medium", "med", "small", "large", "extra", "xl", "xxl", "kayo", "kayong", "kami", "po",
+  "with", "and", "or", "medium", "med", "small", "large", "extra", "xl", "xxl", "kayo", "kayong", "kami", "nyo", "ninyo", "ninyong", "what", "are", "have",
   ...Object.keys(numberWords),
 ]);
 
@@ -342,13 +345,15 @@ export function understandFromRules(
   const quantities = extractQuantities(normalized, productStart);
   const location = extractLocation(normalized);
   const orderIntent = hasAny(normalized, intentPhrases.order_confirm);
+  const availabilityRequested = hasAny(normalized, intentPhrases.availability);
   const ambiguousQuery = Boolean(productQuery) &&
     resolveProduct(productQuery, catalog).status === "ambiguous";
   const availabilityCue = hasAny(normalized, intentPhrases.availability) ||
     (bestMatch && size !== null && /\b(may|meron|mayroon)\b/.test(normalized));
 
   let intent: UnderstandingIntent = "unknown";
-  if (hasAny(normalized, intentPhrases.complaint)) intent = "complaint";
+  if (hasAny(normalized, intentPhrases.catalog)) intent = "catalog";
+  else if (hasAny(normalized, intentPhrases.complaint)) intent = "complaint";
   else if (hasAny(normalized, intentPhrases.other)) intent = "other";
   else if (hasAny(normalized, intentPhrases.status)) intent = "status";
   else if (/\b(nasaan|asan)\b.*\b(order|parcel)\b/.test(normalized)) intent = "status";
@@ -381,5 +386,6 @@ export function understandFromRules(
     quantities_mentioned: quantities,
     location,
     confidence,
+    availability_requested: availabilityRequested,
   };
 }

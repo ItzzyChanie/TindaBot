@@ -25,6 +25,7 @@ export type BrainProduct = CatalogProduct & {
 export type BrainPending = Record<string, unknown> & {
   order?: Record<string, unknown>;
   clarification?: Record<string, unknown>;
+  last_product?: Record<string, unknown>;
 };
 export type BrainInput = {
   message: string;
@@ -179,7 +180,8 @@ export function runIncomingBrain(
     const candidates = input.products.filter((item) => item.active &&
       (clarification.candidates as unknown[]).includes(item.name));
     const selected = resolveProduct(input.message, candidates);
-    if (selected.status === "matched" && typeof clarification.intent === "string") {
+    if (selected.status === "matched" && typeof clarification.intent === "string" &&
+      (understanding.intent === "unknown" || understanding.intent === "question")) {
       understanding = {
         intent: clarification.intent as Understanding["intent"],
         product_query: selected.product.name,
@@ -191,7 +193,8 @@ export function runIncomingBrain(
       };
     }
   }
-  if (clarificationProduct && typeof clarification.intent === "string") {
+  if (clarificationProduct && typeof clarification.intent === "string" &&
+    understanding.intent === "unknown") {
     const kind = clarification.kind;
     const intent = clarification.intent as Understanding["intent"];
     const common = {
@@ -206,8 +209,21 @@ export function runIncomingBrain(
       if (quantity) understanding = { ...common, size: typeof clarification.size === "string" ? clarification.size : null, quantity, quantities_mentioned: [quantity], location: typeof clarification.location === "string" ? clarification.location : null };
     } else if (kind === "location") {
       const location = matchCatalogLocation(input.message);
-      if (location) understanding = { ...common, size: typeof clarification.size === "string" ? clarification.size : null, quantity: Number(clarification.quantity) || 1, location };
+      if (location) understanding = { ...common, size: typeof clarification.size === "string" ? clarification.size : null, quantity: Number(clarification.quantity) || 1, location, availability_requested: clarification.availability_requested === true };
     }
+  }
+  const lastProductContext = record(input.pending.last_product);
+  const lastProduct = input.products.find((item) =>
+    item.active && item.id === lastProductContext.product_id
+  );
+  if (lastProduct && !understanding.product_query &&
+    ["price", "availability", "question"].includes(understanding.intent)) {
+    understanding = {
+      ...understanding,
+      product_query: lastProduct.name,
+      size: understanding.size ?? (typeof lastProductContext.size === "string" ? lastProductContext.size : null),
+      location: understanding.location ?? (typeof lastProductContext.location === "string" ? lastProductContext.location : null),
+    };
   }
   if (clarification.kind && understanding.confidence < 0.6) {
     const prompt = clarification.kind === "size"
@@ -275,6 +291,26 @@ export function runIncomingBrain(
     return respond(
       { greeting: true, automated_assistant: true },
       "Hello po! Ano pong item ang gusto ninyong itanong?",
+    );
+  }
+  if (understanding.intent === "catalog") {
+    const activeProducts = input.products.filter((item) => item.active);
+    if (!activeProducts.length) return respond(
+      { catalog_count: 0 },
+      "Wala pa pong active items sa catalog ngayon. Ipa-check ko po sa seller.",
+    );
+    const now = input.now ?? new Date();
+    const lines = activeProducts.map((item) => {
+      const pricing = quote(item, 1, now, item.promos);
+      const stocks = item.variants.map((variant) =>
+        variant.size + (variant.stock > 0 ? " (" + variant.stock + " available)" : " (sold out)")
+      ).join(", ");
+      return "• " + item.name + " — " + peso(pricing.unit) +
+        (stocks ? "; sizes/stock: " + stocks : "");
+    });
+    return respond(
+      { catalog_count: activeProducts.length, products: activeProducts.map((item) => item.name) },
+      "Ito po ang active items sa catalog at available sizes/stock: " + lines.join("\n"),
     );
   }
   if (understanding.intent === "order_help") {
@@ -431,6 +467,7 @@ export function runIncomingBrain(
     return respond(
       { product: product.name, sizes: product.variants.map((item) => item.size), stock: product.variants.map((item) => item.stock) },
       product.name + " po, available sizes and stock: " + sizeStock.join(", ") + ".",
+      { ...activePending, last_product: { product_id: product.id } },
     );
   }
   if (chosenSize && !sizes.includes(chosenSize)) {
@@ -473,32 +510,6 @@ export function runIncomingBrain(
     : product.variants[0];
   if (!variant)
     return escalate("I-check ko muna ang available sizes sa seller po.");
-  if (variant.stock < quantity && understanding.intent !== "price") {
-    return respond(
-      {
-        product: product.name,
-        size: variant.size,
-        requested: quantity,
-        stock: variant.stock,
-      },
-      variant.stock === 0
-        ? "Pasensya na po, sold out ang " +
-            product.name +
-            " (" +
-            variant.size +
-            "). I-check ko kung may alternative sa seller po."
-        : "May " +
-            variant.stock +
-            " " +
-            variant.size +
-            " pa po ng " +
-            product.name +
-            "; " +
-            quantity +
-            " ang hinahanap ninyo. Ilan po ang gusto ninyong kunin?",
-    );
-  }
-
   const now = input.now ?? new Date();
   const pricing = quote(product, quantity, now, product.promos);
   const region = regionFor(understanding.location);
@@ -508,6 +519,33 @@ export function runIncomingBrain(
       "Hindi ko makita ang shipping rate para sa " + region + ". I-check ko muna sa seller po.",
     );
   }
+  if (variant.stock < quantity &&
+    (understanding.intent !== "price" || understanding.availability_requested)) {
+    const shortageReply = understanding.intent === "price"
+      ? "May " + variant.stock + " stock lang po ng " + product.name + " (" + variant.size + "). Ang presyo para sa " + quantity + " piraso ay subtotal na " + peso(pricing.total) + "." +
+        (typeof shipping === "number" ? " Shipping: " + peso(shipping) + ", total kung available ang quantity: " + peso(Math.round((pricing.total + shipping + Number.EPSILON) * 100) / 100) + "." : " Sabihin po ang delivery area para makuha ang shipping.")
+      : variant.stock === 0
+        ? "Pasensya na po, sold out ang " + product.name + " (" + variant.size + "). I-check ko kung may alternative sa seller po."
+        : "May " + variant.stock + " " + variant.size + " pa po ng " + product.name + "; " + quantity + " ang hinahanap ninyo. Ilan po ang gusto ninyong kunin?";
+    return respond(
+      {
+        product: product.name,
+        size: variant.size,
+        requested: quantity,
+        stock: variant.stock,
+      },
+      shortageReply,
+      typeof shipping === "number" ? {
+        ...activePending,
+        last_product: { product_id: product.id, size: variant.size, quantity, location: understanding.location },
+      } : {
+        ...activePending,
+        last_product: { product_id: product.id, size: variant.size, quantity, location: understanding.location },
+        clarification: { kind: "location", product_id: product.id, intent: understanding.intent, size: variant.size, quantity, location: null, availability_requested: understanding.availability_requested === true },
+      },
+    );
+  }
+
   const shippingAmount = typeof shipping === "number" ? shipping : 0;
   const total =
     Math.round((pricing.total + shippingAmount + Number.EPSILON) * 100) / 100;
@@ -529,6 +567,7 @@ export function runIncomingBrain(
   const pending: BrainPending = orderIntent
     ? { ...activePending, order }
     : activePending;
+  pending.last_product = { product_id: product.id, size: variant.size, quantity, location: understanding.location };
   const amounts = [
     pricing.unit,
     pricing.total,
@@ -583,11 +622,13 @@ export function runIncomingBrain(
         variant.stock +
         " stock. " +
         amountSummary
-    : product.name + (understanding.size ? " (" + variant.size + ")" : "") + " po: " + amountSummary;
+    : product.name + (understanding.size ? " (" + variant.size + ")" : "") +
+      (understanding.quantity ? " x" + quantity : "") + " po: " + amountSummary +
+      (understanding.availability_requested ? " May " + variant.stock + " stock po sa size " + variant.size + "." : "");
 
   const responsePending = typeof shipping === "number" ? pending : {
     ...pending,
-    clarification: { kind: "location", product_id: product.id, intent: understanding.intent, size: variant.size, quantity, location: null },
+    clarification: { kind: "location", product_id: product.id, intent: understanding.intent, size: variant.size, quantity, location: null, availability_requested: understanding.availability_requested === true },
   };
   return respond(facts, template, responsePending);
 }

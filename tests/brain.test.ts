@@ -207,6 +207,82 @@ describe("grounded incoming conversation brain", () => {
     expect(result.reply).toContain("seller");
   });
 
+  it("lists all active catalog items with their current offer, sizes, and stock", async () => {
+    const second: BrainProduct = {
+      ...product,
+      id: "second-product",
+      name: "Habi Ribbed Tank Top",
+      aliases: ["tank top"],
+      price: 120,
+      variants: [
+        { id: "tank-s", size: "S", stock: 2 },
+        { id: "tank-m", size: "M", stock: 0 },
+      ],
+    };
+    const result = await runIncomingBrain({
+      ...baseInput,
+      message: "What items are available?",
+      products: [product, second],
+    });
+    expect(result.reply).toContain("Isla Linen Top");
+    expect(result.reply).toContain("Habi Ribbed Tank Top");
+    expect(result.reply).toContain("S (5 available)");
+    expect(result.reply).toContain("M (sold out)");
+    expect(result.reply).toContain("33.33");
+    expect(result.reply).toContain("120.00");
+  });
+
+  it("answers combined size availability and price questions for the requested quantity", async () => {
+    const result = await runIncomingBrain({
+      ...baseInput,
+      message: "Isla blouse size S still available and how much for 3 items?",
+    });
+    expect(result.reply).toContain("3");
+    expect(result.reply).toContain("S");
+    expect(result.reply).toContain("stock");
+    expect(result.reply).toContain("99.99");
+  });
+
+  it("lets the customer switch to a different catalog item during follow-up", async () => {
+    const tee: BrainProduct = {
+      ...product,
+      id: "tee",
+      name: "Bayanihan Basic T-Shirt",
+      aliases: ["t-shirt"],
+      price: 450,
+      variants: [{ id: "tee-m", size: "M", stock: 5 }],
+    };
+    const first = await runIncomingBrain({
+      ...baseInput,
+      message: "Magkano Bayanihan Basic T-Shirt?",
+      products: [tee, product],
+    });
+    const second = await runIncomingBrain({
+      ...baseInput,
+      message: "hm Isla blouse?",
+      products: [tee, product],
+      pending: first.pending,
+    });
+    expect(second.reply).toContain("Isla Linen Top");
+    expect(second.reply).toContain("33.33");
+    expect(second.reply).not.toContain("450.00");
+  });
+
+  it("uses the last mentioned item when a short price follow-up omits its name", async () => {
+    const first = await runIncomingBrain({
+      ...baseInput,
+      message: "Magkano Isla blouse?",
+    });
+    const followUp = await runIncomingBrain({
+      ...baseInput,
+      message: "How much for 3 pcs?",
+      pending: first.pending,
+    });
+    expect(followUp.reply).toContain("Isla Linen Top");
+    expect(followUp.reply).toContain("x3");
+    expect(followUp.reply).toContain("99.99");
+  });
+
   it("asks the customer to choose when two catalog products share t-shirt", async () => {
     const duplicate: BrainProduct = {
       ...product,
