@@ -150,6 +150,7 @@ const stopWords = new Set([
   "fee", "item", "items", "pcs", "pc", "piece", "pieces", "piraso", "qty",
   "quantity", "size", "sizes", "order", "gusto", "ko", "nito", "iyan", "ito", "na",
   "with", "and", "or", "medium", "med", "small", "large", "extra", "xl", "xxl", "kayo", "kayong", "kami", "nyo", "ninyo", "ninyong", "what", "are", "have",
+  "this", "that",
   ...Object.keys(numberWords),
 ]);
 

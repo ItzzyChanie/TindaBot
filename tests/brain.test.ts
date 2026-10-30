@@ -97,6 +97,18 @@ describe("grounded incoming conversation brain", () => {
     expect(result.reply).toContain("₱99.99");
   });
 
+  it("answers deictic availability questions using the linked shop item", async () => {
+    const result = await runIncomingBrain({
+      ...baseInput,
+      message: "Is this available po?",
+      contextProductId: product.id,
+    });
+
+    expect(result.reply).toContain(product.name);
+    expect(result.reply).toContain("available");
+    expect(result.needsSeller).toBe(false);
+  });
+
   it("returns to assistant mode on /assistant and clears the handoff wait", async () => {
     const result = await runIncomingBrain({
       ...baseInput,

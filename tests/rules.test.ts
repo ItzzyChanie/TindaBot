@@ -91,6 +91,13 @@ describe("catalog-grounded message rules", () => {
       .toBe("unknown");
   });
 
+  it("treats deictic availability wording as having no product phrase", () => {
+    expect(understandFromRules("Is this available po?", catalog)).toMatchObject({
+      intent: "availability",
+      product_query: null,
+    });
+  });
+
   it("recognizes size answers regardless of casing and common typos", () => {
     for (const answer of ["m", "MEDIUM", "meduim", "M po", "LARGE", "larg", "small", "smol"]) {
       expect(matchCatalogSize(answer, ["S", "M", "L"])).not.toBeNull();
