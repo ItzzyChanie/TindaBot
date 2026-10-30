@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { runIncomingBrain, type BrainRules, type BrainInput, type BrainProduct } from "../supabase/functions/_shared/brain";
+import { labelAutoReply, runIncomingBrain, type BrainRules, type BrainInput, type BrainProduct } from "../supabase/functions/_shared/brain";
 import type { Understanding } from "../supabase/functions/_shared/rules";
 
 const product: BrainProduct = {
@@ -55,6 +55,22 @@ function ai(result: Understanding): BrainRules {
 }
 
 describe("grounded incoming conversation brain", () => {
+  it("labels automatic replies and leaves non-auto replies unchanged", () => {
+    expect(labelAutoReply("Hello po", "auto")).toBe("Hello po\n— Assistant");
+    expect(labelAutoReply("Hello po", "suggest")).toBe("Hello po");
+  });
+
+  it("welcomes customers on /start only in Auto mode and explains seller handoff", async () => {
+    const automatic = await runIncomingBrain({ ...baseInput, message: "/start", firstContact: true });
+    expect(automatic.reply).toContain("automated assistant");
+    expect(automatic.reply).toContain("/seller");
+    expect(automatic.action).toBe("reply");
+
+    const human = await runIncomingBrain({ ...baseInput, message: "/start", aiMode: "human" });
+    expect(human.reply).toBeNull();
+    expect(human.action).toBe("none");
+  });
+
   it("uses quote output in its deterministic price reply", async () => {
     const provider = ai(understanding());
     const result = await runIncomingBrain(baseInput, provider);

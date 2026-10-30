@@ -64,6 +64,10 @@ const defaultRules: BrainRules = { understand: understandFromRules };
 const disclosure =
   "Automated assistant po ito ng shop. I-type ang SELLER para makausap ang seller.";
 
+export function labelAutoReply(reply: string, aiMode: BrainInput["aiMode"]): string {
+  return aiMode === "auto" ? reply + "\n— Assistant" : reply;
+}
+
 function record(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -138,6 +142,14 @@ export function runIncomingBrain(
     return escalate(
       "Naipasa na po kayo sa seller. Pakihintay po ng reply rito; maaaring may inaasikaso lang siya ngayon.",
     );
+  }
+  if (/^\s*\/start(?:@[a-z0-9_]+)?\s*$/i.test(input.message)) {
+    if (input.aiMode !== "auto") return base;
+    return {
+      ...base,
+      action: "reply",
+      reply: "Kumusta po! Ako ang automated assistant ng shop. Maaari po akong tumulong sa presyo, sizes, stock, at delivery. Para makausap ang seller, mag-type lang po ng /seller at pakihintay ang reply niya rito.",
+    };
   }
 
   const clarification = record(input.pending.clarification);

@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import { runIncomingBrain, type BrainPending, type BrainProduct } from "./brain.ts";
+import { labelAutoReply, runIncomingBrain, type BrainPending, type BrainProduct } from "./brain.ts";
 import { quote, type QuotePromo } from "./quote.ts";
 
 const supabase = createClient(
@@ -158,13 +158,17 @@ export async function handleIncoming(
     .update({ last_message_at: new Date().toISOString(), seller_read_at: null, is_hidden: false }).eq("id", conversationId);
   if (updateError) throw updateError;
 
-  if (context.paymentProof) {
-    const reply = await savePaymentProof(conversationId, customer.id, context.paymentProof, text);
-    return { conversationId, reply, draft: null };
-  }
-
   const conversation = existing ?? { status: "open", ai_mode: "auto", pending: {} };
   const aiMode = conversation.ai_mode as "auto" | "suggest" | "human";
+  if (context.paymentProof) {
+    const reply = await savePaymentProof(conversationId, customer.id, context.paymentProof, text);
+    return {
+      conversationId,
+      reply: aiMode === "human" ? null : labelAutoReply(reply, aiMode),
+      draft: null,
+    };
+  }
+
   if (aiMode === "human") {
     if (/^\s*(seller|\/seller)\s*$/i.test(text)) {
       const { error } = await supabase.from("conversations").update({ status: "needs_seller" }).eq("id", conversationId);
@@ -335,6 +339,7 @@ export async function handleIncoming(
     }
   }
 
+  if (reply && aiMode === "auto") reply = labelAutoReply(reply, aiMode);
   if (aiMode === "suggest" && reply) {
     draft = reply;
     reply = null;
