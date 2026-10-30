@@ -531,6 +531,26 @@ describe("grounded incoming conversation brain", () => {
     expect(answer.reply).not.toContain("Alin po rito");
   });
 
+  it("answers with the full catalog item when the customer gives a generated partial name", async () => {
+    const futureProduct: BrainProduct = {
+      ...product,
+      id: "hiraya-shirt",
+      name: "Hiraya Oversized Graphic T-Shirt",
+      aliases: [],
+      price: 520,
+      variants: [{ id: "hiraya-m", size: "M", stock: 7 }],
+    };
+    const result = await runIncomingBrain({
+      ...baseInput,
+      message: "Magkano po ang hiraya shirt?",
+      products: [futureProduct],
+    });
+
+    expect(result.reply).toContain("Hiraya Oversized Graphic T-Shirt");
+    expect(result.reply).toContain("520.00");
+    expect(result.needsSeller).toBe(false);
+  });
+
   it("escalates when a known delivery region has no configured shipping rate", async () => {
     const tee: BrainProduct = {
       ...product,

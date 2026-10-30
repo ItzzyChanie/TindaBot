@@ -218,6 +218,27 @@ function containsPhrase(message: string, phrase: string): boolean {
   return ` ${message} `.includes(` ${normalizeMessage(phrase)} `);
 }
 
+function productPhrases(product: CatalogProduct): string[] {
+  const phrases = new Map<string, string>();
+  for (const source of [product.name, ...(product.aliases ?? [])]) {
+    const normalized = normalizeProductQuery(source);
+    if (!normalized) continue;
+    phrases.set(normalized, source.trim());
+    const sourceVariants = [normalized, normalized.replace(/\btshirt\b/g, "shirt")];
+    for (const variant of sourceVariants) {
+      phrases.set(variant, phrases.get(variant) ?? variant);
+      const words = variant.split(" ");
+      for (let start = 0; start < words.length; start += 1) {
+        for (let end = start + 1; end <= words.length; end += 1) {
+          const phrase = words.slice(start, end).join(" ");
+          phrases.set(phrase, phrases.get(phrase) ?? phrase);
+        }
+      }
+    }
+  }
+  return [...phrases.values()];
+}
+
 function editDistance(left: string, right: string): number {
   const row = Array.from({ length: right.length + 1 }, (_, index) => index);
   for (let i = 1; i <= left.length; i += 1) {
@@ -298,8 +319,7 @@ export function resolveProduct<T extends CatalogProduct>(
   const normalizedQuery = normalizeProductQuery(query ?? "");
   if (!normalizedQuery) return { status: "not_found", candidates: [] };
   const scored = products.map((product) => {
-    const names = [product.name, ...(product.aliases ?? [])]
-      .map(normalizeProductQuery).filter(Boolean);
+    const names = productPhrases(product);
     let score = names.includes(normalizedQuery) ? 1 : 0;
     for (const name of names) {
       if (normalizedQuery.length >= 3 && name.length >= 3 &&
@@ -340,10 +360,15 @@ export function resolveProductChoice<T extends CatalogProduct>(
 function findProductMatches(message: string, catalog: CatalogProduct[]): ProductMatch[] {
   const matches: ProductMatch[] = [];
   for (const product of catalog) {
-    for (const alias of [product.name, ...(product.aliases ?? [])]) {
+    for (const alias of productPhrases(product)) {
       const normalizedAlias = normalizeMessage(alias);
       if (!normalizedAlias) continue;
-      const variants = [normalizedAlias, `${normalizedAlias}s`];
+      const variants = [...new Set([
+        normalizedAlias,
+        normalizedAlias.replace(/\btshirt\b/g, "t shirt"),
+        normalizedAlias.replace(/\bt shirt\b/g, "tshirt"),
+        `${normalizedAlias}s`,
+      ])];
       for (const variant of variants) {
         const paddedIndex = ` ${message} `.indexOf(` ${variant} `);
         if (paddedIndex >= 0) {

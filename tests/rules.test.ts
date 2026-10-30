@@ -98,6 +98,27 @@ describe("catalog-grounded message rules", () => {
     });
   });
 
+  it("matches partial names generated from any catalog product", () => {
+    const futureProduct: CatalogProduct = {
+      name: "Hiraya Oversized Graphic T-Shirt",
+      sizes: ["S", "M", "L"],
+    };
+    for (const phrase of [
+      "Hiraya",
+      "Hiraya T-Shirt",
+      "Hiraya shirt",
+      "oversized graphic t-shirt",
+      "graphic shirt",
+    ]) {
+      const result = understandFromRules(`Magkano po ${phrase}?`, [futureProduct]);
+      expect(result.intent).toBe("price");
+      expect(resolveProduct(result.product_query, [futureProduct])).toMatchObject({
+        status: "matched",
+        product: { name: futureProduct.name },
+      });
+    }
+  });
+
   it("classifies greetings and leaves unrelated questions unknown", () => {
     expect(understandFromRules("Hello po", catalog).intent).toBe("greeting");
     expect(understandFromRules("What is the weather today?", catalog).intent)
