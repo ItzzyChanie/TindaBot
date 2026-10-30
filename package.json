@@ -9,6 +9,9 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "seed": "node scripts/seed.mjs",
+    "eval:understand": "deno run --allow-env=EVAL_LIMIT,EVAL_DIAGNOSE --allow-read=eval/messages.json scripts/eval-understand.mts",
+    "test:order-concurrency": "deno run --allow-env --allow-run=psql scripts/test-order-concurrency.mts",
     "check:staged-secrets": "node scripts/check-staged-secrets.mjs"
   },
   "dependencies": {

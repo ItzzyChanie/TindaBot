@@ -38,3 +38,7 @@ enabled = false
 
 [functions.seller-reply]
 verify_jwt = true
+import_map = "./functions/import_map.json"
+
+[functions.telegram-webhook]
+import_map = "./functions/import_map.json"

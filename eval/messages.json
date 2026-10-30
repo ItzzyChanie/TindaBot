@@ -1,0 +1,551 @@
+[
+  {
+    "message": "Magkano po ang 2 medium t-shirt, pa-deliver sa Malabon?",
+    "expected": {
+      "intent": "price",
+      "product": "Bayanihan Basic T-Shirt",
+      "size": "M",
+      "quantity": 2
+    }
+  },
+  {
+    "message": "Hi po!",
+    "expected": {
+      "intent": "greeting",
+      "product": null,
+      "size": null,
+      "quantity": null
+    }
+  },
+  {
+    "message": "Hello, good morning po",
+    "expected": {
+      "intent": "greeting",
+      "product": null,
+      "size": null,
+      "quantity": null
+    }
+  },
+  {
+    "message": "Musta po",
+    "expected": {
+      "intent": "greeting",
+      "product": null,
+      "size": null,
+      "quantity": null
+    }
+  },
+  {
+    "message": "Good evening!",
+    "expected": {
+      "intent": "greeting",
+      "product": null,
+      "size": null,
+      "quantity": null
+    }
+  },
+  {
+    "message": "Hello TindaBot",
+    "expected": {
+      "intent": "greeting",
+      "product": null,
+      "size": null,
+      "quantity": null
+    }
+  },
+  {
+    "message": "Hi seller, magandang araw po",
+    "expected": {
+      "intent": "greeting",
+      "product": null,
+      "size": null,
+      "quantity": null
+    }
+  },
+  {
+    "message": "Ano po ang tela ng Isla Linen Top?",
+    "expected": {
+      "intent": "question",
+      "product": "Isla Linen Top",
+      "size": null,
+      "quantity": null
+    }
+  },
+  {
+    "message": "May lining ba yung Sinta Wrap Dress?",
+    "expected": {
+      "intent": "question",
+      "product": "Sinta Wrap Dress",
+      "size": null,
+      "quantity": null
+    }
+  },
+  {
+    "message": "Oversized fit po ba yung Amihan Cotton Tee?",
+    "expected": {
+      "intent": "question",
+      "product": "Amihan Cotton Tee",
+      "size": null,
+      "quantity": null
+    }
+  },
+  {
+    "message": "Anong sizes ng Luna cardigan?",
+    "expected": {
+      "intent": "question",
+      "product": "Luna Knit Cardigan",
+      "size": null,
+      "quantity": null
+    }
+  },
+  {
+    "message": "Puwede po makita yung Sol hat?",
+    "expected": {
+      "intent": "question",
+      "product": "Sol Bucket Hat",
+      "size": null,
+      "quantity": null
+    }
+  },
+  {
+    "message": "Is the Dahlia blouse cropped?",
+    "expected": {
+      "intent": "question",
+      "product": "Dahlia Puff Sleeve Blouse",
+      "size": null,
+      "quantity": null
+    }
+  },
+  {
+    "message": "Magkano Isla Linen Top?",
+    "expected": {
+      "intent": "price",
+      "product": "Isla Linen Top",
+      "size": null,
+      "quantity": null
+    }
+  },
+  {
+    "message": "Magkano po ang Sinta Wrap Dress na medium?",
+    "expected": {
+      "intent": "price",
+      "product": "Sinta Wrap Dress",
+      "size": "M",
+      "quantity": null
+    }
+  },
+  {
+    "message": "Presyo ng Amihan shirt in small please",
+    "expected": {
+      "intent": "price",
+      "product": "Amihan Cotton Tee",
+      "size": "S",
+      "quantity": null
+    }
+  },
+  {
+    "message": "Magkano yung Baybay trousers size L?",
+    "expected": {
+      "intent": "price",
+      "product": "Baybay Cropped Pants",
+      "size": "L",
+      "quantity": null
+    }
+  },
+  {
+    "message": "hm Sol bucket hat po",
+    "expected": {
+      "intent": "price",
+      "product": "Sol Bucket Hat",
+      "size": "One size",
+      "quantity": null
+    }
+  },
+  {
+    "message": "Price ng Dahlia puff sleeve blouse medium",
+    "expected": {
+      "intent": "price",
+      "product": "Dahlia Puff Sleeve Blouse",
+      "size": "M",
+      "quantity": null
+    }
+  },
+  {
+    "message": "May Isla Linen Top pa na small?",
+    "expected": {
+      "intent": "availability",
+      "product": "Isla Linen Top",
+      "size": "S",
+      "quantity": null
+    }
+  },
+  {
+    "message": "Available pa Luna cardigan size M po?",
+    "expected": {
+      "intent": "availability",
+      "product": "Luna Knit Cardigan",
+      "size": "M",
+      "quantity": null
+    }
+  },
+  {
+    "message": "Meron pa po bang Amihan tee na medium?",
+    "expected": {
+      "intent": "availability",
+      "product": "Amihan Cotton Tee",
+      "size": "M",
+      "quantity": null
+    }
+  },
+  {
+    "message": "May stock pa ng Sinta dress large?",
+    "expected": {
+      "intent": "availability",
+      "product": "Sinta Wrap Dress",
+      "size": "L",
+      "quantity": null
+    }
+  },
+  {
+    "message": "Available ba yung Sol hat?",
+    "expected": {
+      "intent": "availability",
+      "product": "Sol Bucket Hat",
+      "size": "One size",
+      "quantity": null
+    }
+  },
+  {
+    "message": "May Dahlia blouse pa size small?",
+    "expected": {
+      "intent": "availability",
+      "product": "Dahlia Puff Sleeve Blouse",
+      "size": "S",
+      "quantity": null
+    }
+  },
+  {
+    "message": "Order ko na 2 Isla Linen Top size M po",
+    "expected": {
+      "intent": "order_confirm",
+      "product": "Isla Linen Top",
+      "size": "M",
+      "quantity": 2
+    }
+  },
+  {
+    "message": "Kukuha po ako ng isang Sinta Wrap Dress size S",
+    "expected": {
+      "intent": "order_confirm",
+      "product": "Sinta Wrap Dress",
+      "size": "S",
+      "quantity": 1
+    }
+  },
+  {
+    "message": "Pabili po ng tatlong Amihan Cotton Tee medium",
+    "expected": {
+      "intent": "order_confirm",
+      "product": "Amihan Cotton Tee",
+      "size": "M",
+      "quantity": 3
+    }
+  },
+  {
+    "message": "Kunin ko 2 Baybay pants size L",
+    "expected": {
+      "intent": "order_confirm",
+      "product": "Baybay Cropped Pants",
+      "size": "L",
+      "quantity": 2
+    }
+  },
+  {
+    "message": "Mine po, one Sol bucket hat",
+    "expected": {
+      "intent": "order_confirm",
+      "product": "Sol Bucket Hat",
+      "size": "One size",
+      "quantity": 1
+    }
+  },
+  {
+    "message": "Checkout na ako ng 4 Dahlia blouse size S",
+    "expected": {
+      "intent": "order_confirm",
+      "product": "Dahlia Puff Sleeve Blouse",
+      "size": "S",
+      "quantity": 4
+    }
+  },
+  {
+    "message": "Nasaan na po order ko?",
+    "expected": {
+      "intent": "status",
+      "product": null,
+      "size": null,
+      "quantity": null
+    }
+  },
+  {
+    "message": "Pahingi po ng update sa parcel ko",
+    "expected": {
+      "intent": "status",
+      "product": null,
+      "size": null,
+      "quantity": null
+    }
+  },
+  {
+    "message": "Na-ship na ba yung order ko kahapon?",
+    "expected": {
+      "intent": "status",
+      "product": null,
+      "size": null,
+      "quantity": null
+    }
+  },
+  {
+    "message": "Ano na po status ng tracking ko?",
+    "expected": {
+      "intent": "status",
+      "product": null,
+      "size": null,
+      "quantity": null
+    }
+  },
+  {
+    "message": "Nareceive niyo na ba yung order confirmation ko?",
+    "expected": {
+      "intent": "status",
+      "product": null,
+      "size": null,
+      "quantity": null
+    }
+  },
+  {
+    "message": "Follow up lang po sa delivery ko",
+    "expected": {
+      "intent": "status",
+      "product": null,
+      "size": null,
+      "quantity": null
+    }
+  },
+  {
+    "message": "Paano po magbayad?",
+    "expected": {
+      "intent": "payment",
+      "product": null,
+      "size": null,
+      "quantity": null
+    }
+  },
+  {
+    "message": "Gcash ba payment option niyo?",
+    "expected": {
+      "intent": "payment",
+      "product": null,
+      "size": null,
+      "quantity": null
+    }
+  },
+  {
+    "message": "Saan magsesend ng payment screenshot?",
+    "expected": {
+      "intent": "payment",
+      "product": null,
+      "size": null,
+      "quantity": null
+    }
+  },
+  {
+    "message": "Paid na po ako through bank transfer",
+    "expected": {
+      "intent": "payment",
+      "product": null,
+      "size": null,
+      "quantity": null
+    }
+  },
+  {
+    "message": "Puwede po ba cash on delivery?",
+    "expected": {
+      "intent": "payment",
+      "product": null,
+      "size": null,
+      "quantity": null
+    }
+  },
+  {
+    "message": "Ano account name for payment?",
+    "expected": {
+      "intent": "payment",
+      "product": null,
+      "size": null,
+      "quantity": null
+    }
+  },
+  {
+    "message": "How much shipping to Quezon City?",
+    "expected": {
+      "intent": "shipping",
+      "product": null,
+      "size": null,
+      "quantity": null
+    }
+  },
+  {
+    "message": "Ship to Cebu po, magkano delivery?",
+    "expected": {
+      "intent": "shipping",
+      "product": null,
+      "size": null,
+      "quantity": null
+    }
+  },
+  {
+    "message": "Nagde-deliver po ba kayo sa Davao City?",
+    "expected": {
+      "intent": "shipping",
+      "product": null,
+      "size": null,
+      "quantity": null
+    }
+  },
+  {
+    "message": "Shipping fee to Laguna please",
+    "expected": {
+      "intent": "shipping",
+      "product": null,
+      "size": null,
+      "quantity": null
+    }
+  },
+  {
+    "message": "May delivery ba kayo sa Iloilo?",
+    "expected": {
+      "intent": "shipping",
+      "product": null,
+      "size": null,
+      "quantity": null
+    }
+  },
+  {
+    "message": "Gaano po katagal delivery papuntang Metro Manila?",
+    "expected": {
+      "intent": "shipping",
+      "product": null,
+      "size": null,
+      "quantity": null
+    }
+  },
+  {
+    "message": "Sira yung zipper ng Sinta Wrap Dress na dumating",
+    "expected": {
+      "intent": "complaint",
+      "product": "Sinta Wrap Dress",
+      "size": null,
+      "quantity": null
+    }
+  },
+  {
+    "message": "I received the wrong size Isla blouse",
+    "expected": {
+      "intent": "complaint",
+      "product": "Isla Linen Top",
+      "size": null,
+      "quantity": null
+    }
+  },
+  {
+    "message": "Late na yung parcel and no updates, disappointed po",
+    "expected": {
+      "intent": "complaint",
+      "product": null,
+      "size": null,
+      "quantity": null
+    }
+  },
+  {
+    "message": "Can I return this Luna cardigan? May damage",
+    "expected": {
+      "intent": "complaint",
+      "product": "Luna Knit Cardigan",
+      "size": null,
+      "quantity": null
+    }
+  },
+  {
+    "message": "Hindi dumating yung Amihan tee sa parcel",
+    "expected": {
+      "intent": "complaint",
+      "product": "Amihan Cotton Tee",
+      "size": null,
+      "quantity": null
+    }
+  },
+  {
+    "message": "Refund please, iba yung item na pinadala",
+    "expected": {
+      "intent": "complaint",
+      "product": null,
+      "size": null,
+      "quantity": null
+    }
+  },
+  {
+    "message": "Nagbebenta po ba kayo ng denim jacket?",
+    "expected": {
+      "intent": "other",
+      "product": null,
+      "size": null,
+      "quantity": null
+    }
+  },
+  {
+    "message": "Puwede po ba magpagawa ng custom graduation gown?",
+    "expected": {
+      "intent": "other",
+      "product": null,
+      "size": null,
+      "quantity": null
+    }
+  },
+  {
+    "message": "tatlong 2 medium t-shirt",
+    "expected": {
+      "intent": "question",
+      "product": "Bayanihan Basic T-Shirt",
+      "size": "M",
+      "quantity": null
+    }
+  },
+  {
+    "message": "May top po kayo?",
+    "expected": {
+      "intent": "question",
+      "product": null,
+      "size": null,
+      "quantity": null
+    }
+  },
+  {
+    "message": "Isla linnen top available pa?",
+    "expected": {
+      "intent": "availability",
+      "product": "Isla Linen Top",
+      "size": null,
+      "quantity": null
+    }
+  },
+  {
+    "message": "May 2 medium shirt and 3 small shirt?",
+    "expected": {
+      "intent": "availability",
+      "product": null,
+      "size": null,
+      "quantity": null
+    }
+  }
+]

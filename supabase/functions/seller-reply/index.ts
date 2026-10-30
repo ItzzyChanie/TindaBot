@@ -1,4 +1,4 @@
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient } from "@supabase/supabase-js";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
 const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
@@ -59,7 +59,7 @@ Deno.serve(async (request: Request) => {
       { status: 500, headers: cors ?? {} },
     );
 
-  let body: { conversationId?: unknown; text?: unknown };
+  let body: { conversationId?: unknown; text?: unknown; sendDraft?: unknown };
   try {
     body = await request.json();
   } catch {
@@ -71,6 +71,7 @@ Deno.serve(async (request: Request) => {
   const conversationId =
     typeof body.conversationId === "string" ? body.conversationId : "";
   const text = typeof body.text === "string" ? body.text.trim() : "";
+  const sendDraft = body.sendDraft === true;
   if (!conversationId || !text || text.length > 4000) {
     return Response.json(
       {
@@ -83,13 +84,21 @@ Deno.serve(async (request: Request) => {
 
   const { data: conversation, error: conversationError } = await supabase
     .from("conversations")
-    .select("id, customer_id")
+    .select("id, customer_id, ai_mode, status, pending")
     .eq("id", conversationId)
     .maybeSingle();
   if (conversationError || !conversation)
     return Response.json(
       { error: "Conversation not found" },
       { status: 404, headers: cors ?? {} },
+    );
+  const pending = typeof conversation.pending === "object" && conversation.pending !== null
+    ? conversation.pending as Record<string, unknown>
+    : {};
+  if (sendDraft && (conversation.ai_mode !== "suggest" || pending.ai_draft !== text))
+    return Response.json(
+      { error: "This AI draft is no longer available" },
+      { status: 409, headers: cors ?? {} },
     );
 
   const { data: customer, error: customerError } = await supabase
@@ -106,7 +115,7 @@ Deno.serve(async (request: Request) => {
 
   const { error: messageError } = await supabase.from("messages").insert({
     conversation_id: conversation.id,
-    sender: "seller",
+    sender: sendDraft ? "ai" : "seller",
     body: text,
   });
   if (messageError)
@@ -115,9 +124,16 @@ Deno.serve(async (request: Request) => {
       { status: 500, headers: cors ?? {} },
     );
 
+  const nextPending = { ...pending };
+  delete nextPending.ai_draft;
   const { error: modeError } = await supabase
     .from("conversations")
-    .update({ ai_mode: "human", last_message_at: new Date().toISOString() })
+    .update({
+      ...(sendDraft ? {} : { ai_mode: "human", pending: {} }),
+      ...(sendDraft ? { pending: nextPending } : {}),
+      status: conversation.status === "needs_seller" ? "open" : conversation.status,
+      last_message_at: new Date().toISOString(),
+    })
     .eq("id", conversation.id);
   if (modeError)
     return Response.json(
