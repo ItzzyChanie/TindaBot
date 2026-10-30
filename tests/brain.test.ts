@@ -494,6 +494,43 @@ describe("grounded incoming conversation brain", () => {
     expect(result.reply).not.toContain("I-check ko muna");
   });
 
+  it("accepts a shared-alias clarification when the customer repeats an exact product name", async () => {
+    const products: BrainProduct[] = [
+      {
+        ...product,
+        id: "plain-tee",
+        name: "T-Shirt",
+        aliases: ["tee"],
+        price: 100,
+        variants: [{ id: "plain-tee-m", size: "M", stock: 6 }],
+      },
+      {
+        ...product,
+        id: "bayanihan-tee",
+        name: "Bayanihan Basic T-Shirt",
+        aliases: ["t-shirt"],
+        price: 450,
+        variants: [{ id: "bayanihan-tee-m", size: "M", stock: 8 }],
+      },
+    ];
+    const question = await runIncomingBrain({
+      ...baseInput,
+      message: "How much po 2 medium t-shirt?",
+      products,
+    });
+    expect(question.reply).toContain("T-Shirt o Bayanihan Basic T-Shirt");
+
+    const answer = await runIncomingBrain({
+      ...baseInput,
+      message: "T-shirt",
+      products,
+      pending: question.pending,
+    });
+    expect(answer.reply).toContain("T-Shirt (M) x2");
+    expect(answer.reply).toContain("200.00");
+    expect(answer.reply).not.toContain("Alin po rito");
+  });
+
   it("escalates when a known delivery region has no configured shipping rate", async () => {
     const tee: BrainProduct = {
       ...product,

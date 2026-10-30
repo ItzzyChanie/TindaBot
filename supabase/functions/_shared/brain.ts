@@ -4,6 +4,7 @@ import {
   matchQuantityAnswer,
   isAcknowledgement,
   resolveProduct,
+  resolveProductChoice,
   understandFromRules,
   type CatalogProduct,
   type Understanding,
@@ -244,12 +245,14 @@ export function runIncomingBrain(
   const clarificationProduct = input.products.find((item) =>
     item.active && item.id === clarification.product_id
   );
+  let clarifiedProduct: BrainProduct | null = null;
   if (clarification.kind === "product" && Array.isArray(clarification.candidates)) {
     const candidates = input.products.filter((item) => item.active &&
       (clarification.candidates as unknown[]).includes(item.name));
-    const selected = resolveProduct(input.message, candidates);
+    const selected = resolveProductChoice(input.message, candidates);
     if (selected.status === "matched" && typeof clarification.intent === "string" &&
       (understanding.intent === "unknown" || understanding.intent === "question")) {
+      clarifiedProduct = selected.product;
       understanding = {
         intent: clarification.intent as Understanding["intent"],
         product_query: selected.product.name,
@@ -516,10 +519,12 @@ export function runIncomingBrain(
     );
   }
 
-  const resolution = resolveProduct(
-    understanding.product_query,
-    input.products.filter((product) => product.active),
-  );
+  const resolution = clarifiedProduct
+    ? { status: "matched" as const, product: clarifiedProduct }
+    : resolveProduct(
+      understanding.product_query,
+      input.products.filter((product) => product.active),
+    );
   if (resolution.status === "ambiguous") {
     const names = resolution.candidates.map((product) => product.name);
     return respond(

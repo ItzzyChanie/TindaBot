@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isAcknowledgement, matchCatalogSize, matchQuantityAnswer, understandFromRules, type CatalogProduct } from "../supabase/functions/_shared/rules";
+import { isAcknowledgement, matchCatalogSize, matchQuantityAnswer, resolveProduct, resolveProductChoice, understandFromRules, type CatalogProduct } from "../supabase/functions/_shared/rules";
 
 const catalog: CatalogProduct[] = [
   {
@@ -82,6 +82,19 @@ describe("catalog-grounded message rules", () => {
       size: "M",
       quantity: 2,
       location: "Metro Manila",
+    });
+  });
+
+  it("uses an exact product name to resolve a customer's clarification answer", () => {
+    const products = [
+      { name: "T-Shirt", aliases: ["tee"], sizes: ["M"] },
+      { name: "Bayanihan Basic T-Shirt", aliases: ["t-shirt"], sizes: ["M"] },
+    ];
+
+    expect(resolveProduct("T-shirt", products).status).toBe("ambiguous");
+    expect(resolveProductChoice("T-shirt", products)).toMatchObject({
+      status: "matched",
+      product: { name: "T-Shirt" },
     });
   });
 

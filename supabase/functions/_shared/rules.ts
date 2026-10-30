@@ -325,6 +325,18 @@ export function resolveProduct<T extends CatalogProduct>(
   return { status: "matched", product: scored[0].product };
 }
 
+export function resolveProductChoice<T extends CatalogProduct>(
+  query: string | null | undefined,
+  products: T[],
+): ProductResolution<T> {
+  const normalizedQuery = normalizeProductQuery(query ?? "");
+  const exactNames = products.filter((product) =>
+    normalizeProductQuery(product.name) === normalizedQuery
+  );
+  if (exactNames.length === 1) return { status: "matched", product: exactNames[0] };
+  return resolveProduct(query, products);
+}
+
 function findProductMatches(message: string, catalog: CatalogProduct[]): ProductMatch[] {
   const matches: ProductMatch[] = [];
   for (const product of catalog) {
