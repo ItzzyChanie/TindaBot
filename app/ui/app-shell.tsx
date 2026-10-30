@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 const links = [
   { href: "/", label: "Overview", icon: "⌂" },
@@ -29,6 +28,7 @@ export function AppShell({
   const [signOutError, setSignOutError] = useState("");
   const [unreadCount, setUnreadCount] = useState(0);
   const refreshUnread = useCallback(async () => {
+    const { createSupabaseBrowserClient } = await import("@/lib/supabase/client");
     const { count, error } = await createSupabaseBrowserClient()
       .from("conversations")
       .select("id", { count: "exact", head: true })
@@ -41,16 +41,23 @@ export function AppShell({
   useEffect(() => {
     if (pathname === "/chat" || pathname === "/shop" || pathname === "/login") return;
     void refreshUnread();
-    const supabase = createSupabaseBrowserClient();
-    const channel = supabase.channel("sidebar-unread-count")
-      .on("postgres_changes", { event: "*", schema: "public", table: "conversations" }, () => void refreshUnread())
-      .subscribe();
-    return () => { void supabase.removeChannel(channel); };
+    let active = true;
+    let removeChannel: (() => void) | undefined;
+    void import("@/lib/supabase/client").then(({ createSupabaseBrowserClient }) => {
+      if (!active) return;
+      const supabase = createSupabaseBrowserClient();
+      const channel = supabase.channel("sidebar-unread-count")
+        .on("postgres_changes", { event: "*", schema: "public", table: "conversations" }, () => void refreshUnread())
+        .subscribe();
+      removeChannel = () => { void supabase.removeChannel(channel); };
+    });
+    return () => { active = false; removeChannel?.(); };
   }, [refreshUnread, pathname]);
 
   async function signOut() {
     setSignOutError("");
     try {
+      const { createSupabaseBrowserClient } = await import("@/lib/supabase/client");
       const { error } = await createSupabaseBrowserClient().auth.signOut();
       if (error) throw error;
       router.replace("/login");

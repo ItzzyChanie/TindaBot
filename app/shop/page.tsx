@@ -3,7 +3,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { getSupabasePublicEnv } from "@/lib/supabase/env";
 import { quote, type QuotePromo } from "@/supabase/functions/_shared/quote";
 
 type PublicSize = { size: string; availability: "in_stock" | "low_stock" | "sold_out" };
@@ -31,19 +31,33 @@ export default function ShopPage() {
 
   useEffect(() => {
     let active = true;
-    void createSupabaseBrowserClient().from("public_catalog").select("*").order("name")
-      .then(({ data, error: queryError }: { data: unknown[] | null; error: { message: string } | null }) => {
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 12000);
+    void (async () => {
+      try {
+        const { url, supabaseKey } = getSupabasePublicEnv();
+        const response = await fetch(`${url.replace(/\/$/, "")}/rest/v1/public_catalog?select=*&order=name.asc`, {
+          headers: { apikey: supabaseKey },
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        if (!response.ok) throw new Error("Catalog request failed");
+        const data = await response.json() as PublicProduct[];
         if (!active) return;
-        if (queryError) setError("Hindi ma-load ang shop ngayon. Pakisubukan ulit po.");
-        else setProducts((data ?? []) as PublicProduct[]);
+        setProducts(data);
         setLoading(false);
-      }).catch(() => {
+      } catch {
         if (active) {
-          setError("Hindi ma-load ang shop ngayon. Pakisubukan ulit po.");
+          setError(controller.signal.aborted
+            ? "Matagal ang connection. Pakisubukan i-refresh ang shop po."
+            : "Hindi ma-load ang shop ngayon. Pakisubukan ulit po.");
           setLoading(false);
         }
-      });
-    return () => { active = false; };
+      } finally {
+        window.clearTimeout(timeout);
+      }
+    })();
+    return () => { active = false; controller.abort(); window.clearTimeout(timeout); };
   }, []);
 
   const filtered = useMemo(() => {
