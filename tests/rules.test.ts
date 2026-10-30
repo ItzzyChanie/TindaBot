@@ -118,4 +118,16 @@ describe("catalog-grounded message rules", () => {
       });
     }
   });
+
+  it("recognizes natural and reordered size-chart requests", () => {
+    for (const message of [
+      "Meron po ba kayong picture ng size chart?",
+      "Can I see the/your size chart?",
+      "Pwede pong makita ang catalog size chart",
+      "Avail po ba yung chart size?",
+      "See Size Chart",
+    ]) {
+      expect(understandFromRules(message, catalog).intent).toBe("size_chart");
+    }
+  });
 });

@@ -31,6 +31,7 @@ const baseInput: BrainInput = {
     shipping_rates: { Visayas: 75 },
     payment_instructions: "Mock bank transfer instructions",
     policies: "Mock policies",
+    size_chart_url: null,
   },
   now: new Date("2026-10-29T00:00:00.000Z"),
 };
@@ -230,6 +231,28 @@ describe("grounded incoming conversation brain", () => {
     expect(result.reply).toContain("M (sold out)");
     expect(result.reply).toContain("33.33");
     expect(result.reply).toContain("120.00");
+  });
+
+  it("attaches the seller's uploaded size chart to a matching customer request", async () => {
+    const chartUrl = "https://storage.example.com/size-chart.webp";
+    const result = await runIncomingBrain({
+      ...baseInput,
+      message: "Pwede pong makita ang chart size?",
+      settings: { ...baseInput.settings, size_chart_url: chartUrl },
+    });
+    expect(result.reply).toContain("size chart");
+    expect(result.imageUrl).toBe(chartUrl);
+    expect(result.needsSeller).toBe(false);
+  });
+
+  it("escalates a size-chart request when the seller has not uploaded one", async () => {
+    const result = await runIncomingBrain({
+      ...baseInput,
+      message: "Can I see the size chart?",
+    });
+    expect(result.reply).toContain("Wala pa pong uploaded");
+    expect(result.needsSeller).toBe(true);
+    expect(result.missedRequest).toBe(true);
   });
 
   it("answers combined size availability and price questions for the requested quantity", async () => {

@@ -197,11 +197,11 @@ export async function handleIncoming(
 
   const { data: settingsRow, error: settingsError } = await supabase
     .from("shop_settings")
-    .select("shipping_rates, payment_instructions, policies")
+    .select("shipping_rates, payment_instructions, policies, size_chart_url")
     .eq("shop_id", "00000000-0000-4000-8000-000000000001")
     .maybeSingle();
   if (settingsError) throw settingsError;
-  const settings = settingsRow ?? { shipping_rates: {}, payment_instructions: "", policies: "" };
+  const settings = settingsRow ?? { shipping_rates: {}, payment_instructions: "", policies: "", size_chart_url: null };
   const { data: latestOrderRow, error: orderError } = await supabase
     .from("orders")
     .select("id, total, shipping, status, created_at")
@@ -222,6 +222,7 @@ export async function handleIncoming(
       shipping_rates: object(settings.shipping_rates) as Record<string, number>,
       payment_instructions: settings.payment_instructions ?? "",
       policies: settings.policies ?? "",
+      size_chart_url: settings.size_chart_url ?? null,
     },
     latestOrder: latestOrderRow
       ? {
@@ -358,7 +359,7 @@ export async function handleIncoming(
     if (error) throw error;
   }
 
-  return { conversationId, reply, draft };
+  return { conversationId, reply, draft, imageUrl: reply ? brain.imageUrl ?? null : null };
 }
 
 export async function saveAssistantReply(conversationId: string, body: string) {

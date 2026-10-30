@@ -8,6 +8,12 @@ import faq from "../_shared/faq.json" with { type: "json" };
 
 const telegramToken = Deno.env.get("TELEGRAM_BOT_TOKEN");
 const webhookSecret = Deno.env.get("TELEGRAM_WEBHOOK_SECRET");
+const replyMarkup = {
+  keyboard: [faq.questions.slice(0, 2), faq.questions.slice(2, 4), faq.questions.slice(4)],
+  resize_keyboard: true,
+  is_persistent: true,
+  input_field_placeholder: faq.placeholder,
+};
 
 type TelegramMessage = {
   text?: unknown;
@@ -35,16 +41,29 @@ async function sendTelegramMessage(chatId: number, text: string) {
       body: JSON.stringify({
         chat_id: chatId,
         text,
-        reply_markup: {
-          keyboard: [faq.questions.slice(0, 2), faq.questions.slice(2, 4), faq.questions.slice(4)],
-          resize_keyboard: true,
-          is_persistent: true,
-          input_field_placeholder: faq.placeholder,
-        },
+        reply_markup: replyMarkup,
       }),
     },
   );
   if (!response.ok) throw new Error("Telegram sendMessage failed");
+}
+
+async function sendTelegramPhoto(chatId: number, photo: string, caption: string) {
+  if (!telegramToken) throw new Error("Telegram bot is not configured");
+  const response = await fetch(
+    `https://api.telegram.org/bot${telegramToken}/sendPhoto`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        chat_id: chatId,
+        photo,
+        caption,
+        reply_markup: replyMarkup,
+      }),
+    },
+  );
+  if (!response.ok) throw new Error("Telegram sendPhoto failed");
 }
 
 async function processTelegramUpdate(
@@ -104,7 +123,15 @@ async function processTelegramUpdate(
     });
     if (incoming.reply) {
       await saveAssistantReply(incoming.conversationId, incoming.reply);
-      await sendTelegramMessage(chatId, incoming.reply);
+      if (incoming.imageUrl) {
+        try {
+          await sendTelegramPhoto(chatId, incoming.imageUrl, incoming.reply);
+        } catch {
+          await sendTelegramMessage(chatId, incoming.reply + "\n" + incoming.imageUrl);
+        }
+      } else {
+        await sendTelegramMessage(chatId, incoming.reply);
+      }
     }
     succeeded = true;
   } catch (error) {

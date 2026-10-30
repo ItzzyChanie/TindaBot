@@ -38,6 +38,7 @@ export type BrainInput = {
     shipping_rates: Record<string, number>;
     payment_instructions: string;
     policies: string;
+    size_chart_url: string | null;
   };
   latestOrder?: {
     id: number;
@@ -56,6 +57,7 @@ export type BrainResult = {
   missedRequest: boolean;
   quotedPriceMatches: boolean | null;
   orderToConfirm?: Record<string, unknown>;
+  imageUrl?: string | null;
 };
 export type BrainRules = {
   understand: typeof understandFromRules;
@@ -312,6 +314,15 @@ export function runIncomingBrain(
       { catalog_count: activeProducts.length, products: activeProducts.map((item) => item.name) },
       "Ito po ang active items sa catalog at available sizes/stock: " + lines.join("\n"),
     );
+  }
+  if (understanding.intent === "size_chart") {
+    if (!input.settings.size_chart_url) {
+      return escalate("Wala pa pong uploaded na size chart sa shop. Ipa-check ko muna sa seller po.");
+    }
+    return {
+      ...respond({ size_chart_available: true }, "Narito po ang size chart ng shop."),
+      imageUrl: input.settings.size_chart_url,
+    };
   }
   if (understanding.intent === "order_help") {
     return respond(

@@ -8,6 +8,7 @@ export type UnderstandingIntent =
   | "payment"
   | "order_help"
   | "catalog"
+  | "size_chart"
   | "shipping"
   | "complaint"
   | "other"
@@ -112,7 +113,8 @@ const quantityUnits = new Set([
 ]);
 
 const intentPhrases = {
-  catalog: ["what items do you have", "what items are available", "what products do you have", "what products are available", "show me the products", "show available items", "list of items", "list products", "available items", "ano mga tinda", "anong mga tinda", "ano pong items", "mga available na item", "anong products meron", "ano mga available nyo", "ano mga available ninyo"],
+  size_chart: ["size chart", "chart size", "size catalog", "catalog size", "catalog size chart", "size guide", "sizing chart", "chart ng size", "chart ng sizes", "size ng catalog", "catalog ng size"],
+  catalog: ["what items do you have", "what items are available", "what products do you have", "what products are available", "show me the products", "show available items", "see current available items", "current available items", "list of items", "list products", "available items", "ano mga tinda", "anong mga tinda", "ano pong items", "mga available na item", "anong products meron", "ano mga available nyo", "ano mga available ninyo"],
   complaint: ["complaint", "reklamo", "sira", "damaged", "wrong item", "wrong size", "refund", "return", "late delivery", "late parcel", "no updates", "disappointed", "hindi dumating", "did not arrive", "didn't arrive", "not delivered", "received the wrong"],
   other: ["custom", "customize", "customise", "tailor", "alter", "personalized", "personalised", "do you sell", "nagbebenta", "may tinda"],
   status: ["order status", "nasaan order", "asan order", "nasaan na order", "update sa parcel", "track my order", "where is my order", "tracking", "order confirmation", "follow up", "follow-up", "na ship na", "parcel ko"],
@@ -352,7 +354,8 @@ export function understandFromRules(
     (bestMatch && size !== null && /\b(may|meron|mayroon)\b/.test(normalized));
 
   let intent: UnderstandingIntent = "unknown";
-  if (hasAny(normalized, intentPhrases.catalog)) intent = "catalog";
+  if (hasAny(normalized, intentPhrases.size_chart)) intent = "size_chart";
+  else if (hasAny(normalized, intentPhrases.catalog)) intent = "catalog";
   else if (hasAny(normalized, intentPhrases.complaint)) intent = "complaint";
   else if (hasAny(normalized, intentPhrases.other)) intent = "other";
   else if (hasAny(normalized, intentPhrases.status)) intent = "status";
