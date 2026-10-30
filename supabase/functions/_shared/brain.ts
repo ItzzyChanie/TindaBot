@@ -59,6 +59,7 @@ export type BrainResult = {
   quotedPriceMatches: boolean | null;
   orderToConfirm?: Record<string, unknown>;
   imageUrl?: string | null;
+  clearSellerHandoff?: boolean;
 };
 export type BrainRules = {
   understand: typeof understandFromRules;
@@ -150,15 +151,27 @@ export function runIncomingBrain(
       pending: { ...input.pending, seller_handoff: true },
     };
   }
+  const assistantRequest = /^\s*\/assistant(?:@[a-z0-9_]+)?\s*$/i.test(input.message);
+  if (assistantRequest) {
+    const pending = { ...input.pending };
+    delete pending.seller_handoff;
+    return {
+      ...base,
+      action: input.aiMode === "suggest" ? "draft" : "reply",
+      reply: "Assistant mode na po tayo ulit. Maaari po kayong magtanong tungkol sa presyo, sizes, stock, delivery, products, at paano mag-order. Para kausapin ang seller, mag-type lang po ng /seller.",
+      pending,
+      clearSellerHandoff: input.pending.seller_handoff === true,
+    };
+  }
   if (input.pending.seller_handoff === true && isAcknowledgement(input.message)) {
     return base;
   }
-  if (/^\s*\/start(?:@[a-z0-9_]+)?\s*$/i.test(input.message)) {
+  if (/^\s*\/start(?:@[a-z0-9_]+)?(?:\s+.*)?\s*$/i.test(input.message)) {
     if (input.aiMode !== "auto") return base;
     return {
       ...base,
       action: "reply",
-      reply: "Kumusta po! Ako ang automated assistant ng shop. Maaari po akong tumulong sa presyo, sizes, stock, at delivery. Para makausap ang seller, mag-type lang po ng /seller at pakihintay ang reply niya rito.",
+      reply: "Kumusta po! Ako ang automated assistant ng shop, kaya assistant po ang kausap ninyo ngayon. Maaari akong sumagot ng basic questions tungkol sa catalog items, presyo, sizes at stock, shipping, payment, at paano mag-order. Mag-type ng /assistant para magpatuloy sa assistant o /seller para makausap ang seller; kapag nag-switch po kayo sa seller, pakihintay ang reply niya rito.",
     };
   }
 

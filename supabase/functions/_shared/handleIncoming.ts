@@ -346,7 +346,11 @@ export async function handleIncoming(
     reply = null;
   }
   const nextPending = draft ? { ...pending, ai_draft: draft } : pending;
-  const status = needsSeller ? "needs_seller" : undefined;
+  const status = needsSeller
+    ? "needs_seller"
+    : brain.clearSellerHandoff
+      ? "open"
+      : undefined;
   const { error: brainUpdateError } = await supabase.from("conversations")
     .update({ pending: nextPending, ...(status ? { status } : {}) })
     .eq("id", conversationId);

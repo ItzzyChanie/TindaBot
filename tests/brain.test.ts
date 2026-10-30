@@ -61,15 +61,30 @@ describe("grounded incoming conversation brain", () => {
     expect(labelAutoReply("Hello po", "suggest")).toBe("Hello po");
   });
 
-  it("welcomes customers on /start only in Auto mode and explains seller handoff", async () => {
+  it("welcomes customers on /start only in Auto mode and explains basic help and commands", async () => {
     const automatic = await runIncomingBrain({ ...baseInput, message: "/start", firstContact: true });
     expect(automatic.reply).toContain("automated assistant");
+    expect(automatic.reply).toContain("basic questions");
+    expect(automatic.reply).toContain("/assistant");
     expect(automatic.reply).toContain("/seller");
     expect(automatic.action).toBe("reply");
 
     const human = await runIncomingBrain({ ...baseInput, message: "/start", aiMode: "human" });
     expect(human.reply).toBeNull();
     expect(human.action).toBe("none");
+  });
+
+  it("returns to assistant mode on /assistant and clears the handoff wait", async () => {
+    const result = await runIncomingBrain({
+      ...baseInput,
+      message: "/assistant",
+      pending: { seller_handoff: true, last_product: { product_id: product.id } },
+    });
+    expect(result.reply).toContain("Assistant mode na po tayo ulit");
+    expect(result.reply).toContain("/seller");
+    expect(result.pending.seller_handoff).toBeUndefined();
+    expect(result.pending.last_product).toEqual({ product_id: product.id });
+    expect(result.clearSellerHandoff).toBe(true);
   });
 
   it("uses quote output in its deterministic price reply", async () => {
