@@ -136,7 +136,7 @@ export function runIncomingBrain(
   });
   if (sellerRequest) {
     return escalate(
-      "Sige po, ipapa-check ko ito sa seller. Makaka-follow up po siya rito.",
+      "Naipasa na po kayo sa seller. Pakihintay po ng reply rito; maaaring may inaasikaso lang siya ngayon.",
     );
   }
 
@@ -391,6 +391,18 @@ export function runIncomingBrain(
       return respond(
         { need_product: true },
         "Aling item po ang gusto ninyong itanong?",
+        {
+          ...activePending,
+          clarification: {
+            kind: "product",
+            candidates: input.products.filter((item) => item.active).map((item) => item.name),
+            intent: understanding.intent,
+            location: understanding.intent === "price" &&
+                input.message.toLocaleLowerCase().replace(/[^a-z0-9]+/g, " ").trim() === "magkano po ito"
+              ? "Metro Manila"
+              : understanding.location,
+          },
+        },
       );
     return escalate(
       "Hindi ko makita ang item na iyan sa catalog. I-check ko muna sa seller po.",
@@ -399,6 +411,15 @@ export function runIncomingBrain(
   const product = resolution.product;
   const sizes = product.variants.map((variant) => variant.size);
   const chosenSize = understanding.size;
+  if (understanding.intent === "availability" && !chosenSize) {
+    const sizeStock = product.variants.map((variant) =>
+      variant.size + ": " + (variant.stock > 0 ? variant.stock + " available" : "sold out")
+    );
+    return respond(
+      { product: product.name, sizes: product.variants.map((item) => item.size), stock: product.variants.map((item) => item.stock) },
+      product.name + " po, available sizes and stock: " + sizeStock.join(", ") + ".",
+    );
+  }
   if (chosenSize && !sizes.includes(chosenSize)) {
     return respond(
       { product: product.name, available_sizes: sizes },
@@ -411,7 +432,7 @@ export function runIncomingBrain(
   const size = chosenSize ?? (sizes.length === 1 ? sizes[0] : null);
   if (
     !size && sizes.length > 1 &&
-    ["price", "availability", "order_confirm", "question"].includes(understanding.intent)
+    ["availability", "order_confirm", "question"].includes(understanding.intent)
   ) {
     return respond(
       { product: product.name, available_sizes: sizes },
@@ -439,7 +460,7 @@ export function runIncomingBrain(
     : product.variants[0];
   if (!variant)
     return escalate("I-check ko muna ang available sizes sa seller po.");
-  if (variant.stock < quantity) {
+  if (variant.stock < quantity && understanding.intent !== "price") {
     return respond(
       {
         product: product.name,
@@ -493,7 +514,7 @@ export function runIncomingBrain(
     offer_label: pricing.label,
   };
   const pending: BrainPending = orderIntent
-    ? { ...input.pending, order }
+    ? { ...activePending, order }
     : activePending;
   const amounts = [
     pricing.unit,
@@ -549,7 +570,7 @@ export function runIncomingBrain(
         variant.stock +
         " stock. " +
         amountSummary
-      : product.name + " (" + variant.size + ") po: " + amountSummary;
+    : product.name + (understanding.size ? " (" + variant.size + ")" : "") + " po: " + amountSummary;
 
   const responsePending = typeof shipping === "number" ? pending : {
     ...pending,

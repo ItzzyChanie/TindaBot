@@ -15,7 +15,10 @@ type Conversation = {
   customer_id: string;
   status: "open" | "needs_seller" | "resolved";
   ai_mode: "auto" | "suggest" | "human";
+  pending: { ai_draft?: string; [key: string]: unknown };
   last_message_at: string;
+  seller_read_at: string | null;
+  is_hidden: boolean;
   created_at: string;
   customers: Customer | null;
 };
@@ -25,6 +28,19 @@ type Message = {
   sender: "customer" | "ai" | "seller" | "system";
   body: string;
   created_at: string;
+};
+type CustomerOrder = {
+  id: number;
+  customer_id: string;
+  total: number;
+  status: "awaiting_payment" | "paid" | "shipped";
+  payment_proof: unknown[];
+  created_at: string;
+  order_items: {
+    qty: number;
+    unit_price: number;
+    variants: { size: string; products: { name: string } | null } | null;
+  }[];
 };
 
 function formatTime(value: string) {
@@ -37,6 +53,7 @@ function formatTime(value: string) {
 export function InboxWorkspace() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [orders, setOrders] = useState<CustomerOrder[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [loading, setLoading] = useState(true);
@@ -44,6 +61,7 @@ export function InboxWorkspace() {
   const [savingMode, setSavingMode] = useState(false);
   const [error, setError] = useState("");
   const [liveError, setLiveError] = useState("");
+  const [showHidden, setShowHidden] = useState(false);
 
   const loadInbox = useCallback(async (showLoading = false) => {
     if (showLoading) setLoading(true);
@@ -52,8 +70,9 @@ export function InboxWorkspace() {
       const { data, error: conversationError } = await supabase
         .from("conversations")
         .select(
-          "id, customer_id, status, ai_mode, last_message_at, created_at, customers(channel, external_id, name)",
+          "id, customer_id, status, ai_mode, pending, last_message_at, seller_read_at, is_hidden, created_at, customers(channel, external_id, name)",
         )
+        .eq("is_hidden", showHidden)
         .order("last_message_at", { ascending: false });
       if (conversationError) throw conversationError;
 
@@ -69,9 +88,21 @@ export function InboxWorkspace() {
         if (messageError) throw messageError;
         nextMessages = (messageData ?? []) as Message[];
       }
+      const customerIds = [...new Set(rows.map((row) => row.customer_id))];
+      let nextOrders: CustomerOrder[] = [];
+      if (customerIds.length) {
+        const { data: orderData, error: orderError } = await supabase
+          .from("orders")
+          .select("id, customer_id, total, status, payment_proof, created_at, order_items(qty, unit_price, variants(size, products(name)))")
+          .in("customer_id", customerIds)
+          .order("created_at", { ascending: false });
+        if (orderError) throw orderError;
+        nextOrders = (orderData ?? []) as unknown as CustomerOrder[];
+      }
 
       setConversations(rows);
       setMessages(nextMessages);
+      setOrders(nextOrders);
       const isNarrow = window.matchMedia("(max-width: 700px)").matches;
       setSelectedId((current) =>
         rows.some((row) => row.id === current)
@@ -90,7 +121,7 @@ export function InboxWorkspace() {
     } finally {
       if (showLoading) setLoading(false);
     }
-  }, []);
+  }, [showHidden]);
 
   useEffect(() => {
     void loadInbox(true);
@@ -114,6 +145,13 @@ export function InboxWorkspace() {
           void loadInbox();
         },
       )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "orders" },
+        () => {
+          void loadInbox();
+        },
+      )
       .subscribe((status: string) => {
         if (status === "CHANNEL_ERROR" || status === "TIMED_OUT")
           setLiveError("Live updates paused. Refresh to reconnect po.");
@@ -131,6 +169,17 @@ export function InboxWorkspace() {
   const selected =
     conversations.find((conversation) => conversation.id === selectedId) ??
     null;
+
+  useEffect(() => {
+    if (!selected || selected.status !== "needs_seller" || selected.seller_read_at) return;
+    const readAt = new Date().toISOString();
+    void (async () => {
+      const { error: readError } = await createSupabaseBrowserClient()
+        .from("conversations").update({ seller_read_at: readAt }).eq("id", selected.id);
+      if (readError) setError("Hindi ma-update ang unread status: " + readError.message);
+      else setConversations((current) => current.map((item) => item.id === selected.id ? { ...item, seller_read_at: readAt } : item));
+    })();
+  }, [selected]);
   const threadMessages = useMemo(
     () => messages.filter((message) => message.conversation_id === selectedId),
     [messages, selectedId],
@@ -202,7 +251,78 @@ export function InboxWorkspace() {
     }
   }
 
+  async function sendDraft() {
+    if (!selected?.pending.ai_draft || sending) return;
+    setSending(true);
+    setError("");
+    try {
+      const supabase = createSupabaseBrowserClient();
+      const { error: replyError } = await supabase.functions.invoke("seller-reply", {
+        body: { conversationId: selected.id, text: selected.pending.ai_draft, sendDraft: true },
+      });
+      if (replyError) throw replyError;
+      await loadInbox();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Hindi naipadala ang draft po.");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  async function discardDraft() {
+    if (!selected?.pending.ai_draft) return;
+    const pending = { ...selected.pending };
+    delete pending.ai_draft;
+    const { error: updateError } = await createSupabaseBrowserClient()
+      .from("conversations").update({ pending }).eq("id", selected.id);
+    if (updateError) {
+      setError(updateError.message);
+      return;
+    }
+    setConversations((current) => current.map((item) => item.id === selected.id ? { ...item, pending } : item));
+  }
+
+  async function markResolved() {
+    if (!selected) return;
+    const { error: updateError } = await createSupabaseBrowserClient()
+      .from("conversations").update({ status: "resolved", pending: {} }).eq("id", selected.id);
+    if (updateError) {
+      setError(updateError.message);
+      return;
+    }
+    setConversations((current) => current.map((item) => item.id === selected.id
+      ? { ...item, status: "resolved", pending: {} }
+      : item));
+  }
+
+  async function setHidden(hidden: boolean) {
+    if (!selected) return;
+    const { error: updateError } = await createSupabaseBrowserClient()
+      .from("conversations").update({ is_hidden: hidden }).eq("id", selected.id);
+    if (updateError) {
+      setError(updateError.message);
+      return;
+    }
+    setSelectedId(null);
+    await loadInbox();
+  }
+
+  async function deleteConversation() {
+    if (!selected || !window.confirm("Permanently delete this conversation and its messages?")) return;
+    const { error: deleteError } = await createSupabaseBrowserClient()
+      .from("conversations").delete().eq("id", selected.id);
+    if (deleteError) {
+      setError("Hindi mabura ang conversation. Kung may order ito, itago na lang po: " + deleteError.message);
+      return;
+    }
+    setSelectedId(null);
+    await loadInbox();
+  }
+
   const customer = selected?.customers;
+  const customerOrders = selected
+    ? orders.filter((order) => order.customer_id === selected.customer_id)
+    : [];
 
   return (
     <div className={`inbox-page${selectedId ? " has-selection" : ""}`}>
@@ -214,6 +334,9 @@ export function InboxWorkspace() {
           </div>
           <span className="inbox-total">{conversations.length}</span>
         </div>
+        <button className="text-button" onClick={() => setShowHidden((value) => !value)}>
+          {showHidden ? "Show active conversations" : "View hidden conversations"}
+        </button>
         {loading ? (
           <p className="inbox-state">Loading conversations…</p>
         ) : error && conversations.length === 0 ? (
@@ -295,6 +418,17 @@ export function InboxWorkspace() {
               {selected.status === "needs_seller" && (
                 <span className="needs-badge thread-needs">Needs you</span>
               )}
+            {selected.status === "needs_seller" && (
+              <button className="text-button" onClick={() => void markResolved()}>
+                Mark resolved
+              </button>
+            )}
+            <button className="text-button" onClick={() => void setHidden(!selected.is_hidden)}>
+              {selected.is_hidden ? "Unhide" : "Hide"}
+            </button>
+            <button className="text-button" onClick={() => void deleteConversation()}>
+              Delete
+            </button>
             </header>
             {liveError && (
               <p className="inbox-alert" role="status">
@@ -332,6 +466,20 @@ export function InboxWorkspace() {
                 ))
               )}
             </div>
+            {selected.ai_mode === "suggest" && selected.pending.ai_draft && (
+              <div className="panel suggestion-panel">
+                <p className="eyebrow">AI DRAFT · REVIEW BEFORE SENDING</p>
+                <p>{selected.pending.ai_draft}</p>
+                <div className="reply-actions">
+                  <button className="button button-primary" onClick={() => void sendDraft()} disabled={sending}>
+                    {sending ? "Sending…" : "Send draft"}
+                  </button>
+                  <button className="text-button" onClick={() => void discardDraft()} disabled={sending}>
+                    Discard
+                  </button>
+                </div>
+              </div>
+            )}
             <form className="reply-form" onSubmit={sendReply}>
               <label className="sr-only" htmlFor="seller-reply">
                 Write a reply
@@ -400,6 +548,26 @@ export function InboxWorkspace() {
                 </dd>
               </div>
             </dl>
+            <section className="customer-orders">
+              <p className="eyebrow">ORDERS</p>
+              {customerOrders.length === 0 ? (
+                <p className="muted">No orders yet.</p>
+              ) : customerOrders.map((order) => (
+                <article className="customer-order-card" key={order.id}>
+                  <div>
+                    <strong>#{order.id}</strong>
+                    <span className={"order-status " + order.status}>{order.status.replace("_", " ")}</span>
+                  </div>
+                  <p>{order.order_items.map((item) =>
+                    (item.qty + " × " + (item.variants?.products?.name ?? "Product") + " (" + (item.variants?.size ?? "Size") + ")")
+                  ).join(", ")}</p>
+                  <strong>₱{Number(order.total).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+                  {Array.isArray(order.payment_proof) && order.payment_proof.length > 0 && (
+                    <span className="proof-received">Payment proof received</span>
+                  )}
+                </article>
+              ))}
+            </section>
             <label className="mode-label" htmlFor="ai-mode">
               Assistant mode
             </label>

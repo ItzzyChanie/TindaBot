@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 const links = [
@@ -12,6 +12,8 @@ const links = [
   { href: "/orders", label: "Orders", icon: "▣" },
   { href: "/insights", label: "Insights", icon: "▥" },
   { href: "/storefront", label: "Storefront", icon: "↗" },
+
+  { href: "/settings", label: "Settings", icon: "Settings" },
 ];
 
 export function AppShell({
@@ -25,6 +27,25 @@ export function AppShell({
   const router = useRouter();
   const email = userEmail ?? "Seller account";
   const [signOutError, setSignOutError] = useState("");
+  const [unreadCount, setUnreadCount] = useState(0);
+  const refreshUnread = useCallback(async () => {
+    const { count, error } = await createSupabaseBrowserClient()
+      .from("conversations")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "needs_seller")
+      .eq("is_hidden", false)
+      .is("seller_read_at", null);
+    if (!error && typeof count === "number") setUnreadCount(count);
+  }, []);
+
+  useEffect(() => {
+    void refreshUnread();
+    const supabase = createSupabaseBrowserClient();
+    const channel = supabase.channel("sidebar-unread-count")
+      .on("postgres_changes", { event: "*", schema: "public", table: "conversations" }, () => void refreshUnread())
+      .subscribe();
+    return () => { void supabase.removeChannel(channel); };
+  }, [refreshUnread]);
 
   async function signOut() {
     setSignOutError("");
@@ -71,7 +92,9 @@ export function AppShell({
                 {link.icon}
               </span>
               <span>{link.label}</span>
-              {link.count && <span className="nav-count">{link.count}</span>}
+              {link.href === "/inbox" && unreadCount > 0 && (
+                <span className="nav-count">{unreadCount}</span>
+              )}
             </Link>
           ))}
         </nav>

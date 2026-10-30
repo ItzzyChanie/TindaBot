@@ -122,7 +122,7 @@ describe("grounded incoming conversation brain", () => {
       ],
     };
     const first = await runIncomingBrain({
-      ...baseInput, message: "Magkano po 2 t-shirt?", products: [tee],
+      ...baseInput, message: "Pabili po 2 t-shirt?", products: [tee],
       settings: { ...baseInput.settings, shipping_rates: { "Metro Manila": 80 } },
     });
     expect(first.reply).toContain("Anong size po");
@@ -141,6 +141,41 @@ describe("grounded incoming conversation brain", () => {
     });
     expect(delivered.reply).toContain("980.00");
     expect(delivered.pending.clarification).toBeUndefined();
+  });
+
+  it("matches an FAQ size question to any catalog product the customer names", async () => {
+    const tee: BrainProduct = {
+      ...product, id: "tee", name: "Bayanihan Basic T-Shirt", aliases: ["t-shirt"], price: 450,
+      variants: [
+        { id: "tee-s", size: "S", stock: 4 },
+        { id: "tee-m", size: "M", stock: 8 },
+        { id: "tee-l", size: "L", stock: 0 },
+      ],
+    };
+    const faq = await runIncomingBrain({ ...baseInput, message: "Anong sizes ang available?", products: [tee] });
+    expect(faq.reply).toContain("Aling item");
+    const answer = await runIncomingBrain({
+      ...baseInput, message: "bayanihan basic tshirt po", products: [tee], pending: faq.pending,
+    });
+    expect(answer.reply).toContain("S: 4 available");
+    expect(answer.reply).toContain("M: 8 available");
+    expect(answer.reply).toContain("L: sold out");
+  });
+
+  it("answers the price FAQ with Metro Manila shipping for a selected catalog item", async () => {
+    const tee: BrainProduct = {
+      ...product, id: "tee", name: "Bayanihan Basic T-Shirt", aliases: ["t-shirt"], price: 450,
+      variants: [{ id: "tee-m", size: "M", stock: 8 }],
+    };
+    const faq = await runIncomingBrain({ ...baseInput, message: "Magkano po ito?", products: [tee], settings: { ...baseInput.settings, shipping_rates: { "Metro Manila": 80 } } });
+    expect(faq.reply).toContain("Aling item");
+    const answer = await runIncomingBrain({
+      ...baseInput, message: "bayanihan basic tshirt po", products: [tee], pending: faq.pending,
+      settings: { ...baseInput.settings, shipping_rates: { "Metro Manila": 80 } },
+    });
+    expect(answer.reply).toContain("450.00");
+    expect(answer.reply).toContain("80.00");
+    expect(answer.reply).toContain("530.00");
   });
 
   it("asks the customer to choose when two catalog products share t-shirt", async () => {
@@ -226,12 +261,12 @@ describe("grounded incoming conversation brain", () => {
     expect(provider.understand).not.toHaveBeenCalled();
   });
 
-  it("asks one question when a requested size is unavailable", async () => {
+  it("lists per-size availability and stock when the customer asks what sizes are available", async () => {
     const provider = ai(understanding({ intent: "availability", size: null }));
     const result = await runIncomingBrain(baseInput, provider);
 
-    expect(result.reply).toContain("Anong size po");
-    expect(result.reply).toContain("S, M");
+    expect(result.reply).toContain("S: 5 available");
+    expect(result.reply).toContain("M: sold out");
   });
 
   it("stores an order proposal and marks a later confirmation for atomic order creation", async () => {

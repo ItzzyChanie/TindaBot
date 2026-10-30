@@ -138,6 +138,13 @@ export function normalizeMessage(value: string): string {
     .toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
 
+function normalizeProductQuery(value: string): string {
+  return normalizeMessage(value)
+    .replace(/\bt\s*shirt\b/g, " tshirt ")
+    .replace(/\b(na|po|opo|please|pls|paki|yung|ang|itong|ito|nito|ba|kaya)\b/g, " ")
+    .replace(/\s+/g, " ").trim();
+}
+
 function containsPhrase(message: string, phrase: string): boolean {
   return ` ${message} `.includes(` ${normalizeMessage(phrase)} `);
 }
@@ -215,11 +222,11 @@ export function resolveProduct<T extends CatalogProduct>(
   query: string | null | undefined,
   products: T[],
 ): ProductResolution<T> {
-  const normalizedQuery = normalizeMessage(query ?? "");
+  const normalizedQuery = normalizeProductQuery(query ?? "");
   if (!normalizedQuery) return { status: "not_found", candidates: [] };
   const scored = products.map((product) => {
     const names = [product.name, ...(product.aliases ?? [])]
-      .map(normalizeMessage).filter(Boolean);
+      .map(normalizeProductQuery).filter(Boolean);
     let score = names.includes(normalizedQuery) ? 1 : 0;
     for (const name of names) {
       if (normalizedQuery.length >= 3 && name.length >= 3 &&
@@ -361,6 +368,9 @@ export function understandFromRules(
   }
   else if (bestMatch && quantities.length > 1 && /\b(and|or)\b/.test(normalized)) intent = "availability";
   else if (bestMatch) intent = "question";
+
+  if (intent === "unknown" && productQuery &&
+    resolveProduct(productQuery, catalog).status === "matched") intent = "question";
 
   const confidence = intent === "unknown" ? 0 : 0.95;
   return {
