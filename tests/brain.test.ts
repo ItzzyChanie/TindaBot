@@ -643,6 +643,16 @@ describe("grounded incoming conversation brain", () => {
     expect(result.reply).not.toContain("Maya");
   });
 
+  it("does not claim an unchecked payment method is accepted", async () => {
+    const result = await runIncomingBrain({
+      ...baseInput,
+      message: "COD pwede?",
+      settings: { ...baseInput.settings, bot_options: { payment_methods: ["GCash"] } },
+    }, ai(understanding({ intent: "payment", product_query: null, size: null, quantity: null, quantities_mentioned: [] })));
+    expect(result.reply).toContain("wala pa pong Cash on Delivery");
+    expect(result.reply).toContain("GCash");
+  });
+
   it("uses the courier selections from settings", async () => {
     const result = await runIncomingBrain({
       ...baseInput,
@@ -650,6 +660,34 @@ describe("grounded incoming conversation brain", () => {
       settings: { ...baseInput.settings, bot_options: { couriers: ["J&T", "LBC"] } },
     });
     expect(result.reply).toContain("J&T, LBC");
+  });
+
+  it("answers store location and business-hours questions from settings", async () => {
+    const settings = { ...baseInput.settings, bot_options: { address: "Mock address, Cebu", business_hours: "Mon-Sat, 9AM-6PM" } };
+    const address = await runIncomingBrain({ ...baseInput, message: "May physical store ba?", settings });
+    const hours = await runIncomingBrain({ ...baseInput, message: "What are your business hours?", settings });
+    expect(address.reply).toContain("Mock address, Cebu");
+    expect(hours.reply).toContain("Mon-Sat, 9AM-6PM");
+  });
+
+  it("answers after-sales policy questions according to enabled settings", async () => {
+    const result = await runIncomingBrain({
+      ...baseInput,
+      message: "What is your refund policy?",
+      settings: { ...baseInput.settings, bot_options: { after_sales: { refund: true }, refund_policy: "Mock refund policy, within 7 days." } },
+    });
+    expect(result.reply).toContain("Mock refund policy, within 7 days.");
+    expect(result.needsSeller).toBe(false);
+  });
+
+  it("quotes configured regional delivery estimates", async () => {
+    const result = await runIncomingBrain({
+      ...baseInput,
+      message: "How long is delivery to Cebu?",
+      settings: { ...baseInput.settings, bot_options: { delivery_days: { Visayas: "4-7 days" }, processing_days: 2 } },
+    });
+    expect(result.reply).toContain("4-7 days");
+    expect(result.reply).toContain("within 2 day(s)");
   });
 
   it("answers order status from the saved order facts", async () => {

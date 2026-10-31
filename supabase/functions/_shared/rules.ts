@@ -8,6 +8,9 @@ export type UnderstandingIntent =
   | "payment"
   | "order_help"
   | "bulk"
+  | "shop_info"
+  | "business_hours"
+  | "after_sales"
   | "catalog"
   | "size_chart"
   | "seller_availability"
@@ -163,9 +166,12 @@ const intentPhrases = {
   complaint: ["complaint", "reklamo", "sira", "damaged", "wrong item", "wrong size", "refund", "return", "late delivery", "late parcel", "no updates", "disappointed", "hindi dumating", "did not arrive", "didn't arrive", "not delivered", "received the wrong"],
   other: ["custom", "customize", "customise", "tailor", "alter", "personalized", "personalised", "do you sell", "nagbebenta", "may tinda"],
   status: ["order status", "nasaan order", "asan order", "nasaan na order", "update sa parcel", "track my order", "where is my order", "tracking", "order confirmation", "follow up", "follow-up", "na ship na", "parcel ko"],
-  payment: ["payment", "magbayad", "paano magbayad", "gcash", "bank transfer", "payment details", "cash on delivery", "cod"],
+  payment: ["payment", "magbayad", "paano magbayad", "gcash", "maya", "bank transfer", "payment details", "cash on delivery", "cod", "installment", "credit card", "debit card"],
   order_help: ["paano mag order", "paano umorder", "how to order", "how can i order", "how to buy"],
   bulk: ["bulk order", "bulk orders", "wholesale", "maramihan", "bulk pricing"],
+  shop_info: ["physical store", "physical shop", "store address", "shop address", "may tindahan", "may store", "where is your shop"],
+  business_hours: ["business hours", "opening hours", "store hours", "what time do you open", "what time are you open", "anong oras kayo bukas"],
+  after_sales: ["exchange", "return policy", "refund policy", "can i return", "pwede mag return", "pwede mag exchange", "do you accept returns", "do you accept exchange"],
   price: ["magkano", "how much", "price", "presyo", "hm", "total magkano", "cost"],
   availability: ["available", "availability", "avail", "may stock", "in stock", "meron", "mayroon", "anong sizes", "anong size", "available sizes"],
   shipping: ["shipping", "delivery fee", "shipping fee", "pa deliver", "padeliver", "deliver sa", "ship to", "shipping to", "delivery", "deliver", "nagde deliver", "gaano katagal", "courier", "couriers", "which courier", "what courier", "ibang lugar", "other places", "other areas", "outside metro manila", "outside manila", "outside ncr", "elsewhere", "provincial shipping"],
@@ -470,6 +476,9 @@ export function understandFromRules(
   if (sellerAvailability) intent = "seller_availability";
   else if (hasAny(normalized, intentPhrases.size_chart)) intent = "size_chart";
   else if (hasAny(normalized, intentPhrases.catalog)) intent = "catalog";
+  else if (hasAny(normalized, intentPhrases.after_sales) && !/\b(damaged|wrong item|wrong size|sira|late delivery|late parcel|disappointed|reklamo|complaint)\b/.test(normalized)) intent = "after_sales";
+  else if (hasAny(normalized, intentPhrases.business_hours)) intent = "business_hours";
+  else if (hasAny(normalized, intentPhrases.shop_info)) intent = "shop_info";
   else if (hasAny(normalized, intentPhrases.complaint)) intent = "complaint";
   else if (hasAny(normalized, intentPhrases.other)) intent = "other";
   else if (hasAny(normalized, intentPhrases.status)) intent = "status";

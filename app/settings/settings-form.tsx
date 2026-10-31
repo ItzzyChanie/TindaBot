@@ -13,6 +13,7 @@ type BotOptions = {
   couriers: string[]; other_courier: string; free_shipping_minimum: number;
   processing_days: number; after_sales: { exchange: boolean; return: boolean; refund: boolean };
   refund_policy: string; address: string; business_hours: string;
+  delivery_days: Record<Region, string>;
 };
 type Settings = {
   shipping_rates: Partial<Record<Region, number>>;
@@ -24,7 +25,7 @@ type Settings = {
   faq_answers: Record<string, string>;
   bot_options: Partial<BotOptions>;
 };
-const defaultOptions: BotOptions = { bulk_orders: false, bulk_details: "", payment_methods: [], other_payment: "", couriers: [], other_courier: "", free_shipping_minimum: 0, processing_days: 1, after_sales: { exchange: false, return: false, refund: false }, refund_policy: "", address: "", business_hours: "" };
+const defaultOptions: BotOptions = { bulk_orders: false, bulk_details: "", payment_methods: [], other_payment: "", couriers: [], other_courier: "", free_shipping_minimum: 0, processing_days: 1, after_sales: { exchange: false, return: false, refund: false }, refund_policy: "", address: "", business_hours: "", delivery_days: { "Metro Manila": "1-3 days", Luzon: "2-5 days", Visayas: "4-7 days", Mindanao: "5-10 days" } };
 
 async function compressSizeChart(file: File): Promise<File> {
   if (!file.type.startsWith("image/"))
@@ -94,7 +95,7 @@ export function SettingsForm({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(initialError);
   const [notice, setNotice] = useState("");
-  const options = { ...defaultOptions, ...settings.bot_options, after_sales: { ...defaultOptions.after_sales, ...settings.bot_options.after_sales } };
+  const options = { ...defaultOptions, ...settings.bot_options, after_sales: { ...defaultOptions.after_sales, ...settings.bot_options.after_sales }, delivery_days: { ...defaultOptions.delivery_days, ...settings.bot_options.delivery_days } };
   function updateOptions(patch: Partial<BotOptions>) {
     setSettings((current) => ({ ...current, bot_options: { ...defaultOptions, ...current.bot_options, ...patch } }));
   }
@@ -329,6 +330,9 @@ export function SettingsForm({
           <label className="settings-label">Processing days before ship-out
             <input type="number" min="1" max="60" step="1" value={options.processing_days} onChange={(event) => updateOptions({ processing_days: Math.max(1, Number(event.target.value) || 1) })} />
           </label>
+          <div className="settings-label">Estimated delivery after ship-out
+            <div className="shipping-grid">{regions.map((region) => <label key={region}>{region}<input maxLength={40} value={options.delivery_days[region]} onChange={(event) => updateOptions({ delivery_days: { ...options.delivery_days, [region]: event.target.value } })} /></label>)}</div>
+          </div>
           <fieldset className="settings-label"><legend>Accepted payment methods</legend>
             {paymentOptions.map((method) => <label key={method}><input type="checkbox" checked={options.payment_methods.includes(method)} onChange={(event) => toggleOption("payment_methods", method, event.target.checked)} /> {method}</label>)}
           </fieldset>

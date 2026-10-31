@@ -58,6 +58,7 @@ export type BrainInput = {
       refund_policy?: string;
       address?: string;
       business_hours?: string;
+      delivery_days?: Record<string, string>;
     };
   };
   latestOrder?: {
@@ -433,16 +434,53 @@ export function runIncomingBrain(
       return escalate("Tumatanggap po kami ng bulk orders. Ilang piraso po ang kukunin ninyo? Ipa-compute ko sa seller ang bulk price.");
     return respond({ bulk_orders: true }, "Tumatanggap po kami ng bulk orders! " + details + " Ilang piraso po ang kukunin ninyo?");
   }
+  if (understanding.intent === "shop_info") {
+    const address = input.settings.bot_options?.address?.trim();
+    if (!address) return escalate("Ipa-check ko po sa seller ang exact store location. Anong item po ang gusto ninyong tingnan habang naghihintay?");
+    return respond({ shop_address: address }, "Opo, may physical store po kami sa " + address + ". Gusto niyo po bang dumaan o mag-order online?");
+  }
+  if (understanding.intent === "business_hours") {
+    const hours = input.settings.bot_options?.business_hours?.trim();
+    if (!hours) return escalate("Ipa-check ko po sa seller ang business hours. May iba pa po ba kayong gustong malaman tungkol sa shop?");
+    return respond({ business_hours: hours }, "Online po kami " + hours + ". Pwede po kayong mag-message anytime at sasagot po kami pagbalik namin. May iba pa po ba kayong tanong?");
+  }
+  if (understanding.intent === "after_sales") {
+    const options = input.settings.bot_options;
+    const lower = input.message.toLowerCase();
+    const kind = /refund/.test(lower) ? "refund" : /return/.test(lower) ? "return" : "exchange";
+    if (!options?.after_sales?.[kind])
+      return respond({ after_sales: kind, enabled: false }, "Sorry po, wala pa pong " + kind + " sa ngayon. May iba pa po ba kayong tanong bago mag-order?");
+    if (kind === "refund") {
+      const policy = options.refund_policy?.trim();
+      if (policy) return respond({ after_sales: kind, enabled: true, policy }, policy + " May iba pa po ba kayong gustong linawin?");
+      return respond({ after_sales: kind, enabled: true }, "Sorry po, wala pa pong refund policy na available sa ngayon. Gusto niyo po ba akong magtanong sa seller?");
+    }
+    return respond({ after_sales: kind, enabled: true }, "Opo, available po ang " + kind + ". Anong item po ito? Pakisend din po ang order number para matulungan kayo.");
+  }
   if (understanding.intent === "payment") {
     const methods = input.settings.bot_options?.payment_methods ?? [];
     const otherMethod = input.settings.bot_options?.other_payment?.trim();
     const available = [...methods, ...(otherMethod ? [otherMethod] : [])];
+    const message = input.message.toLowerCase();
+    const requested = /\b(cod|cash on delivery)\b/.test(message) ? "Cash on Delivery"
+      : /\bgcash\b/.test(message) ? "GCash"
+      : /\bmaya\b/.test(message) ? "Maya"
+      : /\binstallment\b/.test(message) ? "Installment"
+      : /\bbank transfer\b/.test(message) ? "Bank Transfer"
+      : /\b(credit|debit) card\b/.test(message) ? "Credit/Debit Card"
+      : null;
+    if (requested === "Installment")
+      return respond({ payment_method: requested, available: false }, "Wala pa po kaming installment sa ngayon. Available po ang " + (available.join(", ") || "payment methods na makukumpirma ng seller") + ". Alin po ang gusto ninyong gamitin?");
+    if (requested && available.length && !available.includes(requested))
+      return respond({ payment_method: requested, available: false, payment_methods: available }, "Sorry po, wala pa pong " + requested + " sa ngayon. Pero available po ang " + (available.join(", ") || "payment methods na makukumpirma ng seller") + ". Alin po ang mas convenient sa inyo?");
     if (available.length) {
       return respond(
         { payment_methods: available },
         "Tumatanggap po kami ng " + available.join(", ") + ". Alin po ang gusto ninyong gamitin?",
       );
     }
+    if (input.settings.bot_options)
+      return escalate("Wala pang napiling payment method sa shop settings. I-check ko muna sa seller po.");
     const paymentReply = input.settings.faq_answers?.payment?.trim() || input.settings.payment_instructions.trim();
     if (!paymentReply)
       return escalate(
@@ -560,9 +598,10 @@ export function runIncomingBrain(
         { ...activePending, order },
       );
     }
-    const deliveryDetails = options?.processing_days
+    const deliveryDays = region ? options?.delivery_days?.[region]?.trim() : "";
+    const deliveryDetails = (deliveryDays ? " Estimated delivery po ay " + deliveryDays + " after ship-out." : "") + (options?.processing_days
       ? " Ship-out po within " + options.processing_days + " day(s) after payment confirmation."
-      : "";
+      : "");
     const courierDetails = couriers.length ? " via " + couriers.join(", ") : "";
     return respond(
       { region, shipping: rate, amounts: [rate] },
