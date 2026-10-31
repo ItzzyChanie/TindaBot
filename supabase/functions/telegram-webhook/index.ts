@@ -124,10 +124,10 @@ async function processTelegramUpdate(
         : undefined,
     });
     if (incoming.reply) {
-      await saveAssistantReply(incoming.conversationId, incoming.reply);
       const images = incoming.imageUrls?.length
         ? incoming.imageUrls.slice(0, 5)
         : incoming.imageUrl ? [incoming.imageUrl] : [];
+      await saveAssistantReply(incoming.conversationId, incoming.reply, images);
       if (images.length) {
         const caption = incoming.reply.replace(/https:\/\/\S+/g, "").trim();
         for (let index = 0; index < images.length; index += 1) {

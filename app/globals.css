@@ -2971,6 +2971,15 @@ h2 {
   font-size: 12px;
   line-height: 1.45;
 }
+.widget-message-image {
+  display: block;
+  width: auto;
+  max-width: min(100%, 360px);
+  max-height: 440px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  object-fit: contain;
+}
 .widget-message time {
   justify-self: end;
   color: var(--muted);

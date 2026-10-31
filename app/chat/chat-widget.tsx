@@ -7,6 +7,7 @@ type WidgetMessage = {
   id: string;
   sender: "customer" | "ai" | "seller";
   body: string;
+  image_urls?: string[];
   created_at: string;
 };
 type WidgetResponse = { token?: string; messages?: WidgetMessage[]; cursor?: string | null; error?: string };
@@ -197,6 +198,10 @@ export function ChatWidget({ productId: initialProductId, sessionId: initialSess
           <article className={`widget-message ${message.sender}`} key={message.id}>
             <span>{message.sender === "customer" ? "You" : message.sender === "seller" ? "Seller" : "Assistant"}</span>
             <p>{renderMessageBody(message.body)}</p>
+            {message.image_urls?.filter((url) => /^https:\/\//i.test(url)).map((url) => (
+              // eslint-disable-next-line @next/next/no-img-element -- Seller-uploaded size charts are served from Supabase Storage.
+              <img className="widget-message-image" src={url} alt="Shop size chart" key={url} loading="lazy" />
+            ))}
             <time>{new Intl.DateTimeFormat("en-PH", { hour: "numeric", minute: "2-digit" }).format(new Date(message.created_at))}</time>
           </article>
         ))}

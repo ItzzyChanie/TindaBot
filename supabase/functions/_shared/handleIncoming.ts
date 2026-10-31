@@ -528,11 +528,16 @@ export async function handleIncoming(
   return { conversationId, reply, draft, imageUrl: reply ? brain.imageUrl ?? null : null, imageUrls: reply ? brain.imageUrls ?? [] : [] };
 }
 
-export async function saveAssistantReply(conversationId: string, body: string) {
+export async function saveAssistantReply(
+  conversationId: string,
+  body: string,
+  imageUrls: string[] = [],
+) {
   const { error } = await supabase.from("messages").insert({
     conversation_id: conversationId,
     sender: "ai",
     body,
+    image_urls: imageUrls.filter((url) => /^https:\/\//i.test(url)).slice(0, 5),
   });
   if (error) throw error;
 

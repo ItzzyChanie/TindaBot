@@ -101,11 +101,15 @@ Deno.serve(async (request: Request) => {
         .update({ conversation_id: conversationId }).eq("token", tokenHash);
       if (updateError) throw updateError;
     }
-    if (incoming.reply) await saveAssistantReply(conversationId, incoming.reply);
+    if (incoming.reply) await saveAssistantReply(
+      conversationId,
+      incoming.reply,
+      incoming.imageUrls?.length ? incoming.imageUrls : incoming.imageUrl ? [incoming.imageUrl] : [],
+    );
   }
 
   let query = supabase.from("messages")
-    .select("id, sender, body, created_at")
+    .select("id, sender, body, image_urls, created_at")
     .eq("conversation_id", conversationId)
     .in("sender", ["customer", "ai", "seller"])
     .order("created_at", { ascending: true })
