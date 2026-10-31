@@ -15,6 +15,17 @@ export type BrainVariant = { id: string; size: string; stock: number };
 export type BrainProduct = CatalogProduct & {
   id: string;
   description: string;
+  image_url?: string | null;
+  colors?: string[];
+  material?: string;
+  fabric_details?: string;
+  fit_notes?: string;
+  size_guidance?: string;
+  restock_note?: string;
+  model_details?: string;
+  photos_are_actual?: boolean;
+  additional_images?: string[];
+  video_url?: string;
   price: number;
   active: boolean;
   discount_type: "percent" | "fixed" | null;
@@ -79,6 +90,7 @@ export type BrainResult = {
   quotedPriceMatches: boolean | null;
   orderToConfirm?: Record<string, unknown>;
   imageUrl?: string | null;
+  imageUrls?: string[];
   clearSellerHandoff?: boolean;
 };
 export type BrainRules = {
@@ -257,7 +269,7 @@ export function runIncomingBrain(
     }
   }
   if (contextProduct && (!understanding.product_query || refersToSelectedProduct) &&
-    ["price", "availability", "question", "order_confirm"].includes(understanding.intent)) {
+    ["price", "availability", "question", "order_confirm", "seller_handoff"].includes(understanding.intent)) {
     understanding = {
       ...understanding,
       product_query: contextProduct.name,
@@ -310,7 +322,7 @@ export function runIncomingBrain(
     item.active && item.id === lastProductContext.product_id
   );
   if (lastProduct && !understanding.product_query &&
-    ["price", "discount", "availability", "question"].includes(understanding.intent)) {
+    ["price", "discount", "availability", "question", "seller_handoff"].includes(understanding.intent)) {
     understanding = {
       ...understanding,
       product_query: lastProduct.name,
@@ -396,6 +408,54 @@ export function runIncomingBrain(
   }
   if (understanding.intent === "seller_handoff") {
     const message = input.message.toLowerCase();
+    const resolution = resolveProduct(understanding.product_query, input.products.filter((item) => item.active));
+    const product = resolution.status === "matched"
+      ? resolution.product as BrainProduct
+      : !understanding.product_query ? contextProduct ?? lastProduct ?? null : null;
+    const dataReply = (facts: Record<string, unknown>, value: string, englishPrompt: string, taglishPrompt: string) =>
+      respond(facts, `${value} ${prefersEnglish(input.message) ? englishPrompt : taglishPrompt}`);
+    if (product && /restock/.test(message) && product.restock_note?.trim())
+      return dataReply({ product: product.name, restock_note: product.restock_note }, product.restock_note.trim(), "Would you like help with anything else about this item?", "May iba pa po ba kayong gustong malaman tungkol sa item?");
+    if (product && /color|kulay/.test(message) && (product.colors?.length ?? 0) > 0)
+      return dataReply({ product: product.name, colors: product.colors }, prefersEnglish(input.message) ? "Available colors: " + product.colors!.join(", ") + "." : "Available colors po: " + product.colors!.join(", ") + ".", "Which color would you like?", "Aling color po ang gusto ninyo?");
+    if (product && /size|fit|height|weight|true to size/.test(message)) {
+      const asksMeasurementGuidance = /height|weight|recommend|fit sa akin|what size would fit|\d+\s*(?:kg|cm|ft|feet|lbs|lb)\b|\d+\s*['’]\s*\d+/.test(message);
+      const guidance = asksMeasurementGuidance
+        ? product.size_guidance?.trim() || product.fit_notes?.trim()
+        : product.fit_notes?.trim() || product.size_guidance?.trim();
+      if (guidance)
+        return dataReply({ product: product.name, size_guidance: guidance }, guidance, "Would you like help with anything else about sizing?", "May iba pa po ba kayong gustong malaman tungkol sa sizing?");
+    }
+    if (product && /material|fabric|see.?through|stretch|thick|makapal|manipis/.test(message)) {
+      const details = [
+        ...(/material|fabric/.test(message) && product.material?.trim() ? [product.material.trim()] : []),
+        ...(/see.?through|stretch|thick|makapal|manipis/.test(message) && product.fabric_details?.trim() ? [product.fabric_details.trim()] : []),
+      ];
+      const askedForMaterial = /material|fabric/.test(message);
+      const askedForFabricDetails = /see.?through|stretch|thick|makapal|manipis/.test(message);
+      if (details.length && (!askedForMaterial || Boolean(product.material?.trim())) && (!askedForFabricDetails || Boolean(product.fabric_details?.trim())))
+        return dataReply({ product: product.name, material: product.material, fabric_details: product.fabric_details }, details.join(" "), "Is there anything else about this item I can help with?", "May iba pa po ba kayong tanong tungkol sa item?");
+    }
+    if (product && /model|height of the model/.test(message) && product.model_details?.trim())
+      return dataReply({ product: product.name, model_details: product.model_details }, product.model_details.trim(), "Would you like help with anything else about this item?", "May iba pa po ba kayong gustong malaman tungkol sa item?");
+    if (product && /video/.test(message) && product.video_url?.trim()) {
+      const videoUrl = product.video_url.trim();
+      if (/^https:\/\//i.test(videoUrl)) {
+        const reply = prefersEnglish(input.message)
+          ? `Product video: ${videoUrl}. Would you like to see anything else?`
+          : "Narito po ang product video: " + videoUrl + ". May iba pa po ba kayong gustong makita?";
+        return { ...respond({ product: product.name, video_url: videoUrl }, reply), imageUrls: [] };
+      }
+    }
+    if (product && /photo|picture|actual image|same as picture/.test(message) && product.photos_are_actual) {
+      const images = [product.image_url, ...(product.additional_images ?? [])]
+        .filter((url): url is string => typeof url === "string" && /^https:\/\//i.test(url))
+        .slice(0, 5);
+      if (images.length) {
+        const reply = (prefersEnglish(input.message) ? "These are seller-confirmed actual product photos: " : "Narito po ang actual product photos: ") + images.join("\n") + (prefersEnglish(input.message) ? " Would you like to see anything else?" : "\nMay iba pa po ba kayong gustong makita?");
+        return { ...respond({ product: product.name, photos_are_actual: true, image_count: images.length }, reply), imageUrls: images };
+      }
+    }
     const reason = /restock/.test(message) ? "restock timing"
       : /color/.test(message) ? "available colors"
       : /material|fabric|see.?through|stretch|thick|makapal|manipis/.test(message) ? "fabric and product details"

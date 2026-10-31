@@ -197,7 +197,7 @@ export async function handleIncoming(
 
   const { data: productRows, error: productsError } = await supabase
     .from("products")
-    .select("id, name, aliases, description, price, active, discount_type, discount_value, discount_starts, discount_ends, variants(id, size, stock), promos(label, kind, min_qty, value, starts_at, ends_at, active)")
+    .select("id, name, aliases, description, image_url, colors, material, fabric_details, fit_notes, size_guidance, restock_note, model_details, photos_are_actual, additional_images, video_url, price, active, discount_type, discount_value, discount_starts, discount_ends, variants(id, size, stock), promos(label, kind, min_qty, value, starts_at, ends_at, active)")
     .eq("active", true);
   if (productsError) throw productsError;
   const products = ((productRows ?? []) as unknown as ProductRow[]).map((row) => ({
@@ -385,7 +385,7 @@ export async function handleIncoming(
     if (error) throw error;
   }
 
-  return { conversationId, reply, draft, imageUrl: reply ? brain.imageUrl ?? null : null };
+  return { conversationId, reply, draft, imageUrl: reply ? brain.imageUrl ?? null : null, imageUrls: reply ? brain.imageUrls ?? [] : [] };
 }
 
 export async function saveAssistantReply(conversationId: string, body: string) {

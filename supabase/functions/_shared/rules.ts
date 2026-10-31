@@ -174,7 +174,7 @@ const intentPhrases = {
   shop_info: ["physical store", "physical shop", "store address", "shop address", "may tindahan", "may store", "where is your shop"],
   business_hours: ["business hours", "opening hours", "store hours", "what time do you open", "what time are you open", "anong oras kayo bukas"],
   after_sales: ["exchange", "return policy", "refund policy", "can i return", "pwede mag return", "pwede mag exchange", "do you accept returns", "do you accept exchange"],
-  seller_handoff: ["restock", "material", "fabric", "see through", "stretchable", "stretchy", "thick ba", "makapal", "manipis", "true to size", "size fit sa akin", "fit sa akin", "anong size ang fit", "what size would fit", "recommend a size", "height weight", "actual photo", "actual photos", "actual images", "same as picture", "sa picture", "picture lang", "photos of the item", "video ng item", "model", "height of the model", "available colors", "ibang color", "other color", "other colors", "kulay", "legit", "scam", "reviews", "review", "testimonials", "feedback", "reseller", "reseller price", "dropship", "dropshipping", "dropshipper"],
+  seller_handoff: ["restock", "material", "materials", "fabric", "fabrics", "see through", "see thru", "stretch", "stretchable", "stretchy", "thick ba", "thin", "makapal", "manipis", "true to size", "size fit sa akin", "fit sa akin", "anong size ang fit", "what size would fit", "recommend a size", "height weight", "actual photo", "actual photos", "real photo", "real photos", "actual images", "same as picture", "same as photo", "sa picture", "picture lang", "photo", "photos", "picture", "video", "model", "height of the model", "available colors", "what colors", "what color", "which colors", "which color", "colors", "color", "colours", "colour", "ibang color", "other color", "other colors", "anong kulay", "kulay", "legit", "scam", "reviews", "review", "testimonials", "feedback", "reseller", "reseller price", "dropship", "dropshipping", "dropshipper"],
   discount: ["discount", "tawad", "less pa", "best price", "may bawas", "can you lower", "lower the price"],
   price: ["magkano", "how much", "price", "presyo", "hm", "total magkano", "cost", "pm price"],
   availability: ["available", "availability", "avail", "may stock", "in stock", "meron", "mayroon", "anong sizes", "anong size", "available sizes"],
@@ -211,6 +211,7 @@ const stopWords = new Set([
   "quantity", "size", "sizes", "order", "gusto", "ko", "nito", "iyan", "ito", "dito", "diyan", "dun", "na",
   "with", "and", "or", "medium", "med", "small", "large", "extra", "xl", "xxl", "kayo", "kayong", "kami", "nyo", "ninyo", "ninyong", "what", "are", "have",
   "this", "that", "ibang", "lugar", "other", "place", "places", "area", "areas", "outside", "province", "provinces", "provincial", "elsewhere", "another", "different", "location", "locations",
+  "material", "fabric", "through", "stretchable", "stretchy", "thick", "makapal", "manipis", "true", "fit", "recommend", "restock", "colors", "color", "kulay", "photo", "photos", "image", "images", "picture", "video", "model", "legit", "scam", "reviews", "review", "testimonials", "feedback", "reseller", "dropship", "dropshipping", "dropshipper", "actual", "discount", "tawad",
   ...Object.keys(numberWords).flatMap((word) => word.split(" ")),
 ]);
 

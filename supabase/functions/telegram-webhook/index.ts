@@ -48,7 +48,7 @@ async function sendTelegramMessage(chatId: number, text: string) {
   if (!response.ok) throw new Error("Telegram sendMessage failed");
 }
 
-async function sendTelegramPhoto(chatId: number, photo: string, caption: string) {
+async function sendTelegramPhoto(chatId: number, photo: string, caption = "") {
   if (!telegramToken) throw new Error("Telegram bot is not configured");
   const response = await fetch(
     `https://api.telegram.org/bot${telegramToken}/sendPhoto`,
@@ -58,7 +58,7 @@ async function sendTelegramPhoto(chatId: number, photo: string, caption: string)
       body: JSON.stringify({
         chat_id: chatId,
         photo,
-        caption,
+        ...(caption ? { caption } : {}),
         reply_markup: replyMarkup,
       }),
     },
@@ -125,11 +125,17 @@ async function processTelegramUpdate(
     });
     if (incoming.reply) {
       await saveAssistantReply(incoming.conversationId, incoming.reply);
-      if (incoming.imageUrl) {
-        try {
-          await sendTelegramPhoto(chatId, incoming.imageUrl, incoming.reply);
-        } catch {
-          await sendTelegramMessage(chatId, incoming.reply + "\n" + incoming.imageUrl);
+      const images = incoming.imageUrls?.length
+        ? incoming.imageUrls.slice(0, 5)
+        : incoming.imageUrl ? [incoming.imageUrl] : [];
+      if (images.length) {
+        const caption = incoming.reply.replace(/https:\/\/\S+/g, "").trim();
+        for (let index = 0; index < images.length; index += 1) {
+          try {
+            await sendTelegramPhoto(chatId, images[index], index === 0 ? caption : "");
+          } catch {
+            await sendTelegramMessage(chatId, index === 0 ? incoming.reply : images[index]);
+          }
         }
       } else {
         await sendTelegramMessage(chatId, incoming.reply);

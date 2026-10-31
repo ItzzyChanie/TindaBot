@@ -12,6 +12,16 @@ type Product = {
   aliases: string[];
   description: string;
   image_url: string | null;
+  colors: string[];
+  material: string;
+  fabric_details: string;
+  fit_notes: string;
+  size_guidance: string;
+  restock_note: string;
+  model_details: string;
+  photos_are_actual: boolean;
+  additional_images: string[];
+  video_url: string;
   price: number;
   active: boolean;
   discount_type: "percent" | "fixed" | null;
@@ -71,6 +81,7 @@ export function CatalogManager({
   const [query, setQuery] = useState("");
   const [previewQty, setPreviewQty] = useState(1);
   const [photo, setPhoto] = useState<File | null>(null);
+  const [extraPhotos, setExtraPhotos] = useState<File[]>([]);
   const [form, setForm] = useState({
     name: initialName,
     aliases: "",
@@ -80,6 +91,16 @@ export function CatalogManager({
     active: true,
     discountType: "" as "" | "percent" | "fixed",
     discountValue: "",
+    colors: "",
+    material: "",
+    fabricDetails: "",
+    fitNotes: "",
+    sizeGuidance: "",
+    restockNote: "",
+    modelDetails: "",
+    photosAreActual: false,
+    additionalImages: "",
+    videoUrl: "",
   });
   useEffect(() => {
     if (initialName)
@@ -113,6 +134,7 @@ export function CatalogManager({
   function resetForm() {
     setEditingId(null);
     setPhoto(null);
+    setExtraPhotos([]);
     setForm({
       name: "",
       aliases: "",
@@ -122,12 +144,23 @@ export function CatalogManager({
       active: true,
       discountType: "",
       discountValue: "",
+      colors: "",
+      material: "",
+      fabricDetails: "",
+      fitNotes: "",
+      sizeGuidance: "",
+      restockNote: "",
+      modelDetails: "",
+      photosAreActual: false,
+      additionalImages: "",
+      videoUrl: "",
     });
   }
 
   function editProduct(product: Product) {
     setEditingId(product.id);
     setPhoto(null);
+    setExtraPhotos([]);
     setForm({
       name: product.name,
       aliases: product.aliases.join(", "),
@@ -140,6 +173,16 @@ export function CatalogManager({
       discountType: product.discount_type ?? "",
       discountValue:
         product.discount_value == null ? "" : String(product.discount_value),
+      colors: (product.colors ?? []).join(", "),
+      material: product.material ?? "",
+      fabricDetails: product.fabric_details ?? "",
+      fitNotes: product.fit_notes ?? "",
+      sizeGuidance: product.size_guidance ?? "",
+      restockNote: product.restock_note ?? "",
+      modelDetails: product.model_details ?? "",
+      photosAreActual: product.photos_are_actual ?? false,
+      additionalImages: (product.additional_images ?? []).join("\n"),
+      videoUrl: product.video_url ?? "",
     });
     setNotice("");
     setError("");
@@ -165,6 +208,34 @@ export function CatalogManager({
         imageUrl = supabase.storage.from("product-images").getPublicUrl(path)
           .data.publicUrl;
       }
+      const additionalImages = form.additionalImages.split(/\r?\n/).map((url) => url.trim()).filter(Boolean);
+      if (extraPhotos.length + additionalImages.length > 8)
+        throw new Error("Use up to 8 additional product photos.");
+      const uploadedImages: string[] = [];
+      for (const file of extraPhotos) {
+        const compressed = await compressImage(file);
+        const path = `${crypto.randomUUID()}.webp`;
+        const { error: uploadError } = await supabase.storage
+          .from("product-images")
+          .upload(path, compressed, { contentType: "image/webp" });
+        if (uploadError) throw uploadError;
+        uploadedImages.push(supabase.storage.from("product-images").getPublicUrl(path).data.publicUrl);
+      }
+      const allAdditionalImages = [...additionalImages, ...uploadedImages];
+      for (const url of allAdditionalImages) {
+        try {
+          if (new URL(url).protocol !== "https:") throw new Error();
+        } catch {
+          throw new Error("Additional photo links must be valid HTTPS URLs.");
+        }
+      }
+      if (form.videoUrl.trim()) {
+        try {
+          if (new URL(form.videoUrl.trim()).protocol !== "https:") throw new Error();
+        } catch {
+          throw new Error("The video link must be a valid HTTPS URL.");
+        }
+      }
       const fields = {
         name: form.name.trim(),
         aliases: form.aliases
@@ -177,6 +248,16 @@ export function CatalogManager({
         image_url: imageUrl,
         discount_type: form.discountType || null,
         discount_value: form.discountType ? Number(form.discountValue) : null,
+        colors: form.colors.split(",").map((value) => value.trim()).filter(Boolean),
+        material: form.material.trim(),
+        fabric_details: form.fabricDetails.trim(),
+        fit_notes: form.fitNotes.trim(),
+        size_guidance: form.sizeGuidance.trim(),
+        restock_note: form.restockNote.trim(),
+        model_details: form.modelDetails.trim(),
+        photos_are_actual: form.photosAreActual,
+        additional_images: allAdditionalImages,
+        video_url: form.videoUrl.trim(),
       };
       let productId = editingId;
       if (productId) {
@@ -401,6 +482,7 @@ export function CatalogManager({
                         Also called: {product.aliases.join(", ")}
                       </p>
                     )}
+                    {product.colors?.length > 0 && <p className="muted product-aliases">Colors: {product.colors.join(", ")}</p>}
                     <div className="size-chips">
                       {product.variants.map((variant) => (
                         <span className="size-chip" key={variant.id}>
@@ -557,6 +639,48 @@ export function CatalogManager({
               accept="image/jpeg,image/png,image/webp"
               onChange={(event) => setPhoto(event.target.files?.[0] ?? null)}
             />
+          </label>
+          <label>
+            Available colors <small>Keep this list current for the bot</small>
+            <input value={form.colors} onChange={(event) => setForm({ ...form, colors: event.target.value })} placeholder="Black, cream, sage" />
+          </label>
+          <label>
+            Material
+            <input maxLength={160} value={form.material} onChange={(event) => setForm({ ...form, material: event.target.value })} placeholder="Cotton blend" />
+          </label>
+          <label>
+            Thickness, opacity, and stretch notes
+            <textarea rows={2} maxLength={500} value={form.fabricDetails} onChange={(event) => setForm({ ...form, fabricDetails: event.target.value })} placeholder="Seller-verified details only" />
+          </label>
+          <label>
+            Fit notes <small>For true-to-size or loose/tight sizing questions</small>
+            <textarea rows={2} maxLength={500} value={form.fitNotes} onChange={(event) => setForm({ ...form, fitNotes: event.target.value })} />
+          </label>
+          <label>
+            Size guidance <small>Include only ranges you have verified, e.g. height and weight</small>
+            <textarea rows={3} maxLength={1000} value={form.sizeGuidance} onChange={(event) => setForm({ ...form, sizeGuidance: event.target.value })} />
+          </label>
+          <label>
+            Restock update <small>Leave blank if there is no confirmed update</small>
+            <input maxLength={240} value={form.restockNote} onChange={(event) => setForm({ ...form, restockNote: event.target.value })} placeholder="Expected around mid-November" />
+          </label>
+          <label>
+            Model details
+            <input maxLength={300} value={form.modelDetails} onChange={(event) => setForm({ ...form, modelDetails: event.target.value })} placeholder="Height, weight, and size worn (if confirmed)" />
+          </label>
+          <label>
+            Additional product photos <small>Upload or paste one HTTPS URL per line (up to 8)</small>
+            <textarea rows={3} maxLength={2000} value={form.additionalImages} onChange={(event) => setForm({ ...form, additionalImages: event.target.value })} placeholder="https://..." />
+            <input type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={(event) => setExtraPhotos(Array.from(event.target.files ?? []))} />
+            {extraPhotos.length > 0 && <small>{extraPhotos.length} additional photo(s) selected</small>}
+          </label>
+          <label className="active-toggle">
+            <input type="checkbox" checked={form.photosAreActual} onChange={(event) => setForm({ ...form, photosAreActual: event.target.checked })} />
+            Seller confirms photos show the actual item
+          </label>
+          <label>
+            Product video link <small>HTTPS link only</small>
+            <input type="url" value={form.videoUrl} onChange={(event) => setForm({ ...form, videoUrl: event.target.value })} placeholder="https://..." />
           </label>
           <label className="active-toggle">
             <input

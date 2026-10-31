@@ -739,6 +739,46 @@ describe("grounded incoming conversation brain", () => {
     expect(result.reply).toContain("tracking number");
   });
 
+  it("answers product details only when seller-entered catalog facts exist", async () => {
+    const productFacts: BrainProduct = {
+      ...product,
+      colors: ["Black", "Sage"],
+      material: "Cotton poplin",
+      fabric_details: "Medium weight, opaque, with slight stretch.",
+      fit_notes: "Relaxed fit; runs true to size.",
+      size_guidance: "M fits 5'2-5'4 and 50-58 kg.",
+      restock_note: "Expected around the second week of November.",
+      model_details: "Model is 5'5, 52 kg, wearing size M.",
+    };
+    const cases: Array<[string, string]> = [
+      ["What material is the Isla blouse?", "Cotton poplin"],
+      ["May ibang color pa itong Isla blouse?", "Black, Sage"],
+      ["True to size ba ang Isla blouse?", "Relaxed fit; runs true to size."],
+      ["Anong size fit sa akin, 5'3 55kg? Isla blouse", "M fits 5'2-5'4 and 50-58 kg."],
+      ["Restock kailan ang Isla blouse?", "second week of November"],
+      ["Sino model ng Isla blouse?", "Model is 5'5"],
+    ];
+    for (const [message, expected] of cases) {
+      const result = await runIncomingBrain({ ...baseInput, message, products: [productFacts] });
+      expect(result.needsSeller).toBe(false);
+      expect(result.reply).toContain(expected);
+    }
+  });
+
+  it("shares only photos that the seller marked as actual", async () => {
+    const actualProduct = {
+      ...product,
+      image_url: "https://images.example.com/front.jpg",
+      additional_images: ["https://images.example.com/back.jpg"],
+      photos_are_actual: true,
+    };
+    const actual = await runIncomingBrain({ ...baseInput, message: "May actual photos itong Isla blouse?", products: [actualProduct] });
+    expect(actual.needsSeller).toBe(false);
+    expect(actual.imageUrls).toEqual([actualProduct.image_url, ...actualProduct.additional_images]);
+    const unverified = await runIncomingBrain({ ...baseInput, message: "May actual photos itong Isla blouse?", products: [{ ...actualProduct, photos_are_actual: false }] });
+    expect(unverified.needsSeller).toBe(true);
+  });
+
   it("escalates complaints for missing or incorrect deliveries", async () => {
     for (const message of ["Missing item po", "Iba po ang dumating", "May sira po yung item"]) {
       const result = await runIncomingBrain({ ...baseInput, message });

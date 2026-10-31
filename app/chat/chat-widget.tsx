@@ -26,6 +26,19 @@ const quickReplies = [
   { label: "Talk to the seller", text: "SELLER" },
 ];
 
+function renderMessageBody(body: string) {
+  return body.split(/(https:\/\/\S+)/g).map((part, index) => {
+    if (!part.startsWith("https://")) return part;
+    const url = part.replace(/[),.!?]+$/, "");
+    const suffix = part.slice(url.length);
+    return (
+      <span key={index}>
+        <a href={url} target="_blank" rel="noreferrer">{url}</a>{suffix}
+      </span>
+    );
+  });
+}
+
 async function widgetRequest(path: string, body: Record<string, unknown>): Promise<WidgetResponse> {
   const { url, supabaseKey } = getSupabasePublicEnv();
   const response = await fetch(`${url}/functions/v1/${path}`, {
@@ -183,7 +196,7 @@ export function ChatWidget({ productId: initialProductId, sessionId: initialSess
         {loading ? <p className="widget-state">Inihahanda ang chat…</p> : messages.length === 0 ? <p className="widget-state">Kumusta po! Pumili ng quick question o mag-type ng tanong.</p> : messages.map((message) => (
           <article className={`widget-message ${message.sender}`} key={message.id}>
             <span>{message.sender === "customer" ? "You" : message.sender === "seller" ? "Seller" : "Assistant"}</span>
-            <p>{message.body}</p>
+            <p>{renderMessageBody(message.body)}</p>
             <time>{new Intl.DateTimeFormat("en-PH", { hour: "numeric", minute: "2-digit" }).format(new Date(message.created_at))}</time>
           </article>
         ))}
