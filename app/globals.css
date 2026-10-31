@@ -1979,6 +1979,16 @@ h2 {
   overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
+.inbox-message-image {
+  display: block;
+  width: auto;
+  max-width: min(100%, 420px);
+  max-height: 520px;
+  margin: 4px 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  object-fit: contain;
+}
 .message-bubble time {
   display: block;
   color: var(--muted);

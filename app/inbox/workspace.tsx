@@ -28,6 +28,7 @@ type Message = {
   conversation_id: string;
   sender: "customer" | "ai" | "seller" | "system";
   body: string;
+  image_urls?: string[];
   created_at: string;
 };
 type CustomerOrder = {
@@ -139,7 +140,7 @@ export function InboxWorkspace() {
           ids.length
             ? supabase
                 .from("messages")
-                .select("id, conversation_id, sender, body, created_at")
+                .select("id, conversation_id, sender, body, image_urls, created_at")
                 .in("conversation_id", ids)
                 .order("created_at", { ascending: true })
             : Promise.resolve({ data: [], error: null }),
@@ -220,7 +221,7 @@ export function InboxWorkspace() {
           void (async () => {
             const { data } = await createSupabaseBrowserClient()
               .from("messages")
-              .select("id, conversation_id, sender, body, created_at")
+              .select("id, conversation_id, sender, body, image_urls, created_at")
               .eq("id", messageId)
               .maybeSingle();
             if (data) {
@@ -650,6 +651,10 @@ export function InboxWorkspace() {
                               : "System"}
                       </span>
                       <p>{message.body}</p>
+                      {message.image_urls?.filter((url) => /^https:\/\//i.test(url)).map((url) => (
+                        // eslint-disable-next-line @next/next/no-img-element -- Seller-uploaded chart images are served from Supabase Storage.
+                        <img className="inbox-message-image" src={url} alt="Size chart" key={url} loading="lazy" />
+                      ))}
                       <time>{formatTime(message.created_at)}</time>
                     </div>
                   </article>
