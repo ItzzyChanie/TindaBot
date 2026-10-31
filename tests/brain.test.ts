@@ -814,6 +814,12 @@ describe("grounded incoming conversation brain", () => {
     });
     expect(answer.needsSeller).toBe(false);
     expect(answer.reply).toContain("Noted po, Brown");
+    expect(answer.pending.clarification).toMatchObject({ kind: "order_interest" });
+    const yes = await runIncomingBrain({
+      ...baseInput, message: "sige po", products: [coloredProduct], pending: answer.pending,
+    });
+    expect(yes.reply).toContain("Anong size po");
+    expect(yes.pending.last_product).toMatchObject({ color: "Brown" });
   });
 
   it("uses the selected product's active catalog discount instead of calling it fixed price", async () => {
@@ -834,6 +840,66 @@ describe("grounded incoming conversation brain", () => {
     expect(result.reply).not.toContain("Fixed price");
     expect(result.reply).toContain("16.67");
   });
+
+  it("continues a discounted-product yes reply into size, quantity, area, and the discounted total", async () => {
+    const trousers: BrainProduct = {
+      ...product,
+      id: "trousers",
+      name: "Amara Linen Trousers",
+      price: 1090,
+      discount_type: "percent",
+      discount_value: 50,
+      variants: [
+        { id: "trouser-m", size: "M", stock: 4 },
+        { id: "trouser-l", size: "L", stock: 4 },
+      ],
+    };
+    const settings = { ...baseInput.settings, shipping_rates: { Visayas: 75 } };
+    const offer = await runIncomingBrain({
+      ...baseInput, message: "May discount po ba?", contextProductId: trousers.id,
+      products: [trousers], settings,
+    });
+    expect(offer.pending.clarification).toMatchObject({ kind: "order_interest", product_id: trousers.id });
+
+    const yes = await runIncomingBrain({
+      ...baseInput, message: "yes po", products: [trousers], settings, pending: offer.pending,
+    });
+    expect(yes.needsSeller).toBe(false);
+    expect(yes.reply).toContain("Anong size po");
+
+    const size = await runIncomingBrain({
+      ...baseInput, message: "large", products: [trousers], settings, pending: yes.pending,
+    });
+    expect(size.reply).toContain("Ilang piraso po");
+
+    const quantity = await runIncomingBrain({
+      ...baseInput, message: "2", products: [trousers], settings, pending: size.pending,
+    });
+    expect(quantity.reply).toContain("area ninyo");
+
+    const area = await runIncomingBrain({
+      ...baseInput, message: "Cebu", products: [trousers], settings, pending: quantity.pending,
+    });
+    expect(area.reply).toContain("1,165.00");
+    expect(area.reply).toContain("I-confirm po ba");
+    expect(area.pending.order).toMatchObject({ size: "L", quantity: 2, subtotal: 1090, shipping: 75 });
+  });
+
+  it.each(["wala po", "wla na po", "none", "nothing", "nevermind", "nvm", "noo"])(
+    "continues an earlier product request when the customer says %s to an anything-else prompt",
+    async (message) => {
+      const response = await runIncomingBrain({
+        ...baseInput,
+        message,
+        pending: {
+          clarification: { kind: "engagement", product_id: product.id },
+          last_product: { product_id: product.id },
+        },
+      });
+      expect(response.needsSeller).toBe(false);
+      expect(response.reply).toContain("Anong size po");
+    },
+  );
 
   it("escalates complaints for missing or incorrect deliveries", async () => {
     for (const message of ["Missing item po", "Iba po ang dumating", "May sira po yung item"]) {

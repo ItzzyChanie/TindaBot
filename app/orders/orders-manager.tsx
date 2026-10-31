@@ -7,6 +7,7 @@ type OrderItem = {
   qty: number;
   unit_price: number;
   offer_label: string | null;
+  color: string | null;
   variants: { size: string; products: { name: string } | null } | null;
 };
 type Order = {
@@ -35,7 +36,7 @@ function money(value: number) {
 function orderQuery() {
   return createSupabaseBrowserClient()
     .from("orders")
-    .select("id, customer_id, total, shipping, status, created_at, payment_proof, customers(name, channel, external_id), order_items(qty, unit_price, offer_label, variants(size, products(name)))")
+    .select("id, customer_id, total, shipping, status, created_at, payment_proof, customers(name, channel, external_id), order_items(qty, unit_price, offer_label, color, variants(size, products(name)))")
     .order("created_at", { ascending: false });
 }
 
@@ -137,6 +138,7 @@ export function OrdersManager() {
                 {order.order_items.map((item, index) => (
                   <li key={order.id + "-" + index}>
                     <span>{item.qty} × {item.variants?.products?.name ?? "Product"} ({item.variants?.size ?? "Size"})</span>
+                    {item.color && <small>Color: {item.color}</small>}
                     <span>{money(Number(item.unit_price) * item.qty)}</span>
                     {item.offer_label && <small>{item.offer_label}</small>}
                   </li>

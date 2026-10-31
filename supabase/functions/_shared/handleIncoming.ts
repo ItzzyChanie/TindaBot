@@ -323,6 +323,7 @@ export async function handleIncoming(
                   qty: quantity,
                   unit_price: pricing.unit,
                   offer_label: pricing.label,
+                  color: typeof order.color === "string" ? order.color : null,
                 }],
                 p_shipping: shipping,
                 p_total: total,
