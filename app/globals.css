@@ -3498,7 +3498,9 @@ h2 {
   min-height: 24px;
 }
 .shop-price-row strong {
+  color: #294333;
   font-size: 19px;
+  opacity: 1;
 }
 .shop-price-row del {
   color: var(--muted);
@@ -3522,11 +3524,19 @@ h2 {
   font-size: 11px;
 }
 .shop-size small {
-  color: var(--green);
+  color: #347352;
   font-size: 10px;
 }
+.shop-size:not(.sold_out) b {
+  color: #293b2e;
+  opacity: 1;
+}
+.shop-size:not(.sold_out) small:not(.shop-reserved) {
+  color: #347352;
+  opacity: 1;
+}
 .shop-size .shop-reserved {
-  color: var(--muted);
+  color: #646e65;
   font-size: 9px;
 }
 .shop-size.low_stock small {
