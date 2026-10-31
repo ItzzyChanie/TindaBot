@@ -13,6 +13,7 @@ type BotOptions = {
   couriers: string[]; other_courier: string; free_shipping_minimum: number;
   processing_days: number; after_sales: { exchange: boolean; return: boolean; refund: boolean };
   refund_policy: string; address: string; business_hours: string;
+  facebook_page_name: string; facebook_page_url: string;
   delivery_days: Record<Region, string>;
 };
 type Settings = {
@@ -25,7 +26,7 @@ type Settings = {
   faq_answers: Record<string, string>;
   bot_options: Partial<BotOptions>;
 };
-const defaultOptions: BotOptions = { bulk_orders: false, bulk_details: "", payment_methods: [], other_payment: "", couriers: [], other_courier: "", free_shipping_minimum: 0, processing_days: 1, after_sales: { exchange: false, return: false, refund: false }, refund_policy: "", address: "", business_hours: "", delivery_days: { "Metro Manila": "1-3 days", Luzon: "2-5 days", Visayas: "4-7 days", Mindanao: "5-10 days" } };
+const defaultOptions: BotOptions = { bulk_orders: false, bulk_details: "", payment_methods: [], other_payment: "", couriers: [], other_courier: "", free_shipping_minimum: 0, processing_days: 1, after_sales: { exchange: false, return: false, refund: false }, refund_policy: "", address: "", business_hours: "", facebook_page_name: "", facebook_page_url: "", delivery_days: { "Metro Manila": "1-3 days", Luzon: "2-5 days", Visayas: "4-7 days", Mindanao: "5-10 days" } };
 
 async function compressSizeChart(file: File): Promise<File> {
   if (!file.type.startsWith("image/"))
@@ -348,6 +349,8 @@ export function SettingsForm({
           <p className="eyebrow">STORE AND AFTER-SALES</p><h2>Store details and policies</h2>
           <label className="settings-label">Shop address<input maxLength={300} value={options.address} onChange={(event) => updateOptions({ address: event.target.value })} /></label>
           <label className="settings-label">Business hours<input maxLength={160} value={options.business_hours} onChange={(event) => updateOptions({ business_hours: event.target.value })} placeholder="Mon-Sat, 9AM-6PM" /></label>
+          <label className="settings-label">Facebook page name<input maxLength={100} value={options.facebook_page_name} onChange={(event) => updateOptions({ facebook_page_name: event.target.value })} placeholder="Shop page name" /></label>
+          <label className="settings-label">Facebook page link<input type="url" maxLength={500} value={options.facebook_page_url} onChange={(event) => updateOptions({ facebook_page_url: event.target.value })} placeholder="https://facebook.com/your-shop" /></label>
           <fieldset className="settings-label"><legend>After-sales options</legend>
             {(["exchange", "return", "refund"] as const).map((policy) => <label key={policy}><input type="checkbox" checked={options.after_sales[policy]} onChange={(event) => updateOptions({ after_sales: { ...options.after_sales, [policy]: event.target.checked } })} /> {policy[0].toUpperCase() + policy.slice(1)} accepted</label>)}
           </fieldset>

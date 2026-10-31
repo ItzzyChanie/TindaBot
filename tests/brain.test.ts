@@ -349,10 +349,10 @@ describe("grounded incoming conversation brain", () => {
   it("explains that the assistant cannot know the seller's schedule", async () => {
     const result = await runIncomingBrain({
       ...baseInput,
-      message: "mga what time po kaya sya avail?",
+      message: "kailan po magcha-chat si seller?",
       pending: { seller_handoff: true },
     });
-    expect(result.reply).toContain("I don't know what exact day or time");
+    expect(result.reply).toContain("Magcha-chat po si seller dito sa lalong madaling panahon");
     expect(result.needsSeller).toBe(true);
     expect(result.missedRequest).toBe(true);
     expect(result.pending.seller_handoff).toBe(true);

@@ -473,9 +473,9 @@ export function understandFromRules(
     resolveProduct(productQuery, catalog).status === "ambiguous";
   const availabilityCue = hasAny(normalized, intentPhrases.availability) ||
     (bestMatch && size !== null && /\b(may|meron|mayroon)\b/.test(normalized));
-  const sellerAvailability = /\b(what time|anong oras|anong araw|kailan|kelan|when|anong oras)\b/.test(normalized) &&
+  const sellerAvailability = /\b(what time|anong oras|anong araw|kailan|kelan|when)\b/.test(normalized) &&
     /\b(seller|siya|sya|kayo|owner|shop)\b/.test(normalized) &&
-    /\b(avail|available|online|active|free)\b/.test(normalized);
+    /\b(avail|available|online|active|free|chat|reply|message|magchat|mag chat)\b/.test(normalized);
   const sizeRecommendation = /\b(size|fit|recommend|recommendation|recommendation)\b/.test(normalized) &&
     /\b\d+(?:\.\d+)?\s*(?:kg|kgs|cm|ft|feet|lbs|lb)\b|\b\d+\s*['’]\s*\d+/.test(normalized);
 

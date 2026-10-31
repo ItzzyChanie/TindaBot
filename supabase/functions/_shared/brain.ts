@@ -464,7 +464,7 @@ export function runIncomingBrain(
   if (understanding.intent === "seller_availability") {
     return {
       ...escalate(
-        "Since I'm just an assistant, I don't know what exact day or time the seller is available. Thank you for understanding :>",
+        "Magcha-chat po si seller dito sa lalong madaling panahon. Salamat po sa paghihintay.",
       ),
       pending: { ...input.pending, seller_handoff: true },
     };

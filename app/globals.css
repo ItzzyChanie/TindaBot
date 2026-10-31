@@ -2155,6 +2155,25 @@ h2 {
 .order-customer time {
   margin-left: auto;
 }
+.order-customer-details {
+  display: grid;
+  grid-template-columns: minmax(90px, auto) 1fr;
+  gap: 5px 12px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--green-soft);
+  font-size: 12px;
+}
+.order-customer-details dt {
+  color: var(--muted);
+}
+.order-customer-details dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
 .order-status {
   display: inline-flex;
   width: fit-content;

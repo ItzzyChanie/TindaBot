@@ -1,0 +1,36 @@
+import { describe, expect, it } from "vitest";
+import { customerDetailsPrompt, isOrderAcknowledgment, parseOrderDetails, validCustomerEmail, validCustomerMobile } from "../supabase/functions/_shared/order-customer-details";
+
+describe("order customer details", () => {
+  it("parses a complete labeled details block", () => {
+    expect(parseOrderDetails([
+      "Full name: Juan Dela Cruz",
+      "Complete address: 123 Mabini Street, Cebu City",
+      "Mobile number: +639171234567",
+      "Email address: juan@example.com",
+      "Optional delivery notes: Gate is beside the bakery",
+    ].join("\n"))).toEqual({
+      customer_full_name: "Juan Dela Cruz",
+      customer_address: "123 Mabini Street, Cebu City",
+      customer_mobile: "+639171234567",
+      customer_email: "juan@example.com",
+      customer_notes: "Gate is beside the bakery",
+    });
+  });
+
+  it("prompts one missing field at a time after a partial response", () => {
+    expect(customerDetailsPrompt(1042, ["customer_mobile", "customer_email"]))
+      .toContain("mobile number");
+  });
+
+  it("validates email and recognizes polite closing replies", () => {
+    expect(validCustomerEmail("buyer@example.com")).toBe(true);
+    expect(validCustomerEmail("not-an-email")).toBe(false);
+    expect(validCustomerMobile("+639171234567")).toBe(true);
+    expect(validCustomerMobile("call me later")).toBe(false);
+    for (const message of ["okay", "ok po", "okay, thank you", "thank you po", "fine po", "salamat po"]) {
+      expect(isOrderAcknowledgment(message)).toBe(true);
+    }
+    expect(isOrderAcknowledgment("May update po sa order?")).toBe(false);
+  });
+});

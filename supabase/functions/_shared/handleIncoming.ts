@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { labelAutoReply, runIncomingBrain, type BrainPending, type BrainProduct } from "./brain.ts";
 import { quote, type QuotePromo } from "./quote.ts";
+import { customerDetailsPrompt, isOrderAcknowledgment, orderDetailFields, parseOrderDetails, validCustomerEmail, validCustomerMobile, type OrderCustomerDetails } from "./order-customer-details.ts";
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -215,6 +216,74 @@ export async function handleIncoming(
     .maybeSingle();
   if (settingsError) throw settingsError;
   const settings = settingsRow ?? { shipping_rates: {}, payment_instructions: "", policies: "", size_chart_url: null, greeting_text: "", shipping_text: "", faq_answers: {} };
+  const currentPending = object(conversation.pending);
+  const detailState = object(currentPending.order_customer_details);
+  if (typeof detailState.order_id === "number") {
+    const details = { ...object(detailState.values) } as OrderCustomerDetails;
+    const parsedInput = parseOrderDetails(text);
+    Object.assign(details, Object.fromEntries(
+      Object.entries(parsedInput).filter(([, value]) => typeof value === "string" && value.trim()),
+    ));
+    if (Object.keys(parsedInput).length === 0) {
+      const firstMissing = orderDetailFields.find(([key]) => !details[key]);
+      if (firstMissing && text.trim()) {
+        const maxLength = firstMissing[0] === "customer_full_name" ? 160
+          : firstMissing[0] === "customer_address" ? 500
+          : firstMissing[0] === "customer_mobile" ? 40 : 254;
+        details[firstMissing[0]] = text.trim().slice(0, maxLength);
+      }
+    }
+    const missing = orderDetailFields.filter(([key]) => !String(details[key] ?? "").trim()).map(([key]) => key);
+    if (!missing.includes("customer_mobile") && !validCustomerMobile(String(details.customer_mobile))) {
+      details.customer_mobile = "";
+      missing.unshift("customer_mobile");
+    }
+    if (!missing.length && !validCustomerEmail(String(details.customer_email))) {
+      details.customer_email = "";
+      missing.push("customer_email");
+    }
+    if (missing.length) {
+      const nextPending = { ...currentPending, order_customer_details: { order_id: detailState.order_id, values: details } };
+      const { error } = await supabase.from("conversations").update({ pending: nextPending }).eq("id", conversationId);
+      if (error) throw error;
+      const missingKey = missing[0];
+      const prompt = missingKey === "customer_email"
+        ? "Pakisend po ang valid na email address para sa order #" + detailState.order_id + "."
+        : customerDetailsPrompt(detailState.order_id, missing);
+      const reply = aiMode === "auto" ? labelAutoReply(prompt, aiMode) : null;
+      return { conversationId, reply, draft: aiMode === "suggest" ? prompt : null };
+    }
+
+    const { error: orderDetailsError } = await supabase.from("orders").update({
+      customer_full_name: details.customer_full_name,
+      customer_address: details.customer_address,
+      customer_mobile: details.customer_mobile,
+      customer_email: details.customer_email,
+      customer_notes: details.customer_notes ?? null,
+    }).eq("id", detailState.order_id);
+    if (orderDetailsError) throw orderDetailsError;
+    const { error: conversationUpdateError } = await supabase.from("conversations")
+      .update({ pending: { order_followup: "done" }, status: "needs_seller" }).eq("id", conversationId);
+    if (conversationUpdateError) throw conversationUpdateError;
+    const options = object(settings.bot_options);
+    const pageName = typeof options.facebook_page_name === "string" ? options.facebook_page_name.trim() : "";
+    const pageUrl = typeof options.facebook_page_url === "string" && /^https:\/\//i.test(options.facebook_page_url) ? options.facebook_page_url.trim() : "";
+    const directMessage = pageUrl
+      ? " Or pwede rin po kayong mag-direct message kay seller sa Facebook page na ito: " +
+        (pageName || "shop page") + " (" + pageUrl + "). Ipakita lang po ang order #" + detailState.order_id + " para ma-track kayo ni seller."
+      : "";
+    const completion = "Salamat po! Kumpleto na ang details ng order #" + detailState.order_id +
+      ". Pa wait na lang po, magcha-chat dito si seller sa lalong madaling panahon para maibigay ang payment method/instructions. Ang order ninyo ay nailista na." +
+      directMessage;
+    const reply = aiMode === "auto" ? labelAutoReply(completion, aiMode) : null;
+    return { conversationId, reply, draft: aiMode === "suggest" ? completion : null };
+  }
+  if (currentPending.order_followup === "done") {
+    if (isOrderAcknowledgment(text))
+      return { conversationId, reply: null, draft: null };
+    const { error } = await supabase.from("conversations").update({ pending: {} }).eq("id", conversationId);
+    if (error) throw error;
+  }
   const { data: latestOrderRow, error: orderError } = await supabase
     .from("orders")
     .select("id, total, shipping, status, created_at")
@@ -346,15 +415,10 @@ export async function handleIncoming(
               } else if (error) {
                 throw error;
               } else {
-                const payment = String(settings.payment_instructions ?? "").trim();
                 reply = "Confirmed po, order #" + orderId + " for " + quantity + " " + product.name +
-                  " (" + variant.size + "). Total po ay " + formatPeso(total) + "." +
-                  (payment ? " Payment instructions: " + payment : " I-check ko muna sa seller ang payment instructions po.");
-                pending = {};
-                if (!payment) {
-                  needsSeller = true;
-                  missedRequest = true;
-                }
+                  " (" + variant.size + "). Total po ay " + formatPeso(total) + ".\n\n" +
+                  customerDetailsPrompt(Number(orderId), orderDetailFields.map(([key]) => key));
+                pending = { order_customer_details: { order_id: Number(orderId), values: {} } };
               }
             }
           }

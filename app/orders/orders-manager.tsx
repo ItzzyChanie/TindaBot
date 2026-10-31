@@ -18,6 +18,11 @@ type Order = {
   status: "awaiting_payment" | "paid" | "shipped";
   created_at: string;
   payment_proof: unknown[];
+  customer_full_name: string | null;
+  customer_address: string | null;
+  customer_mobile: string | null;
+  customer_email: string | null;
+  customer_notes: string | null;
   customers: { name: string | null; channel: string; external_id: string } | null;
   order_items: OrderItem[];
 };
@@ -36,7 +41,7 @@ function money(value: number) {
 function orderQuery() {
   return createSupabaseBrowserClient()
     .from("orders")
-    .select("id, customer_id, total, shipping, status, created_at, payment_proof, customers(name, channel, external_id), order_items(qty, unit_price, offer_label, color, variants(size, products(name)))")
+    .select("id, customer_id, total, shipping, status, created_at, payment_proof, customer_full_name, customer_address, customer_mobile, customer_email, customer_notes, customers(name, channel, external_id), order_items(qty, unit_price, offer_label, color, variants(size, products(name)))")
     .order("created_at", { ascending: false });
 }
 
@@ -134,6 +139,15 @@ export function OrdersManager() {
                 <span className="channel-badge">{order.customers?.channel ?? "unknown"}</span>
                 <time>{new Intl.DateTimeFormat("en-PH", { dateStyle: "medium", timeStyle: "short" }).format(new Date(order.created_at))}</time>
               </div>
+              {(order.customer_full_name || order.customer_address || order.customer_mobile || order.customer_email || order.customer_notes) && (
+                <dl className="order-customer-details">
+                  {order.customer_full_name && <><dt>Full name</dt><dd>{order.customer_full_name}</dd></>}
+                  {order.customer_address && <><dt>Delivery address</dt><dd>{order.customer_address}</dd></>}
+                  {order.customer_mobile && <><dt>Mobile</dt><dd>{order.customer_mobile}</dd></>}
+                  {order.customer_email && <><dt>Email</dt><dd>{order.customer_email}</dd></>}
+                  {order.customer_notes && <><dt>Notes</dt><dd>{order.customer_notes}</dd></>}
+                </dl>
+              )}
               <ul className="order-items">
                 {order.order_items.map((item, index) => (
                   <li key={order.id + "-" + index}>
