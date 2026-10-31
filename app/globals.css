@@ -4202,3 +4202,256 @@ h2 {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* Readable type and controls across seller pages. */
+.dashboard-content .overview-kicker,
+.dashboard-content .dashboard-stats .metric-label,
+.dashboard-content .dashboard-stats .metric-note,
+.dashboard-content .sales-total small,
+.dashboard-content .sales-day-amount,
+.dashboard-content .sales-day-label,
+.dashboard-content .shortcut-card strong,
+.dashboard-content .shortcut-card small,
+.dashboard-content .activity-row strong,
+.dashboard-content .dashboard-empty,
+.dashboard-content .overview-about p.muted,
+.dashboard-content .supported-questions {
+  font-size: 14px;
+}
+.dashboard-content .dashboard-stats .stat-card strong {
+  font-size: 34px;
+}
+.dashboard-content-grid .panel-heading h2,
+.insight-grid h2 {
+  font-size: 21px;
+}
+.insights-page .insights-hero p:last-child,
+.insights-page .insights-hero-link,
+.insights-page .insight-stats .stat-card p,
+.insights-page .insight-stats .stat-card span,
+.insights-page .insight-grid > .panel > .muted,
+.insights-page .insight-intents,
+.insights-page .missed-table {
+  font-size: 14px;
+}
+.insights-page .insight-stats .stat-card strong {
+  font-size: 32px;
+}
+.inbox-page .inbox-page-title > .eyebrow,
+.inbox-page .inbox-page-title > p:last-child,
+.inbox-page .inbox-filter-label,
+.inbox-page .inbox-filter-button,
+.inbox-page .simulated-note,
+.inbox-page .conversation-preview,
+.inbox-page .conversation-time,
+.inbox-page .message-sender,
+.inbox-page .message-bubble time,
+.inbox-page .thread-header-actions .text-button,
+.inbox-page .inbox-alert {
+  font-size: 13px;
+}
+.inbox-page .conversation-title,
+.inbox-page .message-bubble p,
+.inbox-page .inbox-search input,
+.inbox-page .reply-form textarea {
+  font-size: 15px;
+}
+.inbox-page .channel-badge,
+.inbox-page .needs-badge {
+  font-size: 12px;
+}
+.inbox-page .needs-badge {
+  padding: 5px 8px;
+}
+.inbox-page .thread-header-actions .text-button {
+  min-height: 40px;
+  padding: 8px 11px;
+}
+.catalog-page .catalog-toolbar > span,
+.catalog-page .product-heading h2,
+.catalog-page .product-price strong,
+.catalog-page .stock-status,
+.catalog-page .inactive-status,
+.catalog-page .product-aliases,
+.catalog-page .size-chip,
+.catalog-page .catalog-form,
+.catalog-page .catalog-form label,
+.catalog-page .catalog-form input,
+.catalog-page .catalog-form textarea,
+.catalog-page .catalog-form select {
+  font-size: 14px;
+}
+.catalog-page .catalog-toolbar input {
+  min-height: 46px;
+  font-size: 15px;
+}
+.catalog-page .product-heading h2 {
+  font-size: 18px;
+}
+.catalog-page .product-price strong {
+  font-size: 16px;
+}
+.catalog-page .size-chip {
+  padding: 6px 8px;
+}
+.orders-page .orders-hero p:last-child,
+.orders-page .order-summary-card span,
+.orders-page .order-customer,
+.orders-page .order-customer-details,
+.orders-page .order-items,
+.orders-page .order-status,
+.orders-page .order-actions,
+.orders-page .orders-filter select {
+  font-size: 14px;
+}
+.orders-page .order-summary-card strong {
+  font-size: 26px;
+}
+.orders-page .order-card-header h2 {
+  font-size: 22px;
+}
+.orders-page .channel-badge {
+  font-size: 12px;
+}
+.storefront-manager-page .storefront-manager-copy > p:not(.eyebrow),
+.storefront-manager-page .storefront-feature-card p,
+.storefront-manager-page .feature-number,
+.storefront-manager-page .storefront-live-badge,
+.storefront-manager-page .storefront-manager-actions .button {
+  font-size: 15px;
+}
+.storefront-manager-page .storefront-feature-card h2 {
+  font-size: 21px;
+}
+.shop-page .shop-hero-copy p,
+.shop-page .shop-section-heading > div > p,
+.shop-page .shop-collection-meta,
+.shop-page .shop-description,
+.shop-page .shop-stock,
+.shop-page .shop-product-body,
+.shop-page .shop-product-body button,
+.shop-page .shop-product-body a,
+.shop-page .shop-state {
+  font-size: 15px;
+}
+.shop-page .shop-product-heading h2 {
+  font-size: 20px;
+}
+.shop-page .offer-badge,
+.shop-page .storefront-live-badge {
+  font-size: 13px;
+}
+.settings-form {
+  gap: 0;
+  padding: 28px;
+}
+.settings-index {
+  gap: 9px;
+  padding: 16px 25px;
+}
+.settings-index a {
+  padding: 9px 11px;
+  font-size: 14px;
+}
+.settings-form section {
+  gap: 15px;
+  min-width: 0;
+  scroll-margin-top: 100px;
+}
+.settings-form section + section {
+  margin-top: 18px;
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: var(--page);
+}
+.settings-form > section:first-of-type {
+  margin-top: 18px;
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: var(--page);
+}
+.settings-form h2 {
+  font-size: 22px;
+}
+.settings-form .muted,
+.settings-form .settings-label,
+.settings-form fieldset label,
+.settings-form legend {
+  font-size: 15px;
+  line-height: 1.55;
+}
+.settings-form input:not([type="checkbox"]):not([type="file"]),
+.settings-form textarea,
+.settings-form select {
+  min-height: 46px;
+  padding: 10px 12px;
+  font-size: 16px;
+  line-height: 1.5;
+}
+.settings-form textarea {
+  min-height: 100px;
+}
+.settings-form input[type="checkbox"] {
+  width: 19px;
+  height: 19px;
+  margin-right: 7px;
+  vertical-align: middle;
+}
+.settings-form .shipping-grid {
+  gap: 14px;
+}
+.settings-form .settings-privacy-note {
+  padding: 18px 4px 2px;
+  font-size: 14px;
+}
+.settings-form > .button,
+.settings-page .catalog-notice,
+.settings-page .form-error {
+  min-height: 46px;
+  padding: 12px 16px;
+  font-size: 15px;
+}
+.catalog-notice,
+.form-error,
+.inbox-alert {
+  padding: 12px 16px;
+  font-size: 15px;
+  line-height: 1.5;
+}
+.needs-badge,
+.channel-badge,
+.offer-badge,
+.storefront-live-badge {
+  min-height: 25px;
+  padding: 5px 9px;
+  font-size: 12px;
+}
+
+@media (max-width: 700px) {
+  .settings-form {
+    padding: 16px;
+  }
+  .settings-index {
+    margin: -16px -16px 0;
+    padding: 12px;
+  }
+  .settings-index a {
+    font-size: 14px;
+  }
+  .settings-form section + section {
+    padding: 17px;
+  }
+  .catalog-page .product-card {
+    gap: 12px;
+    padding: 13px;
+  }
+  .catalog-page .product-photo {
+    width: 88px;
+    height: 108px;
+  }
+  .inbox-page .conversation-preview {
+    font-size: 13px;
+  }
+}

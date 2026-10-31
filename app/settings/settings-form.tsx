@@ -188,9 +188,11 @@ export function SettingsForm({
         <nav className="settings-index" aria-label="Settings sections">
           <a href="#seller-profile">Profile</a>
           <a href="#assistant-replies">Assistant replies</a>
-          <a href="#delivery-rates">Delivery</a>
+          <a href="#delivery-rates">Shipping rates</a>
+          <a href="#bot-controls">Delivery and order options</a>
+          <a href="#shop-info">Shop and after-sales</a>
           <a href="#customer-help">Size chart</a>
-          <a href="#payment-details">Payment</a>
+          <a href="#payment-details">Payment instructions</a>
           <a href="#shop-policies">Policies</a>
         </nav>
         <section>
@@ -322,9 +324,10 @@ export function SettingsForm({
           </div>
         </section>
         <section>
+          <div id="bot-controls" className="settings-anchor" />
           <p className="eyebrow">BOT ANSWER CONTROLS</p>
-          <h2>Shipping and orders</h2>
-          <p className="muted">The assistant uses these selections in customer replies.</p>
+          <h2>Delivery and order options</h2>
+          <p className="muted">The assistant uses these settings when answering delivery, payment, courier, and bulk-order questions.</p>
           <label className="settings-label">Free shipping minimum (₱; 0 disables)
             <input type="number" min="0" step="0.01" value={options.free_shipping_minimum} onChange={(event) => updateOptions({ free_shipping_minimum: Number(event.target.value) || 0 })} />
           </label>
@@ -346,6 +349,7 @@ export function SettingsForm({
           {options.bulk_orders && <label className="settings-label">Bulk pricing details<textarea rows={3} maxLength={1000} value={options.bulk_details} onChange={(event) => updateOptions({ bulk_details: event.target.value })} /></label>}
         </section>
         <section>
+          <div id="shop-info" className="settings-anchor" />
           <p className="eyebrow">STORE AND AFTER-SALES</p><h2>Store details and policies</h2>
           <label className="settings-label">Shop address<input maxLength={300} value={options.address} onChange={(event) => updateOptions({ address: event.target.value })} /></label>
           <label className="settings-label">Business hours<input maxLength={160} value={options.business_hours} onChange={(event) => updateOptions({ business_hours: event.target.value })} placeholder="Mon-Sat, 9AM-6PM" /></label>
