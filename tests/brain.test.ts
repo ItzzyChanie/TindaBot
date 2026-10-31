@@ -923,6 +923,39 @@ describe("grounded incoming conversation brain", () => {
     expect(yes.pending.last_product).toMatchObject({ color: "Brown" });
   });
 
+  it.each(["telegram", "web"])("keeps the selected catalog item through color and order-interest replies (%s)", async (channel) => {
+    const bayanihan: BrainProduct = {
+      ...product,
+      id: "bayanihan-basic-tee",
+      name: "Bayanihan Basic T-Shirt",
+      aliases: ["Bayanihan tshirt", "Basic tee"],
+      colors: ["Navy Blue"],
+      variants: [
+        { id: "bayanihan-s", size: "S", stock: 5 },
+        { id: "bayanihan-m", size: "M", stock: 5 },
+      ],
+    };
+    const generic: BrainProduct = { ...product, id: "generic-tee", name: "T-shirt", aliases: [] };
+    const catalog = [bayanihan, generic];
+    const color = await runIncomingBrain({
+      ...baseInput,
+      channel,
+      message: "navy blue",
+      products: catalog,
+      pending: { clarification: { kind: "color", product_id: bayanihan.id, colors: ["Navy Blue"] } },
+    });
+    const yes = await runIncomingBrain({
+      ...baseInput,
+      channel,
+      message: "yes",
+      products: catalog,
+      pending: color.pending,
+    });
+    expect(yes.reply).toContain("Anong size po");
+    expect(yes.reply).not.toContain("Alin po rito");
+    expect(yes.pending.clarification).toMatchObject({ kind: "size", product_id: bayanihan.id });
+  });
+
   it.each(["telegram", "web"])("continues color-to-order yes replies despite a stale seller-handoff flag (%s)", async (channel) => {
     const coloredProduct = { ...product, colors: ["Navy Blue", "White"] };
     const question = await runIncomingBrain({

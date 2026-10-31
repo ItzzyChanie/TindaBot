@@ -15,7 +15,8 @@ export const orderDetailFields = [
 
 export function parseOrderDetails(text: string): OrderCustomerDetails {
   const result: OrderCustomerDetails = {};
-  for (const line of text.split(/\r?\n/)) {
+  const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  for (const line of lines) {
     const match = line.match(/^\s*(full\s*name|name|complete\s*address|address|mobile(?:\s*number)?|phone(?:\s*number)?|contact\s*number|email(?:\s*address)?|(?:optional\s+)?delivery\s*notes?|additional\s*notes?)\s*[:：-]\s*(.*?)\s*$/i);
     if (!match) continue;
     const value = match[2].slice(0, 500).trim();
@@ -25,6 +26,20 @@ export function parseOrderDetails(text: string): OrderCustomerDetails {
     else if (/^(mobile|mobile number|phone|phone number|contact number)$/.test(label)) result.customer_mobile = value.slice(0, 40);
     else if (/^email/.test(label)) result.customer_email = value.slice(0, 254);
     else result.customer_notes = value;
+  }
+  if (Object.keys(result).length === 0 && lines.length >= 4) {
+    const emailIndex = lines.findIndex((line) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(line));
+    const mobileIndex = lines.findIndex((line) => /^[+\d\s().-]+$/.test(line) && validCustomerMobile(line));
+    if (emailIndex >= 0 && mobileIndex >= 0 && emailIndex !== mobileIndex) {
+      const otherLines = lines.filter((_, index) => index !== emailIndex && index !== mobileIndex);
+      if (otherLines.length >= 2) {
+        result.customer_full_name = otherLines[0].slice(0, 160);
+        result.customer_address = otherLines[1].slice(0, 500);
+        result.customer_mobile = lines[mobileIndex].slice(0, 40);
+        result.customer_email = lines[emailIndex].slice(0, 254);
+        if (otherLines[2]) result.customer_notes = otherLines.slice(2).join(" ").slice(0, 500);
+      }
+    }
   }
   return result;
 }
@@ -44,6 +59,19 @@ export function validCustomerEmail(email: string): boolean {
 export function validCustomerMobile(mobile: string): boolean {
   const digits = mobile.replace(/\D/g, "");
   return digits.length >= 7 && digits.length <= 15;
+}
+
+export function missingCustomerDetails(details: OrderCustomerDetails): string[] {
+  const missing = orderDetailFields
+    .filter(([key]) => !String(details[key] ?? "").trim())
+    .map(([key]) => key);
+  if (!missing.includes("customer_mobile") && !validCustomerMobile(String(details.customer_mobile))) {
+    missing.push("customer_mobile");
+  }
+  if (!missing.includes("customer_email") && !validCustomerEmail(String(details.customer_email))) {
+    missing.push("customer_email");
+  }
+  return missing;
 }
 
 export function isOrderAcknowledgment(text: string): boolean {

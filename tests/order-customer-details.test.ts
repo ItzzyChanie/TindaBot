@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { customerDetailsPrompt, isCancellationRequest, isOrderAcknowledgment, isPaymentRequest, parseOrderDetails, paymentSafetyMessage, sellerRepliedAfterOrder, validCustomerEmail, validCustomerMobile } from "../supabase/functions/_shared/order-customer-details";
+import { customerDetailsPrompt, isCancellationRequest, isOrderAcknowledgment, isPaymentRequest, missingCustomerDetails, parseOrderDetails, paymentSafetyMessage, sellerRepliedAfterOrder, validCustomerEmail, validCustomerMobile } from "../supabase/functions/_shared/order-customer-details";
 
 describe("order customer details", () => {
   it("parses a complete labeled details block", () => {
@@ -16,6 +16,33 @@ describe("order customer details", () => {
       customer_email: "juan@example.com",
       customer_notes: "Gate is beside the bakery",
     });
+  });
+
+  it("parses a complete unlabeled four-line details block", () => {
+    expect(parseOrderDetails([
+      "Jefferson Palceso",
+      "Hernandez st. Catmon, Malabon City",
+      "09108227050",
+      "jeffyt143@gmail.com",
+    ].join("\n"))).toEqual({
+      customer_full_name: "Jefferson Palceso",
+      customer_address: "Hernandez st. Catmon, Malabon City",
+      customer_mobile: "09108227050",
+      customer_email: "jeffyt143@gmail.com",
+    });
+  });
+
+  it("keeps an order incomplete until every required detail is valid", () => {
+    expect(missingCustomerDetails({
+      customer_full_name: "Jefferson Palceso",
+      customer_address: "Hernandez st. Catmon, Malabon City",
+    })).toEqual(["customer_mobile", "customer_email"]);
+    expect(missingCustomerDetails({
+      customer_full_name: "Jefferson Palceso",
+      customer_address: "Hernandez st. Catmon, Malabon City",
+      customer_mobile: "not a phone",
+      customer_email: "not-an-email",
+    })).toEqual(["customer_mobile", "customer_email"]);
   });
 
   it("prompts one missing field at a time after a partial response", () => {

@@ -1,7 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { labelAutoReply, runIncomingBrain, type BrainPending, type BrainProduct } from "./brain.ts";
 import { quote, type QuotePromo } from "./quote.ts";
-import { customerDetailsPrompt, isCancellationRequest, isOrderAcknowledgment, isPaymentRequest, orderDetailFields, parseOrderDetails, paymentSafetyMessage, sellerRepliedAfterOrder, validCustomerEmail, validCustomerMobile, type OrderCustomerDetails } from "./order-customer-details.ts";
+import { customerDetailsPrompt, isCancellationRequest, isOrderAcknowledgment, isPaymentRequest, missingCustomerDetails, orderDetailFields, parseOrderDetails, paymentSafetyMessage, sellerRepliedAfterOrder, type OrderCustomerDetails } from "./order-customer-details.ts";
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -300,15 +300,9 @@ export async function handleIncoming(
         details[firstMissing[0]] = text.trim().slice(0, maxLength);
       }
     }
-    const missing = orderDetailFields.filter(([key]) => !String(details[key] ?? "").trim()).map(([key]) => key);
-    if (!missing.includes("customer_mobile") && !validCustomerMobile(String(details.customer_mobile))) {
-      details.customer_mobile = "";
-      missing.unshift("customer_mobile");
-    }
-    if (!missing.length && !validCustomerEmail(String(details.customer_email))) {
-      details.customer_email = "";
-      missing.push("customer_email");
-    }
+    const missing = missingCustomerDetails(details);
+    if (missing.includes("customer_mobile") && details.customer_mobile) details.customer_mobile = "";
+    if (missing.includes("customer_email") && details.customer_email) details.customer_email = "";
     if (missing.length) {
       const nextPending = { ...currentPending, order_customer_details: { order_id: detailState.order_id, values: details } };
       const { error } = await supabase.from("conversations").update({ pending: nextPending }).eq("id", conversationId);
@@ -438,9 +432,14 @@ export async function handleIncoming(
           const region = typeof order.region === "string" ? order.region : null;
           const freeMinimum = Number(object(settings.bot_options).free_shipping_minimum ?? 0);
           const configuredShipping = region ? rates[region] : undefined;
-          const shipping = typeof configuredShipping === "number" && freeMinimum > 0 && Number(order.subtotal) >= freeMinimum
-            ? 0
-            : configuredShipping;
+          const quotedShipping = Number(order.shipping);
+          // Keep the delivery charge used in the quote the customer confirmed.
+          // Recomputing free shipping here can silently change the total mid-flow.
+          const shipping = order.shipping_known === true && Number.isFinite(quotedShipping)
+            ? quotedShipping
+            : typeof configuredShipping === "number" && freeMinimum > 0 && Number(order.subtotal) >= freeMinimum
+              ? 0
+              : configuredShipping;
           if (typeof shipping !== "number") {
             reply = "Hindi ko makita ang shipping rate para sa area na ito. I-check ko muna sa seller po.";
             pending = {};

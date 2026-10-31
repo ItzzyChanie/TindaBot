@@ -400,6 +400,7 @@ export function runIncomingBrain(
     (clarification.kind === "engagement" && isNo)) {
     const followupProduct = input.products.find((item) => item.active && item.id === clarification.product_id);
     if (followupProduct) {
+      clarifiedProduct = followupProduct;
       understanding = { ...understanding, intent: "order_confirm", product_query: followupProduct.name, confidence: 0.95 };
       lastProductContext = { ...lastProductContext, product_id: followupProduct.id };
       activePending.last_product = lastProductContext;
@@ -412,6 +413,7 @@ export function runIncomingBrain(
   } else if (clarification.kind === "engagement" && isNo) {
     const followupProduct = input.products.find((item) => item.active && item.id === clarification.product_id);
     if (followupProduct) {
+      clarifiedProduct = followupProduct;
       understanding = { ...understanding, intent: "order_confirm", product_query: followupProduct.name, confidence: 0.95 };
       lastProductContext = { ...lastProductContext, product_id: followupProduct.id };
       activePending.last_product = lastProductContext;
