@@ -1,7 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { labelAutoReply, runIncomingBrain, type BrainPending, type BrainProduct } from "./brain.ts";
 import { quote, type QuotePromo } from "./quote.ts";
-import { customerDetailsPrompt, isCancellationRequest, isOrderAcknowledgment, isPaymentRequest, orderDetailFields, parseOrderDetails, validCustomerEmail, validCustomerMobile, type OrderCustomerDetails } from "./order-customer-details.ts";
+import { customerDetailsPrompt, isCancellationRequest, isOrderAcknowledgment, isPaymentRequest, orderDetailFields, parseOrderDetails, paymentSafetyMessage, sellerRepliedAfterOrder, validCustomerEmail, validCustomerMobile, type OrderCustomerDetails } from "./order-customer-details.ts";
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -60,10 +60,22 @@ function formatPeso(value: number): string {
   return "₱" + value.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+async function sellerPresentForOrder(conversationId: string, orderId: number, aiMode: string): Promise<boolean> {
+  const [{ data: order, error: orderError }, { data: sellerMessage, error: sellerMessageError }] = await Promise.all([
+    supabase.from("orders").select("created_at").eq("id", orderId).maybeSingle(),
+    supabase.from("messages").select("created_at").eq("conversation_id", conversationId).eq("sender", "seller")
+      .order("created_at", { ascending: false }).limit(1).maybeSingle(),
+  ]);
+  if (orderError) throw orderError;
+  if (sellerMessageError) throw sellerMessageError;
+  return Boolean(order && sellerMessage) &&
+    (aiMode === "human" || sellerRepliedAfterOrder(order.created_at, sellerMessage?.created_at));
+}
+
 async function savePaymentProof(conversationId: string, customerId: string, proof: NonNullable<IncomingContext["paymentProof"]>, text: string) {
   const { data: order, error: orderError } = await supabase
     .from("orders")
-    .select("id, payment_proof")
+    .select("id, payment_proof, created_at")
     .eq("customer_id", customerId)
     .eq("status", "awaiting_payment")
     .order("created_at", { ascending: false })
@@ -74,20 +86,34 @@ async function savePaymentProof(conversationId: string, customerId: string, proo
   let reply = "Natanggap po ang payment proof. Iko-confirm ito ng seller.";
   let systemBody = "Payment proof received.";
   if (order) {
-    const previous = Array.isArray(order.payment_proof) ? order.payment_proof : [];
-    const { error } = await supabase.from("orders").update({
-      payment_proof: [...previous, {
-        kind: proof.kind,
-        file_id: proof.file_id,
-        file_unique_id: proof.file_unique_id ?? null,
-        file_name: proof.file_name ?? null,
-        mime_type: proof.mime_type ?? null,
-        caption: proof.caption ?? null,
-        received_at: new Date().toISOString(),
-      }],
-    }).eq("id", order.id);
-    if (error) throw error;
-    systemBody = "Payment proof received for order #" + order.id + ".";
+    const [{ data: sellerMessage, error: sellerMessageError }, { data: activeConversation, error: activeConversationError }] = await Promise.all([
+      supabase.from("messages").select("created_at").eq("conversation_id", conversationId).eq("sender", "seller")
+        .order("created_at", { ascending: false }).limit(1).maybeSingle(),
+      supabase.from("conversations").select("ai_mode").eq("id", conversationId).maybeSingle(),
+    ]);
+    if (sellerMessageError) throw sellerMessageError;
+    if (activeConversationError) throw activeConversationError;
+    const sellerIsPresent = Boolean(sellerMessage) &&
+      (activeConversation?.ai_mode === "human" || sellerRepliedAfterOrder(order.created_at, sellerMessage?.created_at));
+    if (!sellerIsPresent) {
+      reply = "Nakita po namin ang file, pero hindi muna ito tinanggap bilang payment proof dahil hindi pa nagre-reply si seller. Huwag muna pong magbayad o mag-send ulit. Hintayin ang seller dito; kapag nag-reply na siya, saka po ipadala ang proof sa Telegram.";
+      systemBody = "Customer sent a payment file before the seller replied; it was not attached to the order.";
+    } else {
+      const previous = Array.isArray(order.payment_proof) ? order.payment_proof : [];
+      const { error } = await supabase.from("orders").update({
+        payment_proof: [...previous, {
+          kind: proof.kind,
+          file_id: proof.file_id,
+          file_unique_id: proof.file_unique_id ?? null,
+          file_name: proof.file_name ?? null,
+          mime_type: proof.mime_type ?? null,
+          caption: proof.caption ?? null,
+          received_at: new Date().toISOString(),
+        }],
+      }).eq("id", order.id);
+      if (error) throw error;
+      systemBody = "Payment proof received for order #" + order.id + ".";
+    }
   } else {
     const { error } = await supabase.from("missed_requests").insert({
       conversation_id: conversationId,
@@ -172,7 +198,7 @@ export async function handleIncoming(
     .update({ last_message_at: new Date().toISOString(), seller_read_at: null, is_hidden: false }).eq("id", conversationId);
   if (updateError) throw updateError;
 
-  const conversation = existing ?? { status: "open", ai_mode: "auto", pending: {} };
+  let conversation = existing ?? { status: "open", ai_mode: "auto", pending: {} };
   const aiMode = conversation.ai_mode as "auto" | "suggest" | "human";
   if (context.paymentProof) {
     const reply = await savePaymentProof(conversationId, customer.id, context.paymentProof, text);
@@ -239,11 +265,16 @@ export async function handleIncoming(
     const options = object(settings.bot_options);
     const pageName = typeof options.facebook_page_name === "string" ? options.facebook_page_name.trim() : "";
     const pageUrl = typeof options.facebook_page_url === "string" && /^https:\/\//i.test(options.facebook_page_url) ? options.facebook_page_url.trim() : "";
-    const directMessage = pageUrl
-      ? " Pwede rin po kayong mag-message sa Facebook page na " + (pageName || "shop page") + ": " + pageUrl + " at ipakita ang order #" + detailState.order_id + "."
-      : "";
-    const paymentReply = "No po muna sa bayad o downpayment. Naka-lista at naka-reserve na po ang order #" + detailState.order_id +
-      ". Kalma lang po at hintayin ang real seller para maibigay ang payment method/instructions. Magcha-chat po siya rito sa lalong madaling panahon." + directMessage;
+    const paymentReply = paymentSafetyMessage({
+      channel,
+      orderId: detailState.order_id,
+      orderReserved: true,
+      sellerPresent: channel === "telegram"
+        ? await sellerPresentForOrder(conversationId, detailState.order_id, aiMode)
+        : false,
+      facebookPageName: pageName,
+      facebookPageUrl: pageUrl,
+    });
     const reply = aiMode === "auto" ? labelAutoReply(paymentReply, aiMode) : null;
     return { conversationId, reply, draft: aiMode === "suggest" ? paymentReply : null };
   }
@@ -304,13 +335,17 @@ export async function handleIncoming(
     const options = object(settings.bot_options);
     const pageName = typeof options.facebook_page_name === "string" ? options.facebook_page_name.trim() : "";
     const pageUrl = typeof options.facebook_page_url === "string" && /^https:\/\//i.test(options.facebook_page_url) ? options.facebook_page_url.trim() : "";
-    const directMessage = pageUrl
-      ? " Or pwede rin po kayong mag-direct message kay seller sa Facebook page na ito: " +
-        (pageName || "shop page") + " (" + pageUrl + "). Ipakita lang po ang order #" + detailState.order_id + " para ma-track kayo ni seller."
-      : "";
     const completion = "Salamat po! Kumpleto na ang details ng order #" + detailState.order_id +
-      ". Kalma lang po, naka-lista at naka-reserve na ang item para sa inyo. Pa wait na lang po, magcha-chat dito si seller sa lalong madaling panahon para maibigay ang payment method/instructions." +
-      directMessage;
+      ". " + paymentSafetyMessage({
+        channel,
+        orderId: detailState.order_id,
+        orderReserved: true,
+        sellerPresent: channel === "telegram"
+          ? await sellerPresentForOrder(conversationId, detailState.order_id, aiMode)
+          : false,
+        facebookPageName: pageName,
+        facebookPageUrl: pageUrl,
+      });
     const reply = aiMode === "auto" ? labelAutoReply(completion, aiMode) : null;
     return { conversationId, reply, draft: aiMode === "suggest" ? completion : null };
   }
@@ -319,6 +354,7 @@ export async function handleIncoming(
       return { conversationId, reply: null, draft: null };
     const { error } = await supabase.from("conversations").update({ pending: {} }).eq("id", conversationId);
     if (error) throw error;
+    conversation = { ...conversation, pending: {} };
   }
   const { data: latestOrderRow, error: orderError } = await supabase
     .from("orders")
@@ -331,6 +367,10 @@ export async function handleIncoming(
 
   const brain = await runIncomingBrain({
     message: text,
+    channel,
+    sellerPresent: channel === "telegram" && latestOrderRow
+      ? await sellerPresentForOrder(conversationId, Number(latestOrderRow.id), aiMode)
+      : false,
     contextProductId: productId ?? (existing?.context_product_id as string | null | undefined) ?? null,
     aiMode,
     status: conversation.status as "open" | "needs_seller" | "resolved",

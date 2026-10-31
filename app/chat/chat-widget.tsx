@@ -190,7 +190,7 @@ export function ChatWidget({ productId: initialProductId, sessionId: initialSess
         <div><strong>TindaBot shop assistant</strong><span>Web chat</span></div>
         {onClose && <button className="widget-close" type="button" onClick={onClose} aria-label="Close chat">×</button>}
       </header>
-      <p className="widget-notice">Automated assistant po ito ng shop. Maaari po kayong magtanong tungkol sa catalog, presyo, sizes at stock, shipping, bayad, at order status. I-type ang SELLER para makausap ang seller. Chat messages are retained for 90 days po.</p>
+      <p className="widget-notice">Automated assistant po ito ng shop. Maaari po kayong magtanong tungkol sa catalog, presyo, sizes at stock, shipping, paano mag-order, at order status. Storefront chat lang po ito para sa basic questions at hindi tumatanggap o nagpoproseso ng payment. I-type ang SELLER para makausap ang seller. Chat messages are retained for 90 days po.</p>
       {error && <p className="widget-error" role="alert">{error}</p>}
       <div className="widget-messages" aria-live="polite" aria-busy={sending}>
         {loading ? <p className="widget-state">Inihahanda ang chat…</p> : messages.length === 0 ? <p className="widget-state">Kumusta po! Pumili ng quick question o mag-type ng tanong.</p> : messages.map((message) => (

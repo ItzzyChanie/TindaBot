@@ -61,3 +61,54 @@ export function isPaymentRequest(text: string): boolean {
     text.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim(),
   );
 }
+
+export function paymentSafetyMessage(input: {
+  channel: string;
+  orderId?: number | null;
+  orderReserved?: boolean;
+  paymentAlreadyRecorded?: boolean;
+  sellerPresent?: boolean;
+  facebookPageName?: string;
+  facebookPageUrl?: string;
+}): string {
+  const orderReference = input.orderId ? "order #" + input.orderId : "order ninyo";
+  const facebookLink = input.channel === "web" &&
+      input.facebookPageUrl && /^https:\/\//i.test(input.facebookPageUrl)
+    ? " Facebook page: " + (input.facebookPageName?.trim() || "shop page") + " (" + input.facebookPageUrl.trim() + ")."
+    : "";
+
+  if (input.paymentAlreadyRecorded) {
+    return "No po muna sa panibagong bayad o downpayment. Naka-record na po ang payment sa order #" +
+      input.orderId + "; huwag na pong magpadala ulit at hintayin ang update ni seller." +
+      (input.channel === "web" ? " Hindi payment channel ang website widget." : "");
+  }
+
+  if (input.channel === "telegram") {
+    if (input.sellerPresent) {
+      return "Opo, nag-reply na po si seller dito. Maaari na po kayong magbayad ayon lamang sa payment instructions na direktang ibinigay niya rito. Pagkatapos, ipadala ang screenshot o proof dito rin sa Telegram para ma-check niya. Huwag magpadala sa ibang account o sa instructions na hindi galing kay seller; hindi po masasagot ng shop ang maling transfer kung hindi susundin ang confirmed instructions.";
+    }
+    const orderStatus = input.orderReserved
+      ? "Naka-lista na po ang " + orderReference + " at naka-reserve na ang item para sa inyo."
+      : "Kailangan munang kumpirmahin ang order bago ito mailista at ma-reserve.";
+    return "No po muna sa bayad o downpayment habang wala pa si seller sa chat. " + orderStatus +
+      ". Kalma lang po at hintayin ang reply niya rito. Kapag nag-reply na si seller, saka po ninyo puwedeng ipadala ang payment screenshot o proof dito rin sa Telegram. Kung magpapadala bago makausap si seller o sa hindi niya kinumpirmang account, hindi po masasagot ng shop ang maling padala o anumang issue.";
+  }
+
+  return "No po muna, huwag magbayad o magpadala ng pera sa website chat/widget. Storefront lang po ito para sa basic questions at hindi ito tumatanggap o nagpoproseso ng payment. " +
+    (input.orderReserved
+      ? "Naka-lista at naka-reserve na po ang " + orderReference + "; kalma lang po at hintayin ang seller."
+      : "Pakikumpirma muna ang order at ibigay ang details para mailista ito.") +
+    " Para magbayad, mag-direct message po kay seller sa Facebook page at isama ang " + orderReference +
+    ", pangalan, at ibang order details. Hintayin muna ang instructions niya bago magpadala." + facebookLink +
+    " Kung magbabayad sa widget o sa account na hindi kinumpirma ni seller, hindi po masasagot ng shop ang maling transfer o anumang issue.";
+}
+
+export function sellerRepliedAfterOrder(
+  orderCreatedAt: string,
+  sellerRepliedAt: string | null | undefined,
+): boolean {
+  if (!sellerRepliedAt) return false;
+  const orderTime = Date.parse(orderCreatedAt);
+  const sellerTime = Date.parse(sellerRepliedAt);
+  return Number.isFinite(orderTime) && Number.isFinite(sellerTime) && sellerTime >= orderTime;
+}

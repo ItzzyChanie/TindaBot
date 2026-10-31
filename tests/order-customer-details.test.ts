@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { customerDetailsPrompt, isCancellationRequest, isOrderAcknowledgment, isPaymentRequest, parseOrderDetails, validCustomerEmail, validCustomerMobile } from "../supabase/functions/_shared/order-customer-details";
+import { customerDetailsPrompt, isCancellationRequest, isOrderAcknowledgment, isPaymentRequest, parseOrderDetails, paymentSafetyMessage, sellerRepliedAfterOrder, validCustomerEmail, validCustomerMobile } from "../supabase/functions/_shared/order-customer-details";
 
 describe("order customer details", () => {
   it("parses a complete labeled details block", () => {
@@ -46,5 +46,36 @@ describe("order customer details", () => {
     for (const message of ["Pwede na po bang magbayad?", "Can I send a downpayment?", "May I pay now?", "GCash po?"]) {
       expect(isPaymentRequest(message)).toBe(true);
     }
+  });
+
+  it("gives web and Telegram buyers different payment safety instructions", () => {
+    const web = paymentSafetyMessage({
+      channel: "web",
+      orderId: 1042,
+      orderReserved: true,
+      facebookPageName: "Jeff's Shop",
+      facebookPageUrl: "https://facebook.com/jeffsshop",
+    });
+    expect(web).toContain("website chat/widget");
+    expect(web).toContain("basic questions");
+    expect(web).toContain("https://facebook.com/jeffsshop");
+    expect(web).toContain("order #1042");
+    expect(web).toContain("hindi po masasagot ng shop");
+
+    const telegram = paymentSafetyMessage({ channel: "telegram", orderId: 1042, orderReserved: true });
+    expect(telegram).toContain("habang wala pa si seller");
+    expect(telegram).toContain("payment screenshot o proof dito rin sa Telegram");
+    expect(telegram).not.toContain("website chat/widget");
+    expect(telegram).toContain("hindi po masasagot ng shop");
+
+    const sellerPresent = paymentSafetyMessage({ channel: "telegram", orderId: 1042, orderReserved: true, sellerPresent: true });
+    expect(sellerPresent).toContain("nag-reply na po si seller");
+    expect(sellerPresent).toContain("payment instructions na direktang ibinigay niya");
+  });
+
+  it("only accepts a Telegram payment proof after seller presence", () => {
+    expect(sellerRepliedAfterOrder("2026-11-10T10:00:00Z", "2026-11-10T10:01:00Z")).toBe(true);
+    expect(sellerRepliedAfterOrder("2026-11-10T10:00:00Z", "2026-11-10T09:59:00Z")).toBe(false);
+    expect(sellerRepliedAfterOrder("2026-11-10T10:00:00Z", null)).toBe(false);
   });
 });

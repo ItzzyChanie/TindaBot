@@ -11,7 +11,7 @@ import {
   type Understanding,
 } from "./rules.ts";
 import { quote, type QuotePromo } from "./quote.ts";
-import { isCancellationRequest } from "./order-customer-details.ts";
+import { isCancellationRequest, paymentSafetyMessage } from "./order-customer-details.ts";
 
 export type BrainVariant = { id: string; size: string; stock: number };
 export type BrainProduct = CatalogProduct & {
@@ -44,6 +44,8 @@ export type BrainPending = Record<string, unknown> & {
 };
 export type BrainInput = {
   message: string;
+  channel?: string;
+  sellerPresent?: boolean;
   contextProductId?: string | null;
   aiMode: "auto" | "suggest" | "human";
   status: "open" | "needs_seller" | "resolved";
@@ -664,21 +666,19 @@ export function runIncomingBrain(
     return respond({ fixed_price: true }, reply);
   }
   if (understanding.intent === "payment") {
-    const pageName = input.settings.bot_options?.facebook_page_name?.trim();
-    const pageUrl = input.settings.bot_options?.facebook_page_url?.trim();
-    const directMessage = pageUrl && /^https:\/\//i.test(pageUrl)
-      ? " Pwede rin po kayong mag-direct message sa Facebook page na " + (pageName || "shop page") + ": " + pageUrl +
-        (input.latestOrder ? " at ipakita ang order #" + input.latestOrder.id + " para ma-track kayo ni seller." : " para ma-accommodate kayo ni seller.")
-      : "";
     const orderIsReserved = input.latestOrder?.status === "awaiting_payment";
     const orderIsPaid = input.latestOrder?.status === "paid" || input.latestOrder?.status === "shipped";
     return respond(
       { payment_allowed_now: false, order_reserved: orderIsReserved, payment_already_recorded: orderIsPaid },
-      (orderIsPaid
-        ? "No po muna sa panibagong bayad o downpayment. Naka-record na po ang payment ng order ninyo; huwag na pong magpadala ulit at hintayin ang update ng seller."
-        : "No po muna, huwag muna magbayad o mag-downpayment. Hintayin muna ang real seller para maibigay at ma-confirm niya ang tamang payment method/instructions, para maiwasan ang maling padala o anumang conflict.") +
-        (orderIsReserved ? " Naka-lista at naka-reserve na po ang order ninyo; kalma lang po at maghintay sa seller." : !orderIsPaid ? " Kailangan munang i-confirm ninyo ang order bago ito mailista at ma-reserve." : "") +
-        " Mag-reply po si seller rito sa lalong madaling panahon." + directMessage,
+      paymentSafetyMessage({
+        channel: input.channel ?? "web",
+        sellerPresent: input.sellerPresent === true,
+        orderId: input.latestOrder?.id,
+        orderReserved: orderIsReserved,
+        paymentAlreadyRecorded: orderIsPaid,
+        facebookPageName: input.settings.bot_options?.facebook_page_name,
+        facebookPageUrl: input.settings.bot_options?.facebook_page_url,
+      }),
     );
   }
   if (understanding.intent === "status") {

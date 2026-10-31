@@ -644,7 +644,7 @@ describe("grounded incoming conversation brain", () => {
       },
     }, ai(understanding({ intent: "payment", product_query: null, size: null, quantity: null, quantities_mentioned: [] })));
     expect(result.reply).toContain("No po muna");
-    expect(result.reply).toContain("Hintayin muna ang real seller");
+    expect(result.reply).toContain("Hintayin muna ang instructions niya");
     expect(result.reply).not.toContain("GCash");
     expect(result.reply).not.toContain("SECRET PAYMENT INSTRUCTIONS");
   });
@@ -660,6 +660,23 @@ describe("grounded incoming conversation brain", () => {
     expect(result.reply).toContain("naka-reserve na po ang order");
     expect(result.reply).toContain("https://facebook.com/example");
     expect(result.reply).not.toContain("Payment instructions");
+  });
+
+  it("allows a Telegram buyer to send proof only after the seller is present", async () => {
+    const paymentIntent = ai(understanding({ intent: "payment", product_query: null, size: null, quantity: null, quantities_mentioned: [] }));
+    const common = {
+      ...baseInput,
+      message: "Can I pay now?",
+      channel: "telegram",
+      latestOrder: { id: 1042, total: 174.99, shipping: 75, status: "awaiting_payment", created_at: "2026-10-29T00:00:00Z" },
+    };
+    const waiting = await runIncomingBrain({ ...common, sellerPresent: false }, paymentIntent);
+    expect(waiting.reply).toContain("habang wala pa si seller");
+    expect(waiting.reply).toContain("saka po ninyo puwedeng ipadala");
+
+    const sellerHere = await runIncomingBrain({ ...common, sellerPresent: true }, paymentIntent);
+    expect(sellerHere.reply).toContain("nag-reply na po si seller");
+    expect(sellerHere.reply).toContain("screenshot o proof dito rin sa Telegram");
   });
 
   it("cancels an unconfirmed order proposal without placing it", async () => {
