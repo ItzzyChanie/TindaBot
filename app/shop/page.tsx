@@ -92,11 +92,18 @@ export default function ShopPage() {
       }
     };
     void loadCatalog();
-    const refreshTimer = window.setInterval(() => void loadCatalog(), 15000);
+    const refreshTimer = window.setInterval(() => {
+      if (!document.hidden) void loadCatalog();
+    }, 60000);
+    const onVisibilityChange = () => {
+      if (!document.hidden) void loadCatalog();
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
     return () => {
       active = false;
       if (controller) controller.abort();
       window.clearInterval(refreshTimer);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
     };
   }, []);
 

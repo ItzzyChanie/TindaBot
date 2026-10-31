@@ -4455,3 +4455,142 @@ h2 {
     font-size: 13px;
   }
 }
+
+/* Larger page copy and clearer dashboard actions. */
+.page-content h1,
+.inbox-page-title h1 {
+  font-size: clamp(30px, 3vw, 38px);
+}
+.page-content h2,
+.inbox-page h2 {
+  font-size: 22px;
+}
+.page-content .panel p:not(.eyebrow),
+.page-content .panel li,
+.page-content .panel td,
+.page-content .panel th,
+.page-content .panel label,
+.page-content .panel .muted,
+.inbox-page .inbox-page-title > p:last-child,
+.inbox-page .conversation-preview,
+.inbox-page .message-bubble p {
+  font-size: 15px;
+  line-height: 1.55;
+}
+.settings-index a {
+  padding: 11px 14px;
+  font-size: 16px;
+  font-weight: 650;
+}
+.settings-index {
+  gap: 10px;
+}
+.dashboard-content-grid .sales-trend-panel {
+  align-self: start;
+  padding: 18px 22px 14px;
+}
+.dashboard-content-grid .sales-bars {
+  min-height: 128px;
+  gap: 12px;
+  margin-top: 4px;
+}
+.dashboard-content-grid .sales-day-track {
+  height: 82px;
+}
+.dashboard-content-grid .sales-total strong {
+  font-size: 20px;
+}
+.dashboard-shortcuts .shortcut-card {
+  min-height: 92px;
+  padding: 19px;
+  border-color: color-mix(in srgb, var(--green) 30%, var(--line));
+  background: color-mix(in srgb, var(--green-soft) 62%, var(--surface));
+  box-shadow: 0 3px 12px rgb(31 39 30 / 5%);
+}
+.dashboard-shortcuts .shortcut-card:hover,
+.dashboard-shortcuts .shortcut-card:focus-visible {
+  border-color: var(--green);
+  background: color-mix(in srgb, var(--green-soft) 82%, var(--surface));
+  transform: translateY(-2px);
+}
+.dashboard-shortcuts .shortcut-card strong {
+  font-size: 16px;
+}
+.inbox-pagination,
+.table-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 14px;
+}
+.inbox-pagination .text-button,
+.table-pagination .text-button {
+  min-height: 40px;
+  padding: 8px 12px;
+  font-size: 14px;
+}
+.inbox-pagination .text-button:disabled,
+.table-pagination .text-button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+.load-older-messages {
+  align-self: center;
+  min-height: 42px;
+  margin: 8px 0 0;
+  padding: 9px 14px;
+  font-size: 14px;
+}
+.dashboard-shortcuts .shortcut-card small {
+  font-size: 14px;
+}
+.dashboard-shortcuts .shortcut-icon {
+  width: 46px;
+  height: 46px;
+  flex-basis: 46px;
+}
+.insights-page .missed-table td,
+.insights-page .missed-table th,
+.orders-page .order-items,
+.catalog-page .product-aliases,
+.catalog-page .size-chip,
+.catalog-page .stock-status,
+.catalog-page .inactive-status {
+  font-size: 15px;
+}
+.insights-page .insight-grid > .panel > .muted,
+.insights-page .insight-intents,
+.insights-page .insight-stats .stat-card p,
+.insights-page .insight-stats .stat-card span {
+  font-size: 15px;
+}
+.catalog-page .catalog-form label,
+.catalog-page .catalog-form input,
+.catalog-page .catalog-form textarea,
+.catalog-page .catalog-form select,
+.settings-form .settings-label,
+.settings-form input:not([type="checkbox"]):not([type="file"]),
+.settings-form textarea {
+  font-size: 16px;
+}
+.inbox-page .channel-badge,
+.inbox-page .needs-badge,
+.orders-page .channel-badge,
+.catalog-page .offer-badge,
+.shop-page .offer-badge,
+.storefront-manager-page .storefront-live-badge {
+  min-height: 28px;
+  padding: 6px 10px;
+  font-size: 13px;
+}
+.catalog-notice,
+.form-error,
+.inbox-alert {
+  min-height: 48px;
+  padding: 13px 17px;
+  font-size: 16px;
+}

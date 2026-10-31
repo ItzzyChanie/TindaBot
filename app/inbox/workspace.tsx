@@ -45,6 +45,9 @@ type CustomerOrder = {
   }[];
 };
 
+const CONVERSATIONS_PER_PAGE = 30;
+const MESSAGES_PER_PAGE = 100;
+
 function formatTime(value: string) {
   return new Intl.DateTimeFormat("en-PH", {
     hour: "numeric",
@@ -70,6 +73,7 @@ export function InboxWorkspace() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [orders, setOrders] = useState<CustomerOrder[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedSnapshot, setSelectedSnapshot] = useState<Conversation | null>(null);
   const [draft, setDraft] = useState("");
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
@@ -78,31 +82,41 @@ export function InboxWorkspace() {
   const [error, setError] = useState("");
   const [liveError, setLiveError] = useState("");
   const [showHidden, setShowHidden] = useState(false);
-  const customerIdsRef = useRef<string[]>([]);
+  const [conversationPage, setConversationPage] = useState(0);
+  const [conversationCount, setConversationCount] = useState(0);
+  const [previews, setPreviews] = useState<Map<string, Message>>(new Map());
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [hasOlderMessages, setHasOlderMessages] = useState(false);
+  const selectedConversationRef = useRef<string | null>(null);
+  const selectedCustomerRef = useRef<string | null>(null);
 
   const refreshConversationList = useCallback(async () => {
-    const { data, error: queryError } = await createSupabaseBrowserClient()
+    const { data, error: queryError, count } = await createSupabaseBrowserClient()
       .from("conversations")
       .select(
         "id, customer_id, status, ai_mode, pending, last_message_at, seller_read_at, is_hidden, created_at, customers(channel, external_id, name)",
+        { count: "exact" },
       )
       .eq("is_hidden", showHidden)
-      .order("last_message_at", { ascending: false });
+      .order("last_message_at", { ascending: false })
+      .range(conversationPage * CONVERSATIONS_PER_PAGE, (conversationPage + 1) * CONVERSATIONS_PER_PAGE - 1);
     if (queryError) {
       setLiveError("Live updates paused. Refresh to reconnect po.");
       return;
     }
     const rows = (data ?? []) as unknown as Conversation[];
-    customerIdsRef.current = [...new Set(rows.map((row) => row.customer_id))];
+    setConversationCount(count ?? rows.length);
+    const { data: previewRows } = await createSupabaseBrowserClient()
+      .rpc("get_inbox_previews", { p_conversation_ids: rows.map((row) => row.id) });
+    setPreviews(new Map(((previewRows ?? []) as { conversation_id: string; body: string; sender: Message["sender"]; created_at: string }[])
+      .map((row) => [row.conversation_id, { ...row, id: "preview-" + row.conversation_id, conversation_id: row.conversation_id, image_urls: [] }])));
     setConversations(rows);
-    setSelectedId((current) =>
-      rows.some((row) => row.id === current) ? current : null,
-    );
-  }, [showHidden]);
+    setSelectedSnapshot((current) => rows.find((row) => row.id === current?.id) ?? current);
+  }, [conversationPage, showHidden]);
 
   const refreshOrders = useCallback(async () => {
-    const customerIds = customerIdsRef.current;
-    if (!customerIds.length) {
+    const customerId = selectedCustomerRef.current;
+    if (!customerId) {
       setOrders([]);
       return;
     }
@@ -111,8 +125,9 @@ export function InboxWorkspace() {
       .select(
         "id, customer_id, total, status, payment_proof, created_at, order_items(qty, unit_price, variants(size, products(name)))",
       )
-      .in("customer_id", customerIds)
-      .order("created_at", { ascending: false });
+      .eq("customer_id", customerId)
+      .order("created_at", { ascending: false })
+      .limit(20);
     if (!queryError) setOrders((data ?? []) as unknown as CustomerOrder[]);
   }, []);
 
@@ -121,56 +136,32 @@ export function InboxWorkspace() {
       if (showLoading) setLoading(true);
       try {
         const supabase = createSupabaseBrowserClient();
-        const { data, error: conversationError } = await supabase
+        const { data, error: conversationError, count } = await supabase
           .from("conversations")
           .select(
             "id, customer_id, status, ai_mode, pending, last_message_at, seller_read_at, is_hidden, created_at, customers(channel, external_id, name)",
+            { count: "exact" },
           )
           .eq("is_hidden", showHidden)
-          .order("last_message_at", { ascending: false });
+          .order("last_message_at", { ascending: false })
+          .range(conversationPage * CONVERSATIONS_PER_PAGE, (conversationPage + 1) * CONVERSATIONS_PER_PAGE - 1);
         if (conversationError) throw conversationError;
 
         const rows = (data ?? []) as unknown as Conversation[];
-        customerIdsRef.current = [
-          ...new Set(rows.map((row) => row.customer_id)),
-        ];
-        const ids = rows.map((row) => row.id);
-        const customerIds = [...new Set(rows.map((row) => row.customer_id))];
-        const [messageResult, orderResult] = await Promise.all([
-          ids.length
-            ? supabase
-                .from("messages")
-                .select("id, conversation_id, sender, body, image_urls, created_at")
-                .in("conversation_id", ids)
-                .order("created_at", { ascending: true })
-            : Promise.resolve({ data: [], error: null }),
-          customerIds.length
-            ? supabase
-                .from("orders")
-                .select(
-                  "id, customer_id, total, status, payment_proof, created_at, order_items(qty, unit_price, variants(size, products(name)))",
-                )
-                .in("customer_id", customerIds)
-                .order("created_at", { ascending: false })
-            : Promise.resolve({ data: [], error: null }),
-        ]);
-        if (messageResult.error) throw messageResult.error;
-        if (orderResult.error) throw orderResult.error;
-        const nextMessages = (messageResult.data ?? []) as Message[];
-        const nextOrders = (orderResult.data ??
-          []) as unknown as CustomerOrder[];
+        const { data: previewRows, error: previewError } = await supabase
+          .rpc("get_inbox_previews", { p_conversation_ids: rows.map((row) => row.id) });
+        if (previewError) throw previewError;
+        const nextPreviews = new Map(((previewRows ?? []) as { conversation_id: string; body: string; sender: Message["sender"]; created_at: string }[])
+          .map((row) => [row.conversation_id, { ...row, id: "preview-" + row.conversation_id, conversation_id: row.conversation_id, image_urls: [] }]));
 
         setConversations(rows);
-        setMessages(nextMessages);
-        setOrders(nextOrders);
+        setConversationCount(count ?? rows.length);
+        setPreviews(nextPreviews);
         const isNarrow = window.matchMedia("(max-width: 700px)").matches;
-        setSelectedId((current) =>
-          rows.some((row) => row.id === current)
-            ? current
-            : isNarrow
-              ? null
-              : (rows[0]?.id ?? null),
-        );
+        const currentId = selectedConversationRef.current;
+        const nextId = currentId ?? (isNarrow ? null : (rows[0]?.id ?? null));
+        setSelectedId(nextId);
+        setSelectedSnapshot(rows.find((row) => row.id === nextId) ?? null);
         setError("");
       } catch (cause) {
         setError(
@@ -182,7 +173,7 @@ export function InboxWorkspace() {
         if (showLoading) setLoading(false);
       }
     },
-    [showHidden],
+    [conversationPage, showHidden],
   );
 
   useEffect(() => {
@@ -210,6 +201,7 @@ export function InboxWorkspace() {
             payload.eventType === "DELETE" ? payload.old : payload.new
           ) as Record<string, unknown>;
           const messageId = typeof record.id === "string" ? record.id : null;
+          const conversationId = typeof record.conversation_id === "string" ? record.conversation_id : null;
           if (payload.eventType === "DELETE") {
             if (messageId)
               setMessages((current) =>
@@ -217,24 +209,13 @@ export function InboxWorkspace() {
               );
             return;
           }
-          if (!messageId) return;
-          void (async () => {
-            const { data } = await createSupabaseBrowserClient()
-              .from("messages")
-              .select("id, conversation_id, sender, body, image_urls, created_at")
-              .eq("id", messageId)
-              .maybeSingle();
-            if (data) {
-              const message = data as Message;
-              setMessages((current) =>
-                [
-                  ...current.filter((item) => item.id !== message.id),
-                  message,
-                ].sort((a, b) => a.created_at.localeCompare(b.created_at)),
-              );
-            }
-            void refreshConversationList();
-          })();
+          if (!messageId || !conversationId) return;
+          if (conversationId !== selectedConversationRef.current || typeof record.body !== "string") return;
+          const message = record as unknown as Message;
+          setMessages((current) => [
+            ...current.filter((item) => item.id !== message.id), message,
+          ].sort((a, b) => a.created_at.localeCompare(b.created_at)));
+          setPreviews((current) => new Map(current).set(conversationId, message));
         },
       )
       .on(
@@ -257,7 +238,67 @@ export function InboxWorkspace() {
 
   const selected =
     conversations.find((conversation) => conversation.id === selectedId) ??
-    null;
+    (selectedSnapshot?.id === selectedId ? selectedSnapshot : null);
+  const selectedCustomerId = selected?.customer_id ?? null;
+
+  selectedConversationRef.current = selectedId;
+  selectedCustomerRef.current = selectedCustomerId;
+
+  useEffect(() => {
+    setMessages([]);
+    setOrders([]);
+    setHasOlderMessages(false);
+    if (!selectedId || !selectedCustomerId) return;
+    let active = true;
+    setLoadingOlder(false);
+    void (async () => {
+      const supabase = createSupabaseBrowserClient();
+      const [messageResult, orderResult] = await Promise.all([
+        supabase.from("messages")
+          .select("id, conversation_id, sender, body, image_urls, created_at")
+          .eq("conversation_id", selectedId)
+          .order("created_at", { ascending: false })
+          .limit(MESSAGES_PER_PAGE),
+        supabase.from("orders")
+          .select("id, customer_id, total, status, payment_proof, created_at, order_items(qty, unit_price, variants(size, products(name)))")
+          .eq("customer_id", selectedCustomerId)
+          .order("created_at", { ascending: false })
+          .limit(20),
+      ]);
+      if (!active) return;
+      if (messageResult.error || orderResult.error) {
+        setError(messageResult.error?.message ?? orderResult.error?.message ?? "Could not load this conversation.");
+        return;
+      }
+      const loadedMessages = ((messageResult.data ?? []) as Message[]).reverse();
+      setMessages(loadedMessages);
+      setHasOlderMessages(loadedMessages.length === MESSAGES_PER_PAGE);
+      setOrders((orderResult.data ?? []) as unknown as CustomerOrder[]);
+      const latest = loadedMessages.at(-1);
+      if (latest) setPreviews((current) => new Map(current).set(selectedId, latest));
+    })();
+    return () => { active = false; };
+  }, [selectedId, selectedCustomerId]);
+
+  async function loadOlderMessages() {
+    const oldest = messages[0];
+    if (!selectedId || !oldest || loadingOlder || !hasOlderMessages) return;
+    setLoadingOlder(true);
+    const { data, error: olderError } = await createSupabaseBrowserClient()
+      .from("messages")
+      .select("id, conversation_id, sender, body, image_urls, created_at")
+      .eq("conversation_id", selectedId)
+      .lt("created_at", oldest.created_at)
+      .order("created_at", { ascending: false })
+      .limit(MESSAGES_PER_PAGE);
+    if (olderError) setError(olderError.message);
+    else {
+      const older = ((data ?? []) as Message[]).reverse();
+      setMessages((current) => [...older, ...current]);
+      setHasOlderMessages(older.length === MESSAGES_PER_PAGE);
+    }
+    setLoadingOlder(false);
+  }
 
   useEffect(() => {
     if (
@@ -284,16 +325,8 @@ export function InboxWorkspace() {
         );
     })();
   }, [selected]);
-  const threadMessages = useMemo(
-    () => messages.filter((message) => message.conversation_id === selectedId),
-    [messages, selectedId],
-  );
-  const lastMessages = useMemo(() => {
-    const latest = new Map<string, Message>();
-    for (const message of messages)
-      latest.set(message.conversation_id, message);
-    return latest;
-  }, [messages]);
+  const threadMessages = messages;
+  const lastMessages = previews;
   const visibleConversations = useMemo(() => {
     const normalized = search.trim().toLocaleLowerCase();
     if (!normalized) return conversations;
@@ -492,7 +525,7 @@ export function InboxWorkspace() {
             <p>Keep customer conversations moving.</p>
           </div>
           <span className="inbox-total">
-            <strong>{conversations.length}</strong>
+            <strong>{conversationCount}</strong>
             <small>threads</small>
           </span>
         </div>
@@ -502,7 +535,12 @@ export function InboxWorkspace() {
           </span>
           <button
             className="inbox-filter-button"
-            onClick={() => setShowHidden((value) => !value)}
+            onClick={() => {
+              setConversationPage(0);
+              setSelectedSnapshot(null);
+              setSelectedId(null);
+              setShowHidden((value) => !value);
+            }}
           >
             {showHidden ? "Show active" : "View hidden"}
           </button>
@@ -512,7 +550,7 @@ export function InboxWorkspace() {
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search people or messages"
+            placeholder="Search this page"
           />
         </label>
         {loading ? (
@@ -540,7 +578,10 @@ export function InboxWorkspace() {
                 <button
                   key={conversation.id}
                   className={`conversation-card${selectedId === conversation.id ? " selected" : ""}${conversation.status === "needs_seller" && !conversation.seller_read_at ? " unread" : ""}`}
-                  onClick={() => setSelectedId(conversation.id)}
+                  onClick={() => {
+                    setSelectedSnapshot(conversation);
+                    setSelectedId(conversation.id);
+                  }}
                 >
                   <span className="conversation-avatar">
                     {(contact?.name ?? contact?.external_id ?? "?")
@@ -572,6 +613,13 @@ export function InboxWorkspace() {
               );
             })}
           </div>
+        )}
+        {conversationCount > CONVERSATIONS_PER_PAGE && (
+          <nav className="inbox-pagination" aria-label="Conversation pages">
+            <button className="text-button" disabled={conversationPage === 0 || loading} onClick={() => { setSelectedSnapshot(null); setSelectedId(null); setConversationPage((page) => Math.max(0, page - 1)); }}>Previous</button>
+            <span>Page {conversationPage + 1} of {Math.ceil(conversationCount / CONVERSATIONS_PER_PAGE)}</span>
+            <button className="text-button" disabled={(conversationPage + 1) * CONVERSATIONS_PER_PAGE >= conversationCount || loading} onClick={() => { setSelectedSnapshot(null); setSelectedId(null); setConversationPage((page) => page + 1); }}>Next</button>
+          </nav>
         )}
       </aside>
 
@@ -630,6 +678,11 @@ export function InboxWorkspace() {
               <p className="inbox-alert error-state" role="alert">
                 {error}
               </p>
+            )}
+            {hasOlderMessages && (
+              <button className="text-button load-older-messages" onClick={() => void loadOlderMessages()} disabled={loadingOlder}>
+                {loadingOlder ? "Loading earlier messages…" : "Load earlier messages"}
+              </button>
             )}
             <div className="thread-messages" aria-live="polite">
               {threadMessages.length === 0 ? (
