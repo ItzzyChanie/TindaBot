@@ -2,6 +2,7 @@ import {
   matchCatalogLocation,
   matchCatalogSize,
   matchQuantityAnswer,
+  normalizeMessage,
   isAcknowledgement,
   resolveProduct,
   resolveProductChoice,
@@ -269,7 +270,7 @@ export function runIncomingBrain(
     }
   }
   if (contextProduct && (!understanding.product_query || refersToSelectedProduct) &&
-    ["price", "availability", "question", "order_confirm", "seller_handoff"].includes(understanding.intent)) {
+    ["price", "discount", "availability", "question", "order_confirm", "seller_handoff"].includes(understanding.intent)) {
     understanding = {
       ...understanding,
       product_query: contextProduct.name,
@@ -329,6 +330,48 @@ export function runIncomingBrain(
       size: understanding.size ?? (typeof lastProductContext.size === "string" ? lastProductContext.size : null),
       location: understanding.location ?? (typeof lastProductContext.location === "string" ? lastProductContext.location : null),
     };
+  }
+  const normalizedShortReply = normalizeMessage(input.message)
+    .replace(/\b(po|opo|please|pls)\b/g, " ").replace(/\s+/g, " ").trim();
+  const isYes = /^(yes|yeah|yep|yup|oo|opo|sige|ge|g|go|okay|ok|sure|please do)$/.test(normalizedShortReply);
+  const isNo = /^(no|nope|hindi|wag na|not now)$/.test(normalizedShortReply);
+  const continueReply = (reply: string, pending: BrainPending): BrainResult => ({
+    ...base,
+    action: input.aiMode === "suggest" ? "draft" : "reply",
+    reply: reply + (input.firstContact ? " " + disclosure : ""),
+    pending,
+    clearSellerHandoff: input.status === "needs_seller",
+  });
+  if (clarification.kind === "engagement" && (isYes || isNo)) {
+    const pending: BrainPending = isYes
+      ? { ...activePending, clarification: { kind: "engagement", product_id: clarification.product_id } }
+      : activePending;
+    return continueReply(
+      isYes
+        ? "Sige po! Ano pa pong gusto ninyong malaman tungkol sa item?"
+        : "Okay po. Nandito lang po kami kung may iba pa kayong tanong.",
+      pending,
+    );
+  }
+  if (clarification.kind === "color" && clarificationProduct) {
+    const colors = Array.isArray(clarification.colors)
+      ? clarification.colors.filter((color): color is string => typeof color === "string")
+      : clarificationProduct.colors ?? [];
+    const normalizedColorReply = normalizedShortReply
+      .replace(/\b(color|colour|kulay|yung|ang|the|want|gusto|ko|sana)\b/g, " ")
+      .replace(/\s+/g, " ").trim();
+    const selectedColor = colors.find((color) => normalizeMessage(color) === normalizedColorReply);
+    if (selectedColor) {
+      const pending: BrainPending = {
+        ...activePending,
+        last_product: { ...lastProductContext, product_id: clarificationProduct.id, color: selectedColor },
+        clarification: { kind: "engagement", product_id: clarificationProduct.id, topic: "color" },
+      };
+      return continueReply("Noted po, " + selectedColor + ". May iba pa po ba kayong gustong malaman tungkol sa item?", pending);
+    }
+    if (understanding.intent === "unknown" && normalizedShortReply.split(" ").length <= 2) {
+      return continueReply("Available colors po: " + colors.join(", ") + ". Aling color po ang gusto ninyo?", input.pending);
+    }
   }
   if (clarification.kind && understanding.confidence < 0.6) {
     const prompt = clarification.kind === "size"
@@ -412,12 +455,19 @@ export function runIncomingBrain(
     const product = resolution.status === "matched"
       ? resolution.product as BrainProduct
       : !understanding.product_query ? contextProduct ?? lastProduct ?? null : null;
-    const dataReply = (facts: Record<string, unknown>, value: string, englishPrompt: string, taglishPrompt: string) =>
-      respond(facts, `${value} ${prefersEnglish(input.message) ? englishPrompt : taglishPrompt}`);
+    const detailPending: BrainPending = {
+      ...activePending,
+      clarification: { kind: "engagement", product_id: product?.id ?? null },
+    };
+    const dataReply = (facts: Record<string, unknown>, value: string, englishPrompt: string, taglishPrompt: string, pending = detailPending) =>
+      respond(facts, `${value} ${prefersEnglish(input.message) ? englishPrompt : taglishPrompt}`, pending);
     if (product && /restock/.test(message) && product.restock_note?.trim())
       return dataReply({ product: product.name, restock_note: product.restock_note }, product.restock_note.trim(), "Would you like help with anything else about this item?", "May iba pa po ba kayong gustong malaman tungkol sa item?");
     if (product && /color|kulay/.test(message) && (product.colors?.length ?? 0) > 0)
-      return dataReply({ product: product.name, colors: product.colors }, prefersEnglish(input.message) ? "Available colors: " + product.colors!.join(", ") + "." : "Available colors po: " + product.colors!.join(", ") + ".", "Which color would you like?", "Aling color po ang gusto ninyo?");
+      return dataReply({ product: product.name, colors: product.colors }, prefersEnglish(input.message) ? "Available colors: " + product.colors!.join(", ") + "." : "Available colors po: " + product.colors!.join(", ") + ".", "Which color would you like?", "Aling color po ang gusto ninyo?", {
+        ...activePending,
+        clarification: { kind: "color", product_id: product.id, colors: product.colors },
+      });
     if (product && /size|fit|height|weight|true to size/.test(message)) {
       const asksMeasurementGuidance = /height|weight|recommend|fit sa akin|what size would fit|\d+\s*(?:kg|cm|ft|feet|lbs|lb)\b|\d+\s*['’]\s*\d+/.test(message);
       const guidance = asksMeasurementGuidance
@@ -444,7 +494,7 @@ export function runIncomingBrain(
         const reply = prefersEnglish(input.message)
           ? `Product video: ${videoUrl}. Would you like to see anything else?`
           : "Narito po ang product video: " + videoUrl + ". May iba pa po ba kayong gustong makita?";
-        return { ...respond({ product: product.name, video_url: videoUrl }, reply), imageUrls: [] };
+        return { ...respond({ product: product.name, video_url: videoUrl }, reply, detailPending), imageUrls: [] };
       }
     }
     if (product && /photo|picture|actual image|same as picture/.test(message) && product.photos_are_actual) {
@@ -453,7 +503,7 @@ export function runIncomingBrain(
         .slice(0, 5);
       if (images.length) {
         const reply = (prefersEnglish(input.message) ? "These are seller-confirmed actual product photos: " : "Narito po ang actual product photos: ") + images.join("\n") + (prefersEnglish(input.message) ? " Would you like to see anything else?" : "\nMay iba pa po ba kayong gustong makita?");
-        return { ...respond({ product: product.name, photos_are_actual: true, image_count: images.length }, reply), imageUrls: images };
+        return { ...respond({ product: product.name, photos_are_actual: true, image_count: images.length }, reply, detailPending), imageUrls: images };
       }
     }
     const reason = /restock/.test(message) ? "restock timing"

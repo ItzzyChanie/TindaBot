@@ -779,6 +779,62 @@ describe("grounded incoming conversation brain", () => {
     expect(unverified.needsSeller).toBe(true);
   });
 
+  it("continues the chat when the customer answers a sizing follow-up with yes", async () => {
+    const fittedProduct = { ...product, fit_notes: "Height: 5'9, weight: 58 kg." };
+    const answer = await runIncomingBrain({
+      ...baseInput,
+      message: "True to size ba po ang Isla blouse?",
+      products: [fittedProduct],
+    });
+    expect(answer.pending.clarification).toMatchObject({ kind: "engagement" });
+    const yes = await runIncomingBrain({
+      ...baseInput,
+      message: "yes",
+      products: [fittedProduct],
+      pending: answer.pending,
+    });
+    expect(yes.needsSeller).toBe(false);
+    expect(yes.reply).toContain("Ano pa pong gusto ninyong malaman");
+  });
+
+  it("accepts a selected color as the answer to the bot's color question", async () => {
+    const coloredProduct = { ...product, colors: ["Brown", "Beige", "White"] };
+    const question = await runIncomingBrain({
+      ...baseInput,
+      message: "Anong color po ang available?",
+      contextProductId: coloredProduct.id,
+      products: [coloredProduct],
+    });
+    expect(question.pending.clarification).toMatchObject({ kind: "color", product_id: coloredProduct.id });
+    const answer = await runIncomingBrain({
+      ...baseInput,
+      message: "brown po",
+      products: [coloredProduct],
+      pending: question.pending,
+    });
+    expect(answer.needsSeller).toBe(false);
+    expect(answer.reply).toContain("Noted po, Brown");
+  });
+
+  it("uses the selected product's active catalog discount instead of calling it fixed price", async () => {
+    const discountedProduct = {
+      ...product,
+      discount_type: "percent" as const,
+      discount_value: 50,
+      discount_starts: null,
+      discount_ends: null,
+    };
+    const result = await runIncomingBrain({
+      ...baseInput,
+      message: "May discount po ba?",
+      contextProductId: discountedProduct.id,
+      products: [discountedProduct],
+    });
+    expect(result.reply).toContain("50% off");
+    expect(result.reply).not.toContain("Fixed price");
+    expect(result.reply).toContain("16.67");
+  });
+
   it("escalates complaints for missing or incorrect deliveries", async () => {
     for (const message of ["Missing item po", "Iba po ang dumating", "May sira po yung item"]) {
       const result = await runIncomingBrain({ ...baseInput, message });
