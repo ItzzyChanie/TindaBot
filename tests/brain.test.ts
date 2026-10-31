@@ -771,6 +771,15 @@ describe("grounded incoming conversation brain", () => {
     expect(hours.reply).toContain("Mon-Sat, 9AM-6PM");
   });
 
+  it("answers legitimacy questions with the seller-entered store address without claiming independent verification", async () => {
+    const settings = { ...baseInput.settings, bot_options: { address: "Mock address, Cebu" } };
+    const result = await runIncomingBrain({ ...baseInput, message: "Legit po ba kayo?", settings });
+    expect(result.reply).not.toBeNull();
+    expect(result.reply!).toContain("Mock address, Cebu");
+    expect(result.reply!.toLowerCase()).toContain("hindi ko mave-verify");
+    expect(result.needsSeller).toBe(false);
+  });
+
   it("answers after-sales policy questions according to enabled settings", async () => {
     const result = await runIncomingBrain({
       ...baseInput,

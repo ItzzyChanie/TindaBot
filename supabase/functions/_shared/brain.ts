@@ -635,8 +635,26 @@ export function runIncomingBrain(
   }
   if (understanding.intent === "shop_info") {
     const address = input.settings.bot_options?.address?.trim();
-    if (!address) return escalate("Ipa-check ko po sa seller ang exact store location. Anong item po ang gusto ninyong tingnan habang naghihintay?");
-    return respond({ shop_address: address }, "Opo, may physical store po kami sa " + address + ". Gusto niyo po bang dumaan o mag-order online?");
+    const isTrustQuestion = /\b(legit|legitimate|scam|scammer)\b/.test(
+      input.message.toLowerCase(),
+    );
+    if (!address) return escalate(isTrustQuestion
+      ? (prefersEnglish(input.message)
+        ? "The seller has not added a physical store address yet, so I can’t confirm the shop location or independently verify its legitimacy. I’ll ask the seller to clarify."
+        : "Wala pa pong physical store address na inilagay ang seller, kaya hindi ko makukumpirma ang lokasyon o mave-verify ang legitimacy ng shop. Ipa-confirm ko po ito sa seller.")
+      : "Ipa-check ko po sa seller ang exact store location. Anong item po ang gusto ninyong tingnan habang naghihintay?");
+    if (isTrustQuestion) return respond(
+      { shop_address: address, legitimacy_verified: false },
+      prefersEnglish(input.message)
+        ? `According to the shop details entered by the seller, the physical store is at ${address}. I’m an automated assistant and can’t independently verify whether a shop is legitimate, so please confirm any concerns directly with the seller.`
+        : `Ayon po sa shop details na inilagay ng seller, ang physical store ay nasa ${address}. Automated assistant lang po ako at hindi ko mave-verify nang independent ang legitimacy ng shop, kaya paki-confirm po sa seller kung may concern kayo.`,
+    );
+    return respond(
+      { shop_address: address },
+      prefersEnglish(input.message)
+        ? `Yes, the seller-listed physical store address is ${address}. Would you like directions or help ordering online?`
+        : "Opo, ang address ng physical store na inilagay ng seller ay " + address + ". May iba pa po ba kayong gustong malaman?",
+    );
   }
   if (understanding.intent === "business_hours") {
     const hours = input.settings.bot_options?.business_hours?.trim();

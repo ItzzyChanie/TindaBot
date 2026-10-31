@@ -4524,12 +4524,12 @@ h2 {
   white-space: normal;
 }
 .dashboard-content-grid .sales-bars {
-  min-height: 128px;
+  min-height: 198px;
   gap: 12px;
   margin-top: 4px;
 }
 .dashboard-content-grid .sales-day-track {
-  height: 82px;
+  height: 152px;
 }
 .dashboard-content-grid .sales-total strong {
   font-size: 20px;

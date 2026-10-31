@@ -209,6 +209,16 @@ export function SettingsForm({
             />
           </label>
           <label className="settings-label">
+            Physical store address
+            <input
+              maxLength={300}
+              value={options.address}
+              onChange={(event) => updateOptions({ address: event.target.value })}
+              placeholder="Leave blank if the shop is online-only"
+            />
+            <span className="muted">The assistant shares this seller-provided address when customers ask about the shop or whether it is legitimate. It cannot independently verify legitimacy.</span>
+          </label>
+          <label className="settings-label">
             Account email
             <input
               type="email"
@@ -351,7 +361,6 @@ export function SettingsForm({
         <section>
           <div id="shop-info" className="settings-anchor" />
           <p className="eyebrow">STORE AND AFTER-SALES</p><h2>Store details and policies</h2>
-          <label className="settings-label">Shop address<input maxLength={300} value={options.address} onChange={(event) => updateOptions({ address: event.target.value })} /></label>
           <label className="settings-label">Business hours<input maxLength={160} value={options.business_hours} onChange={(event) => updateOptions({ business_hours: event.target.value })} placeholder="Mon-Sat, 9AM-6PM" /></label>
           <label className="settings-label">Facebook page name<input maxLength={100} value={options.facebook_page_name} onChange={(event) => updateOptions({ facebook_page_name: event.target.value })} placeholder="Shop page name" /></label>
           <label className="settings-label">Facebook page link<input type="url" maxLength={500} value={options.facebook_page_url} onChange={(event) => updateOptions({ facebook_page_url: event.target.value })} placeholder="https://facebook.com/your-shop" /></label>
