@@ -150,6 +150,10 @@ function asksOtherAreaShipping(message: string): boolean {
   return /\b(ibang lugar|ibang area|other place|other places|other area|other areas|another area|different area|outside metro manila|outside manila|outside ncr|elsewhere|provincial shipping)\b/.test(normalized);
 }
 
+function prefersEnglish(message: string): boolean {
+  return /\b(what|how|where|when|which|do|does|is|are|can|could|would|please|my|your|the|this|that)\b/i.test(message);
+}
+
 export function runIncomingBrain(
   input: BrainInput,
   rules: BrainRules = defaultRules,
@@ -240,7 +244,7 @@ export function runIncomingBrain(
   const refersToSelectedProduct = /\b(this|that|it|these|those|ito|dito|nito|iyan|diyan|iyon|yun|dun|yung item|item na ito)\b/i
     .test(input.message.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase());
   if (
-    contextProduct && understanding.intent === "price" &&
+    contextProduct && ["price", "discount"].includes(understanding.intent) &&
     understanding.quantities_mentioned.length === 0
   ) {
     const quantity = matchQuantityAnswer(input.message);
@@ -306,7 +310,7 @@ export function runIncomingBrain(
     item.active && item.id === lastProductContext.product_id
   );
   if (lastProduct && !understanding.product_query &&
-    ["price", "availability", "question"].includes(understanding.intent)) {
+    ["price", "discount", "availability", "question"].includes(understanding.intent)) {
     understanding = {
       ...understanding,
       product_query: lastProduct.name,
@@ -390,6 +394,21 @@ export function runIncomingBrain(
       pending: { ...input.pending, seller_handoff: true },
     };
   }
+  if (understanding.intent === "seller_handoff") {
+    const message = input.message.toLowerCase();
+    const reason = /restock/.test(message) ? "restock timing"
+      : /color/.test(message) ? "available colors"
+      : /material|fabric|see.?through|stretch|thick|makapal|manipis/.test(message) ? "fabric and product details"
+      : /size|fit|height|weight|true to size/.test(message) ? "size recommendations"
+      : /photo|picture|video|model/.test(message) ? "actual photos or model details"
+      : /review|feedback|legit|scam/.test(message) ? "shop verification and reviews"
+      : /resell|drop.?ship/.test(message) ? "reseller or dropshipping requests"
+      : "this question";
+    const reply = prefersEnglish(input.message)
+      ? `I’ll pass your question about ${reason} to the seller so they can give you an accurate answer. Is there anything else about the listed price, sizes, or delivery I can help with?`
+      : `Ipa-check ko po sa seller ang tungkol sa ${reason} para accurate ang sagot. May iba pa po ba kayong tanong tungkol sa presyo, sizes, o delivery?`;
+    return escalate(reply);
+  }
   if (understanding.intent === "catalog") {
     const activeProducts = input.products.filter((item) => item.active);
     if (!activeProducts.length) return respond(
@@ -457,6 +476,31 @@ export function runIncomingBrain(
     }
     return respond({ after_sales: kind, enabled: true }, "Opo, available po ang " + kind + ". Anong item po ito? Pakisend din po ang order number para matulungan kayo.");
   }
+  if (understanding.intent === "discount") {
+    const options = input.settings.bot_options;
+    const resolution = resolveProduct(understanding.product_query, input.products.filter((item) => item.active));
+    if (resolution.status === "matched") {
+      const product = resolution.product as BrainProduct;
+      const pricing = quote(product, 1, input.now ?? new Date(), product.promos);
+      const benefits = [
+        ...(pricing.label ? ["May " + pricing.label + " po sa item na ito."] : ["Fixed price po ito; wala pong additional tawad sa catalog price."]),
+        ...(Number(options?.free_shipping_minimum) > 0 ? ["Free shipping po kapag umabot sa " + peso(Number(options?.free_shipping_minimum)) + "."] : []),
+        ...(options?.bulk_orders ? [options.bulk_details?.trim() || "Tumatanggap po kami ng bulk orders; seller ang magko-confirm ng quote."] : []),
+      ];
+      const reply = prefersEnglish(input.message)
+        ? `${product.name} is ${peso(pricing.unit)}. ${benefits.join(" ")} Would you like to order?`
+        : `${product.name}: ${peso(pricing.unit)} po. ${benefits.join(" ")} Gusto niyo po bang mag-order?`;
+      return respond({ product: product.name, unit_price: pricing.unit, offer: pricing.label }, reply);
+    }
+    const benefits = [
+      ...(Number(options?.free_shipping_minimum) > 0 ? ["May free shipping po kapag umabot sa " + peso(Number(options?.free_shipping_minimum)) + "."] : []),
+      ...(options?.bulk_orders ? ["Tumatanggap din po kami ng bulk orders."] : []),
+    ];
+    const reply = prefersEnglish(input.message)
+      ? "Catalog prices are fixed; promotions depend on the item. " + (benefits.length ? benefits.join(" ") + " " : "") + "Which item would you like me to check?"
+      : "Fixed price po ang catalog items; ang promo ay depende sa item. " + (benefits.length ? benefits.join(" ") + " " : "") + "Aling item po ang gusto ninyong i-check?";
+    return respond({ fixed_price: true }, reply);
+  }
   if (understanding.intent === "payment") {
     const methods = input.settings.bot_options?.payment_methods ?? [];
     const otherMethod = input.settings.bot_options?.other_payment?.trim();
@@ -492,6 +536,10 @@ export function runIncomingBrain(
     );
   }
   if (understanding.intent === "status") {
+    if (/\b(track|tracking|tracking number|waybill|awb)\b/i.test(input.message))
+      return escalate(prefersEnglish(input.message)
+        ? "I can’t access a tracking number here yet. I’ll ask the seller to check it for you. Please share your order number or the name on the order."
+        : "Hindi ko po makita rito ang tracking number. Ipa-check ko po ito sa seller. Pakisend po ang order number o pangalan sa order.");
     if (!input.latestOrder)
       return escalate(
         "Wala pa po akong mahanap na order record. I-check ko muna sa seller po.",
@@ -521,13 +569,45 @@ export function runIncomingBrain(
     const options = input.settings.bot_options;
     const couriers = [...(options?.couriers ?? []), ...(options?.other_courier?.trim() ? [options.other_courier.trim()] : [])];
     const minimum = Number(options?.free_shipping_minimum ?? 0);
-    if (/\b(courier|couriers|which courier|what courier)\b/i.test(input.message) && !understanding.location) {
-      if (!couriers.length) return escalate("Wala pa pong nakalistang courier. I-check ko muna sa seller po.");
-      return respond({ couriers }, "Available po ang " + couriers.join(", ") + ". Anong area po kayo para ma-check ang delivery details?");
+    const asksFreeShipping = /\bfree shipping\b/i.test(input.message);
+    if (/\b(same day|same-day)\b/i.test(input.message)) {
+      const sameDayCouriers = couriers.filter((courier) => /^(lalamove|move it)$/i.test(courier));
+      if (!sameDayCouriers.length)
+        return respond({ same_day: false }, prefersEnglish(input.message)
+          ? "Sorry, same-day delivery isn’t currently listed as available. Would you like me to check the regular delivery options for your area?"
+          : "Sorry po, wala pong naka-enable na same-day delivery ngayon. Gusto niyo po bang i-check ko ang regular delivery options sa area ninyo?");
+      return respond({ same_day: true, couriers: sameDayCouriers }, prefersEnglish(input.message)
+        ? `Same-day delivery may be arranged via ${sameDayCouriers.join(" or ")}; the rider fee and availability depend on your area. Where should we check?`
+        : `Pwede pong mag-check ng same-day via ${sameDayCouriers.join(" o ")}; depende po sa area ang availability at rider fee. Saan po ang delivery area?`);
+    }
+    if (/\b(ship out|ship-out|dispatch|cut off|cutoff)\b/i.test(input.message)) {
+      const days = Number(options?.processing_days);
+      if (!Number.isFinite(days) || days < 1)
+        return escalate(prefersEnglish(input.message) ? "I don’t have the ship-out schedule saved. I’ll confirm it with the seller. Is there anything else I can help with?" : "Wala pong naka-save na ship-out schedule. Ipa-confirm ko po sa seller. May iba pa po ba akong maitutulong?");
+      return respond({ processing_days: days }, prefersEnglish(input.message)
+        ? `Orders ship out within ${days} day(s) after payment is confirmed. Would you like help checking delivery time for your area?`
+        : `Ship out po ang orders within ${days} day(s) matapos ma-confirm ang payment. Gusto niyo po bang i-check ang delivery time sa area ninyo?`);
+    }
+    const asksCourier = /\b(courier|couriers|which courier|what courier|lbc|flash|lalamove|ninja van|spx|jrs|move it)\b/i.test(input.message) || /j\s*&\s*t/i.test(input.message);
+    if (asksCourier && !understanding.location) {
+      if (!couriers.length) return escalate(prefersEnglish(input.message)
+        ? "No couriers are listed in the shop settings. I’ll check with the seller. What else can I help with?"
+        : "Wala pa pong nakalistang courier. I-check ko muna sa seller po.");
+      return respond({ couriers }, prefersEnglish(input.message)
+        ? `Available couriers are ${couriers.join(", ")}. What area should I check delivery details for?`
+        : "Available po ang " + couriers.join(", ") + ". Anong area po kayo para ma-check ang delivery details?");
     }
     const asksOtherAreas = asksOtherAreaShipping(input.message);
     const region = regionFor(understanding.location);
     const rate = region ? input.settings.shipping_rates[region] : undefined;
+    if (asksFreeShipping && minimum > 0)
+      return respond({ free_shipping_minimum: minimum }, prefersEnglish(input.message)
+        ? `Free shipping applies to orders of ${peso(minimum)} or more. What is your cart total so I can check?`
+        : "Free shipping po kapag umabot sa " + peso(minimum) + " ang order. Magkano po ang items sa cart ninyo para ma-check natin?");
+    if (asksFreeShipping && minimum === 0 && !region)
+      return respond({ free_shipping_minimum: 0 }, prefersEnglish(input.message)
+        ? "Free shipping isn’t currently enabled. What area should I check the shipping fee for?"
+        : "Wala pa pong free shipping sa ngayon. Saan po ang delivery area ninyo para ma-check ang shipping fee?");
     if (!region && asksOtherAreas) {
       const otherRates = Object.entries(input.settings.shipping_rates)
         .filter(([area, amount]) => area.toLocaleLowerCase() !== "metro manila" && Number.isFinite(amount));
@@ -603,9 +683,12 @@ export function runIncomingBrain(
       ? " Ship-out po within " + options.processing_days + " day(s) after payment confirmation."
       : "");
     const courierDetails = couriers.length ? " via " + couriers.join(", ") : "";
-    return respond(
+      const freeShippingNote = asksFreeShipping
+        ? minimum > 0 ? " Free shipping po kapag umabot sa " + peso(minimum) + " ang order." : " Wala pa pong free shipping sa ngayon."
+        : "";
+      return respond(
       { region, shipping: rate, amounts: [rate] },
-      (input.settings.shipping_text?.trim() ? input.settings.shipping_text.trim() + " " : "") + "Shipping to " + region + " po ay " + peso(rate) + courierDetails + "." + deliveryDetails,
+      (input.settings.shipping_text?.trim() ? input.settings.shipping_text.trim() + " " : "") + "Shipping to " + region + " po ay " + peso(rate) + courierDetails + "." + freeShippingNote + deliveryDetails,
     );
   }
 

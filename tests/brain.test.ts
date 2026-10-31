@@ -690,6 +690,63 @@ describe("grounded incoming conversation brain", () => {
     expect(result.reply).toContain("within 2 day(s)");
   });
 
+  it("routes unavailable product facts and seller-only requests to a logged handoff", async () => {
+    for (const message of ["Anong material po?", "May actual photos po?", "May ibang color pa?", "Restock kailan?", "Paano mag-reseller?", "May reviews po?"]) {
+      const result = await runIncomingBrain({ ...baseInput, message });
+      expect(result.action).toBe("reply");
+      expect(result.needsSeller).toBe(true);
+      expect(result.missedRequest).toBe(true);
+      expect(result.reply).toContain("seller");
+    }
+    const english = await runIncomingBrain({ ...baseInput, message: "What material is this?" });
+    expect(english.reply).toContain("I’ll pass your question");
+  });
+
+  it("recognizes PM and MP shorthand price questions and bargaining", async () => {
+    for (const message of ["PM price", "MP"]) {
+      const result = await runIncomingBrain({ ...baseInput, message });
+      expect(result.reply).toContain("Aling item");
+    }
+    const bargaining = await runIncomingBrain({ ...baseInput, message: "Pwede po ba tawad?" });
+    expect(bargaining.reply).toContain("Fixed price");
+    const namedItem = await runIncomingBrain({ ...baseInput, message: "May discount sa Isla blouse?" });
+    expect(namedItem.reply).toContain("Isla Linen Top");
+    expect(namedItem.reply).toContain("33.33");
+  });
+
+  it("answers ship-out and same-day questions only from enabled settings", async () => {
+    const shipOut = await runIncomingBrain({ ...baseInput, message: "Kailan po ship out?", settings: { ...baseInput.settings, bot_options: { processing_days: 2 } } });
+    expect(shipOut.reply).toContain("within 2 day(s)");
+    const unavailable = await runIncomingBrain({ ...baseInput, message: "Same-day delivery po?", settings: { ...baseInput.settings, bot_options: { couriers: ["J&T"] } } });
+    expect(unavailable.reply).toContain("wala pong naka-enable");
+    const available = await runIncomingBrain({ ...baseInput, message: "Same-day delivery po?", settings: { ...baseInput.settings, bot_options: { couriers: ["Lalamove"] } } });
+    expect(available.reply).toContain("Lalamove");
+  });
+
+  it("answers explicit free-shipping and named-courier questions from settings", async () => {
+    const threshold = await runIncomingBrain({ ...baseInput, message: "Is there free shipping?", settings: { ...baseInput.settings, bot_options: { free_shipping_minimum: 500 } } });
+    expect(threshold.reply).toContain("500.00");
+    const disabled = await runIncomingBrain({ ...baseInput, message: "Free shipping?", settings: { ...baseInput.settings, bot_options: { free_shipping_minimum: 0 } } });
+    expect(disabled.reply).toContain("Wala pa pong free shipping");
+    const couriers = await runIncomingBrain({ ...baseInput, message: "Saan po kayo nag-ship? J&T? LBC? Flash?", settings: { ...baseInput.settings, bot_options: { couriers: ["J&T", "LBC", "Flash Express"] } } });
+    expect(couriers.reply).toContain("J&T, LBC, Flash Express");
+  });
+
+  it("hands tracking number requests to the seller instead of inventing tracking data", async () => {
+    const result = await runIncomingBrain({ ...baseInput, message: "Tracking number po?" });
+    expect(result.needsSeller).toBe(true);
+    expect(result.missedRequest).toBe(true);
+    expect(result.reply).toContain("tracking number");
+  });
+
+  it("escalates complaints for missing or incorrect deliveries", async () => {
+    for (const message of ["Missing item po", "Iba po ang dumating", "May sira po yung item"]) {
+      const result = await runIncomingBrain({ ...baseInput, message });
+      expect(result.needsSeller).toBe(true);
+      expect(result.missedRequest).toBe(true);
+    }
+  });
+
   it("answers order status from the saved order facts", async () => {
     const result = await runIncomingBrain(
       { ...baseInput, message: "Nasaan na order ko?", latestOrder: { id: 1042, total: 174.99, shipping: 75, status: "paid", created_at: "2026-10-29T00:00:00Z" } },

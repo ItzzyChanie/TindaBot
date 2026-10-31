@@ -11,6 +11,8 @@ export type UnderstandingIntent =
   | "shop_info"
   | "business_hours"
   | "after_sales"
+  | "discount"
+  | "seller_handoff"
   | "catalog"
   | "size_chart"
   | "seller_availability"
@@ -163,7 +165,7 @@ const quantityUnits = new Set([
 const intentPhrases = {
   size_chart: ["size chart", "chart size", "size catalog", "catalog size", "catalog size chart", "size guide", "sizing chart", "chart ng size", "chart ng sizes", "size ng catalog", "catalog ng size"],
   catalog: ["what items do you have", "what items are available", "what products do you have", "what products are available", "show me the products", "show available items", "see current available items", "current available items", "list of items", "list products", "available items", "ano mga tinda", "anong mga tinda", "ano pong items", "mga available na item", "anong products meron", "ano mga available nyo", "ano mga available ninyo"],
-  complaint: ["complaint", "reklamo", "sira", "damaged", "wrong item", "wrong size", "refund", "return", "late delivery", "late parcel", "no updates", "disappointed", "hindi dumating", "did not arrive", "didn't arrive", "not delivered", "received the wrong"],
+  complaint: ["complaint", "reklamo", "galit", "angry", "not happy", "unacceptable", "sira", "may sira", "damaged", "wrong item", "maling item", "wrong size", "refund", "return", "missing item", "item missing", "parcel missing", "kulang item", "may kulang", "kulang ang laman", "incomplete order", "iba dumating", "iba ang dumating", "iba po ang dumating", "mali dumating", "late delivery", "late parcel", "no updates", "disappointed", "hindi dumating", "did not arrive", "didn't arrive", "not delivered", "received the wrong"],
   other: ["custom", "customize", "customise", "tailor", "alter", "personalized", "personalised", "do you sell", "nagbebenta", "may tinda"],
   status: ["order status", "nasaan order", "asan order", "nasaan na order", "update sa parcel", "track my order", "where is my order", "tracking", "order confirmation", "follow up", "follow-up", "na ship na", "parcel ko"],
   payment: ["payment", "magbayad", "paano magbayad", "gcash", "maya", "bank transfer", "payment details", "cash on delivery", "cod", "installment", "credit card", "debit card"],
@@ -172,9 +174,11 @@ const intentPhrases = {
   shop_info: ["physical store", "physical shop", "store address", "shop address", "may tindahan", "may store", "where is your shop"],
   business_hours: ["business hours", "opening hours", "store hours", "what time do you open", "what time are you open", "anong oras kayo bukas"],
   after_sales: ["exchange", "return policy", "refund policy", "can i return", "pwede mag return", "pwede mag exchange", "do you accept returns", "do you accept exchange"],
-  price: ["magkano", "how much", "price", "presyo", "hm", "total magkano", "cost"],
+  seller_handoff: ["restock", "material", "fabric", "see through", "stretchable", "stretchy", "thick ba", "makapal", "manipis", "true to size", "size fit sa akin", "fit sa akin", "anong size ang fit", "what size would fit", "recommend a size", "height weight", "actual photo", "actual photos", "actual images", "same as picture", "sa picture", "picture lang", "photos of the item", "video ng item", "model", "height of the model", "available colors", "ibang color", "other color", "other colors", "kulay", "legit", "scam", "reviews", "review", "testimonials", "feedback", "reseller", "reseller price", "dropship", "dropshipping", "dropshipper"],
+  discount: ["discount", "tawad", "less pa", "best price", "may bawas", "can you lower", "lower the price"],
+  price: ["magkano", "how much", "price", "presyo", "hm", "total magkano", "cost", "pm price"],
   availability: ["available", "availability", "avail", "may stock", "in stock", "meron", "mayroon", "anong sizes", "anong size", "available sizes"],
-  shipping: ["shipping", "delivery fee", "shipping fee", "pa deliver", "padeliver", "deliver sa", "ship to", "shipping to", "delivery", "deliver", "nagde deliver", "gaano katagal", "courier", "couriers", "which courier", "what courier", "ibang lugar", "other places", "other areas", "outside metro manila", "outside manila", "outside ncr", "elsewhere", "provincial shipping"],
+  shipping: ["shipping", "delivery fee", "shipping fee", "pa deliver", "padeliver", "deliver sa", "ship to", "shipping to", "delivery", "deliver", "ship out", "ship-out", "nag ship", "nagship", "ship with", "dispatch", "cut off", "cutoff", "same day", "same-day", "lalamove", "move it", "j t", "lbc", "flash", "ninja van", "spx", "jrs", "gaano katagal", "courier", "couriers", "which courier", "what courier", "ibang lugar", "other places", "other areas", "outside metro manila", "outside manila", "outside ncr", "elsewhere", "provincial shipping"],
   order_confirm: ["order na", "order ko na", "confirm order", "confirm", "i-confirm", "sige kunin", "kuha ko na", "kukuha", "kunin ko", "pabili", "checkout", "mine", "go na"],
   greeting: ["hi", "hello", "hey", "good morning", "good afternoon", "good evening", "kamusta", "kumusta", "musta"],
 };
@@ -199,7 +203,7 @@ export function isAcknowledgement(message: string): boolean {
 }
 
 const stopWords = new Set([
-  "magkano", "how", "much", "price", "presyo", "hm", "cost", "available",
+  "magkano", "how", "much", "price", "presyo", "hm", "pm", "mp", "cost", "available",
   "availability", "avail", "stock", "meron", "mayroon", "may", "ba", "have", "do", "you", "it",
   "the", "a", "an", "is", "are", "in", "from", "at", "of", "to", "for", "me", "please", "paki", "po",
   "ang", "yung", "ng", "sa", "pa", "ano", "anong", "deliver", "delivery", "ship", "shipping",
@@ -471,11 +475,14 @@ export function understandFromRules(
   const sellerAvailability = /\b(what time|anong oras|anong araw|kailan|kelan|when|anong oras)\b/.test(normalized) &&
     /\b(seller|siya|sya|kayo|owner|shop)\b/.test(normalized) &&
     /\b(avail|available|online|active|free)\b/.test(normalized);
+  const sizeRecommendation = /\b(size|fit|recommend|recommendation|recommendation)\b/.test(normalized) &&
+    /\b\d+(?:\.\d+)?\s*(?:kg|kgs|cm|ft|feet|lbs|lb)\b|\b\d+\s*['’]\s*\d+/.test(normalized);
 
   let intent: UnderstandingIntent = "unknown";
   if (sellerAvailability) intent = "seller_availability";
   else if (hasAny(normalized, intentPhrases.size_chart)) intent = "size_chart";
   else if (hasAny(normalized, intentPhrases.catalog)) intent = "catalog";
+  else if (sizeRecommendation || hasAny(normalized, intentPhrases.seller_handoff)) intent = "seller_handoff";
   else if (hasAny(normalized, intentPhrases.after_sales) && !/\b(damaged|wrong item|wrong size|sira|late delivery|late parcel|disappointed|reklamo|complaint)\b/.test(normalized)) intent = "after_sales";
   else if (hasAny(normalized, intentPhrases.business_hours)) intent = "business_hours";
   else if (hasAny(normalized, intentPhrases.shop_info)) intent = "shop_info";
@@ -486,9 +493,11 @@ export function understandFromRules(
   else if (hasAny(normalized, intentPhrases.payment)) intent = "payment";
   else if (hasAny(normalized, intentPhrases.order_help)) intent = "order_help";
   else if (hasAny(normalized, intentPhrases.bulk)) intent = "bulk";
+  else if (hasAny(normalized, intentPhrases.discount)) intent = "discount";
   else if (hasAny(normalized, otherAreaShippingPhrases)) intent = "shipping";
   else if (!bestMatch && hasAny(normalized, intentPhrases.shipping)) intent = "shipping";
   else if (hasAny(normalized, intentPhrases.price)) intent = "price";
+  else if (normalized === "mp") intent = "price";
   else if (hasAny(normalized, intentPhrases.availability)) intent = "availability";
   else if (availabilityCue) intent = "availability";
   else if (hasAny(normalized, intentPhrases.shipping)) intent = "shipping";

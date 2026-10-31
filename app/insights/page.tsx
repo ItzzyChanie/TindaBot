@@ -11,6 +11,7 @@ const intentLabels: Record<UnderstandingIntent, string> = {
   greeting: "Greeting", question: "Product question", price: "Price", availability: "Availability",
   order_confirm: "Order confirmation", status: "Order status", payment: "Payment", order_help: "How to order", bulk: "Bulk orders",
   shop_info: "Store location", business_hours: "Business hours", after_sales: "After-sales policy",
+  discount: "Discount question", seller_handoff: "Seller follow-up",
   catalog: "Catalog", size_chart: "Size chart", seller_availability: "Seller availability", shipping: "Shipping",
   complaint: "Complaint", other: "Other request", unknown: "Unrecognized",
 };
