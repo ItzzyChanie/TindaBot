@@ -10,7 +10,7 @@ export default async function SettingsPage() {
     supabase
       .from("shop_settings")
       .select(
-        "shipping_rates,payment_instructions,policies,size_chart_url,greeting_text,shipping_text,faq_answers",
+        "shipping_rates,payment_instructions,policies,size_chart_url,greeting_text,shipping_text,faq_answers,bot_options",
       )
       .eq("shop_id", SHOP_ID)
       .maybeSingle(),

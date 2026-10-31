@@ -210,7 +210,7 @@ export async function handleIncoming(
 
   const { data: settingsRow, error: settingsError } = await supabase
     .from("shop_settings")
-    .select("shipping_rates, payment_instructions, policies, size_chart_url, greeting_text, shipping_text, faq_answers")
+    .select("shipping_rates, payment_instructions, policies, size_chart_url, greeting_text, shipping_text, faq_answers, bot_options")
     .eq("shop_id", "00000000-0000-4000-8000-000000000001")
     .maybeSingle();
   if (settingsError) throw settingsError;
@@ -240,6 +240,7 @@ export async function handleIncoming(
       greeting_text: settings.greeting_text ?? "",
       shipping_text: settings.shipping_text ?? "",
       faq_answers: object(settings.faq_answers) as Record<string, string>,
+      bot_options: object(settings.bot_options) as NonNullable<Parameters<typeof runIncomingBrain>[0]["settings"]["bot_options"]>,
     },
     latestOrder: latestOrderRow
       ? {
@@ -290,7 +291,11 @@ export async function handleIncoming(
           const pricing = quote(product, quantity, new Date(), product.promos);
           const rates = object(settings.shipping_rates) as Record<string, number>;
           const region = typeof order.region === "string" ? order.region : null;
-          const shipping = region ? rates[region] : undefined;
+          const freeMinimum = Number(object(settings.bot_options).free_shipping_minimum ?? 0);
+          const configuredShipping = region ? rates[region] : undefined;
+          const shipping = typeof configuredShipping === "number" && freeMinimum > 0 && Number(order.subtotal) >= freeMinimum
+            ? 0
+            : configuredShipping;
           if (typeof shipping !== "number") {
             reply = "Hindi ko makita ang shipping rate para sa area na ito. I-check ko muna sa seller po.";
             pending = {};

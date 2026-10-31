@@ -633,6 +633,25 @@ describe("grounded incoming conversation brain", () => {
     expect(result.reply).toContain("SELLER");
   });
 
+  it("lists only payment methods enabled in settings", async () => {
+    const result = await runIncomingBrain({
+      ...baseInput,
+      message: "What payment methods?",
+      settings: { ...baseInput.settings, bot_options: { payment_methods: ["GCash", "Cash on Delivery"] } },
+    }, ai(understanding({ intent: "payment", product_query: null, size: null, quantity: null, quantities_mentioned: [] })));
+    expect(result.reply).toContain("GCash, Cash on Delivery");
+    expect(result.reply).not.toContain("Maya");
+  });
+
+  it("uses the courier selections from settings", async () => {
+    const result = await runIncomingBrain({
+      ...baseInput,
+      message: "Which courier do you use?",
+      settings: { ...baseInput.settings, bot_options: { couriers: ["J&T", "LBC"] } },
+    });
+    expect(result.reply).toContain("J&T, LBC");
+  });
+
   it("answers order status from the saved order facts", async () => {
     const result = await runIncomingBrain(
       { ...baseInput, message: "Nasaan na order ko?", latestOrder: { id: 1042, total: 174.99, shipping: 75, status: "paid", created_at: "2026-10-29T00:00:00Z" } },

@@ -45,6 +45,20 @@ export type BrainInput = {
     greeting_text?: string;
     shipping_text?: string;
     faq_answers?: Record<string, string>;
+    bot_options?: {
+      bulk_orders?: boolean;
+      bulk_details?: string;
+      payment_methods?: string[];
+      other_payment?: string;
+      couriers?: string[];
+      other_courier?: string;
+      free_shipping_minimum?: number;
+      processing_days?: number;
+      after_sales?: { exchange?: boolean; return?: boolean; refund?: boolean };
+      refund_policy?: string;
+      address?: string;
+      business_hours?: string;
+    };
   };
   latestOrder?: {
     id: number;
@@ -410,7 +424,25 @@ export function runIncomingBrain(
       input.settings.faq_answers?.order_help?.trim() || "Para mag-order po, sabihin ang item, size, quantity, at delivery area. Iche-check ko ang stock at total bago ko hingin ang confirmation.",
     );
   }
+  if (understanding.intent === "bulk") {
+    const options = input.settings.bot_options;
+    if (!options?.bulk_orders)
+      return respond({ bulk_orders: false }, "Sorry po, hindi muna kami tumatanggap ng bulk orders. May promo po ba kayong gustong itanong?");
+    const details = options.bulk_details?.trim();
+    if (!details)
+      return escalate("Tumatanggap po kami ng bulk orders. Ilang piraso po ang kukunin ninyo? Ipa-compute ko sa seller ang bulk price.");
+    return respond({ bulk_orders: true }, "Tumatanggap po kami ng bulk orders! " + details + " Ilang piraso po ang kukunin ninyo?");
+  }
   if (understanding.intent === "payment") {
+    const methods = input.settings.bot_options?.payment_methods ?? [];
+    const otherMethod = input.settings.bot_options?.other_payment?.trim();
+    const available = [...methods, ...(otherMethod ? [otherMethod] : [])];
+    if (available.length) {
+      return respond(
+        { payment_methods: available },
+        "Tumatanggap po kami ng " + available.join(", ") + ". Alin po ang gusto ninyong gamitin?",
+      );
+    }
     const paymentReply = input.settings.faq_answers?.payment?.trim() || input.settings.payment_instructions.trim();
     if (!paymentReply)
       return escalate(
@@ -448,6 +480,13 @@ export function runIncomingBrain(
     );
   }
   if (understanding.intent === "shipping") {
+    const options = input.settings.bot_options;
+    const couriers = [...(options?.couriers ?? []), ...(options?.other_courier?.trim() ? [options.other_courier.trim()] : [])];
+    const minimum = Number(options?.free_shipping_minimum ?? 0);
+    if (/\b(courier|couriers|which courier|what courier)\b/i.test(input.message) && !understanding.location) {
+      if (!couriers.length) return escalate("Wala pa pong nakalistang courier. I-check ko muna sa seller po.");
+      return respond({ couriers }, "Available po ang " + couriers.join(", ") + ". Anong area po kayo para ma-check ang delivery details?");
+    }
     const asksOtherAreas = asksOtherAreaShipping(input.message);
     const region = regionFor(understanding.location);
     const rate = region ? input.settings.shipping_rates[region] : undefined;
@@ -476,7 +515,8 @@ export function runIncomingBrain(
         );
       return respond(
         { shipping_regions: Object.keys(input.settings.shipping_rates) },
-      (input.settings.shipping_text?.trim() ? input.settings.shipping_text.trim() + " " : "") + "Anong area po kayo: Metro Manila, Luzon, Visayas, o Mindanao?",
+      (minimum > 0 ? "Free shipping po kapag umabot sa " + peso(minimum) + ". " : "") +
+        (input.settings.shipping_text?.trim() ? input.settings.shipping_text.trim() + " " : "") + "Anong area po kayo: Metro Manila, Luzon, Visayas, o Mindanao?",
         { ...activePending, clarification: { kind: "location", intent: "shipping" } },
       );
     }
@@ -488,9 +528,12 @@ export function runIncomingBrain(
         shipping: rate,
         shipping_known: true,
       };
+      const freeShipping = minimum > 0 && Number(oldOrder.subtotal) >= minimum;
+      const finalRate = freeShipping ? 0 : rate;
+      order.shipping = finalRate;
       order.total =
         Math.round(
-          ((Number(oldOrder.subtotal) || 0) + rate + Number.EPSILON) * 100,
+          ((Number(oldOrder.subtotal) || 0) + finalRate + Number.EPSILON) * 100,
         ) / 100;
       const amounts = [
         rate,
@@ -510,16 +553,20 @@ export function runIncomingBrain(
         "Shipping to " +
           region +
           " po ay " +
-          peso(rate) +
+          (freeShipping ? "free po" : peso(rate)) +
           ". Total po ay " +
           peso(Number(order.total)) +
           ". I-confirm po ba ang order?",
         { ...activePending, order },
       );
     }
+    const deliveryDetails = options?.processing_days
+      ? " Ship-out po within " + options.processing_days + " day(s) after payment confirmation."
+      : "";
+    const courierDetails = couriers.length ? " via " + couriers.join(", ") : "";
     return respond(
       { region, shipping: rate, amounts: [rate] },
-      (input.settings.shipping_text?.trim() ? input.settings.shipping_text.trim() + " " : "") + "Shipping to " + region + " po ay " + peso(rate) + ".",
+      (input.settings.shipping_text?.trim() ? input.settings.shipping_text.trim() + " " : "") + "Shipping to " + region + " po ay " + peso(rate) + courierDetails + "." + deliveryDetails,
     );
   }
 

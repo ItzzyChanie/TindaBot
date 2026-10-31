@@ -7,6 +7,7 @@ export type UnderstandingIntent =
   | "status"
   | "payment"
   | "order_help"
+  | "bulk"
   | "catalog"
   | "size_chart"
   | "seller_availability"
@@ -164,9 +165,10 @@ const intentPhrases = {
   status: ["order status", "nasaan order", "asan order", "nasaan na order", "update sa parcel", "track my order", "where is my order", "tracking", "order confirmation", "follow up", "follow-up", "na ship na", "parcel ko"],
   payment: ["payment", "magbayad", "paano magbayad", "gcash", "bank transfer", "payment details", "cash on delivery", "cod"],
   order_help: ["paano mag order", "paano umorder", "how to order", "how can i order", "how to buy"],
+  bulk: ["bulk order", "bulk orders", "wholesale", "maramihan", "bulk pricing"],
   price: ["magkano", "how much", "price", "presyo", "hm", "total magkano", "cost"],
   availability: ["available", "availability", "avail", "may stock", "in stock", "meron", "mayroon", "anong sizes", "anong size", "available sizes"],
-  shipping: ["shipping", "delivery fee", "shipping fee", "pa deliver", "padeliver", "deliver sa", "ship to", "shipping to", "delivery", "deliver", "nagde deliver", "gaano katagal", "ibang lugar", "other places", "other areas", "outside metro manila", "outside manila", "outside ncr", "elsewhere", "provincial shipping"],
+  shipping: ["shipping", "delivery fee", "shipping fee", "pa deliver", "padeliver", "deliver sa", "ship to", "shipping to", "delivery", "deliver", "nagde deliver", "gaano katagal", "courier", "couriers", "which courier", "what courier", "ibang lugar", "other places", "other areas", "outside metro manila", "outside manila", "outside ncr", "elsewhere", "provincial shipping"],
   order_confirm: ["order na", "order ko na", "confirm order", "confirm", "i-confirm", "sige kunin", "kuha ko na", "kukuha", "kunin ko", "pabili", "checkout", "mine", "go na"],
   greeting: ["hi", "hello", "hey", "good morning", "good afternoon", "good evening", "kamusta", "kumusta", "musta"],
 };
@@ -474,6 +476,7 @@ export function understandFromRules(
   else if (/\b(nasaan|asan)\b.*\b(order|parcel)\b/.test(normalized)) intent = "status";
   else if (hasAny(normalized, intentPhrases.payment)) intent = "payment";
   else if (hasAny(normalized, intentPhrases.order_help)) intent = "order_help";
+  else if (hasAny(normalized, intentPhrases.bulk)) intent = "bulk";
   else if (hasAny(normalized, otherAreaShippingPhrases)) intent = "shipping";
   else if (!bestMatch && hasAny(normalized, intentPhrases.shipping)) intent = "shipping";
   else if (hasAny(normalized, intentPhrases.price)) intent = "price";

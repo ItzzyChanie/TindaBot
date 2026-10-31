@@ -6,6 +6,14 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 const SHOP_ID = "00000000-0000-4000-8000-000000000001";
 const regions = ["Metro Manila", "Luzon", "Visayas", "Mindanao"] as const;
 type Region = (typeof regions)[number];
+const paymentOptions = ["GCash", "Maya", "Bank Transfer", "Cash on Delivery", "Credit/Debit Card"];
+const courierOptions = ["J&T", "LBC", "Flash Express", "Move It", "Lalamove", "JRS", "Ninja Van", "SPX"];
+type BotOptions = {
+  bulk_orders: boolean; bulk_details: string; payment_methods: string[]; other_payment: string;
+  couriers: string[]; other_courier: string; free_shipping_minimum: number;
+  processing_days: number; after_sales: { exchange: boolean; return: boolean; refund: boolean };
+  refund_policy: string; address: string; business_hours: string;
+};
 type Settings = {
   shipping_rates: Partial<Record<Region, number>>;
   payment_instructions: string;
@@ -14,7 +22,9 @@ type Settings = {
   greeting_text: string;
   shipping_text: string;
   faq_answers: Record<string, string>;
+  bot_options: Partial<BotOptions>;
 };
+const defaultOptions: BotOptions = { bulk_orders: false, bulk_details: "", payment_methods: [], other_payment: "", couriers: [], other_courier: "", free_shipping_minimum: 0, processing_days: 1, after_sales: { exchange: false, return: false, refund: false }, refund_policy: "", address: "", business_hours: "" };
 
 async function compressSizeChart(file: File): Promise<File> {
   if (!file.type.startsWith("image/"))
@@ -74,6 +84,7 @@ export function SettingsForm({
     greeting_text: initialSettings?.greeting_text ?? "",
     shipping_text: initialSettings?.shipping_text ?? "",
     faq_answers: initialSettings?.faq_answers ?? {},
+    bot_options: { ...defaultOptions, ...(initialSettings?.bot_options ?? {}), after_sales: { ...defaultOptions.after_sales, ...(initialSettings?.bot_options?.after_sales ?? {}) } },
   });
   const [name, setName] = useState(sellerName);
   const [sizeChartFile, setSizeChartFile] = useState<File | null>(null);
@@ -83,6 +94,14 @@ export function SettingsForm({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(initialError);
   const [notice, setNotice] = useState("");
+  const options = { ...defaultOptions, ...settings.bot_options, after_sales: { ...defaultOptions.after_sales, ...settings.bot_options.after_sales } };
+  function updateOptions(patch: Partial<BotOptions>) {
+    setSettings((current) => ({ ...current, bot_options: { ...defaultOptions, ...current.bot_options, ...patch } }));
+  }
+  function toggleOption(list: "payment_methods" | "couriers", value: string, checked: boolean) {
+    const current = options[list];
+    updateOptions({ [list]: checked ? [...current, value] : current.filter((item) => item !== value) });
+  }
 
   async function save(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -299,6 +318,36 @@ export function SettingsForm({
               </label>
             ))}
           </div>
+        </section>
+        <section>
+          <p className="eyebrow">BOT ANSWER CONTROLS</p>
+          <h2>Shipping and orders</h2>
+          <p className="muted">The assistant uses these selections in customer replies.</p>
+          <label className="settings-label">Free shipping minimum (₱; 0 disables)
+            <input type="number" min="0" step="0.01" value={options.free_shipping_minimum} onChange={(event) => updateOptions({ free_shipping_minimum: Number(event.target.value) || 0 })} />
+          </label>
+          <label className="settings-label">Processing days before ship-out
+            <input type="number" min="1" max="60" step="1" value={options.processing_days} onChange={(event) => updateOptions({ processing_days: Math.max(1, Number(event.target.value) || 1) })} />
+          </label>
+          <fieldset className="settings-label"><legend>Accepted payment methods</legend>
+            {paymentOptions.map((method) => <label key={method}><input type="checkbox" checked={options.payment_methods.includes(method)} onChange={(event) => toggleOption("payment_methods", method, event.target.checked)} /> {method}</label>)}
+          </fieldset>
+          <label className="settings-label">Other payment method<input maxLength={80} value={options.other_payment} onChange={(event) => updateOptions({ other_payment: event.target.value })} /></label>
+          <fieldset className="settings-label"><legend>Available couriers</legend>
+            {courierOptions.map((courier) => <label key={courier}><input type="checkbox" checked={options.couriers.includes(courier)} onChange={(event) => toggleOption("couriers", courier, event.target.checked)} /> {courier}</label>)}
+          </fieldset>
+          <label className="settings-label">Other courier<input maxLength={80} value={options.other_courier} onChange={(event) => updateOptions({ other_courier: event.target.value })} /></label>
+          <label className="settings-label"><input type="checkbox" checked={options.bulk_orders} onChange={(event) => updateOptions({ bulk_orders: event.target.checked })} /> Allow bulk orders</label>
+          {options.bulk_orders && <label className="settings-label">Bulk pricing details<textarea rows={3} maxLength={1000} value={options.bulk_details} onChange={(event) => updateOptions({ bulk_details: event.target.value })} /></label>}
+        </section>
+        <section>
+          <p className="eyebrow">STORE AND AFTER-SALES</p><h2>Store details and policies</h2>
+          <label className="settings-label">Shop address<input maxLength={300} value={options.address} onChange={(event) => updateOptions({ address: event.target.value })} /></label>
+          <label className="settings-label">Business hours<input maxLength={160} value={options.business_hours} onChange={(event) => updateOptions({ business_hours: event.target.value })} placeholder="Mon-Sat, 9AM-6PM" /></label>
+          <fieldset className="settings-label"><legend>After-sales options</legend>
+            {(["exchange", "return", "refund"] as const).map((policy) => <label key={policy}><input type="checkbox" checked={options.after_sales[policy]} onChange={(event) => updateOptions({ after_sales: { ...options.after_sales, [policy]: event.target.checked } })} /> {policy[0].toUpperCase() + policy.slice(1)} accepted</label>)}
+          </fieldset>
+          <label className="settings-label">Refund policy<textarea rows={3} maxLength={1500} value={options.refund_policy} onChange={(event) => updateOptions({ refund_policy: event.target.value })} /></label>
         </section>
         <p className="muted settings-privacy-note">
           Chat messages are retained for 90 days. Customers see a privacy notice
