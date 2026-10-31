@@ -367,6 +367,20 @@ export function resolveProductChoice<T extends CatalogProduct>(
     normalizeProductQuery(product.name) === normalizedQuery
   );
   if (exactNames.length === 1) return { status: "matched", product: exactNames[0] };
+  // A customer often repeats only the distinguishing words from a long product
+  // name ("Bayanihan tshirt", "basic t-shirt"). Accept that only when those
+  // words identify exactly one of the clarification candidates.
+  const queryWords = [...new Set(normalizedQuery.split(" ").filter(Boolean))];
+  const genericWords = new Set(["shirt", "tshirt", "tee", "top", "item", "the", "a"]);
+  const distinctiveWords = queryWords.filter((word) => !genericWords.has(word));
+  if (distinctiveWords.length) {
+    const matches = products.filter((product) => {
+      const text = normalizeProductQuery([product.name, ...(product.aliases ?? [])].join(" "));
+      const words = new Set(text.split(" "));
+      return distinctiveWords.every((word) => words.has(word));
+    });
+    if (matches.length === 1) return { status: "matched", product: matches[0] };
+  }
   return resolveProduct(query, products);
 }
 

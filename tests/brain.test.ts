@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { labelAutoReply, runIncomingBrain, type BrainRules, type BrainInput, type BrainProduct } from "../supabase/functions/_shared/brain";
 import type { Understanding } from "../supabase/functions/_shared/rules";
+import { resolveProductChoice } from "../supabase/functions/_shared/rules";
 
 const product: BrainProduct = {
   id: "product-1",
@@ -56,6 +57,65 @@ function ai(result: Understanding): BrainRules {
 }
 
 describe("grounded incoming conversation brain", () => {
+  it("resolves distinctive partial product names and recognizes med as M", async () => {
+    const basicTee: BrainProduct = {
+      ...product,
+      id: "bayanihan-basic-tee",
+      name: "Bayanihan Basic T-Shirt",
+      aliases: ["Bayanihan tshirt", "Basic tee"],
+      variants: [
+        { id: "bayanihan-s", size: "S", stock: 5 },
+        { id: "bayanihan-m", size: "M", stock: 5 },
+      ],
+    };
+    const genericTee: BrainProduct = {
+      ...product,
+      id: "generic-tee",
+      name: "T-shirt",
+      aliases: [],
+    };
+    const candidates = [basicTee, genericTee];
+    expect(resolveProductChoice("bayanihan tshirt", candidates)).toMatchObject({
+      status: "matched", product: { id: basicTee.id },
+    });
+    expect(resolveProductChoice("basic t-shirt", candidates)).toMatchObject({
+      status: "matched", product: { id: basicTee.id },
+    });
+
+    for (const channel of ["telegram", "web"] as const) {
+      const selected = await runIncomingBrain({
+        ...baseInput,
+        channel,
+        message: "bayanihan tshirt",
+        products: candidates,
+        pending: {
+          clarification: {
+            kind: "product",
+            candidates: [genericTee.name, basicTee.name],
+            intent: "order_confirm",
+          },
+        },
+      });
+      expect(selected.reply).toContain("Anong size po");
+      expect(selected.pending.clarification).toMatchObject({
+        kind: "size", product_id: basicTee.id,
+      });
+
+      const sized = await runIncomingBrain({
+        ...baseInput,
+        channel,
+        message: "med po",
+        products: candidates,
+        pending: selected.pending,
+      });
+      expect(sized.reply).not.toContain("Alin po rito");
+      expect(sized.reply).toContain("Ilang piraso po");
+      expect(sized.pending.clarification).toMatchObject({
+        kind: "quantity", product_id: basicTee.id, size: "M",
+      });
+    }
+  });
+
   it("labels automatic replies and leaves non-auto replies unchanged", () => {
     expect(labelAutoReply("Hello po", "auto")).toBe("Hello po\n— Assistant");
     expect(labelAutoReply("Hello po", "suggest")).toBe("Hello po");

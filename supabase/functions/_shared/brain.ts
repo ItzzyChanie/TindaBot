@@ -319,13 +319,22 @@ export function runIncomingBrain(
     };
     if (kind === "size") {
       const size = matchCatalogSize(input.message, clarificationProduct.variants.map((v) => v.size));
-      if (size) understanding = { ...common, size, quantity: Number(clarification.quantity) || null, location: typeof clarification.location === "string" ? clarification.location : null };
+      if (size) {
+        clarifiedProduct = clarificationProduct;
+        understanding = { ...common, size, quantity: Number(clarification.quantity) || null, location: typeof clarification.location === "string" ? clarification.location : null };
+      }
     } else if (kind === "quantity") {
       const quantity = matchQuantityAnswer(input.message);
-      if (quantity) understanding = { ...common, size: typeof clarification.size === "string" ? clarification.size : null, quantity, quantities_mentioned: [quantity], location: typeof clarification.location === "string" ? clarification.location : null };
+      if (quantity) {
+        clarifiedProduct = clarificationProduct;
+        understanding = { ...common, size: typeof clarification.size === "string" ? clarification.size : null, quantity, quantities_mentioned: [quantity], location: typeof clarification.location === "string" ? clarification.location : null };
+      }
     } else if (kind === "location") {
       const location = matchCatalogLocation(input.message);
-      if (location) understanding = { ...common, size: typeof clarification.size === "string" ? clarification.size : null, quantity: Number(clarification.quantity) || 1, location, availability_requested: clarification.availability_requested === true };
+      if (location) {
+        clarifiedProduct = clarificationProduct;
+        understanding = { ...common, size: typeof clarification.size === "string" ? clarification.size : null, quantity: Number(clarification.quantity) || 1, location, availability_requested: clarification.availability_requested === true };
+      }
     }
   }
   let lastProductContext = record(input.pending.last_product);
