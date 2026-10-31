@@ -3506,6 +3506,21 @@ h2 {
   color: var(--muted);
   font-size: 12px;
 }
+.shop-colors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 7px;
+  color: #59665c;
+  font-size: 13px;
+  line-height: 1.4;
+}
+.shop-colors strong {
+  color: #293b2e;
+  font-weight: 700;
+}
+.shop-colors span {
+  color: #347352;
+}
 .shop-sizes {
   display: flex;
   min-height: 52px;

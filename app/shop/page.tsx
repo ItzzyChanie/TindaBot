@@ -10,6 +10,7 @@ import { ChatWidget } from "@/app/chat/chat-widget";
 type PublicSize = {
   size: string;
   availability: "in_stock" | "low_stock" | "sold_out";
+  stock: number;
   reserved_stock: number;
 };
 type PublicProduct = {
@@ -22,6 +23,7 @@ type PublicProduct = {
   discount_value: number | null;
   discount_starts: string | null;
   discount_ends: string | null;
+  colors: string[];
   sizes: PublicSize[];
   promos: QuotePromo[];
 };
@@ -273,6 +275,12 @@ export default function ShopPage() {
                         <span className="offer-badge">{pricing.label}</span>
                       )}
                     </div>
+                    {product.colors?.length > 0 && (
+                      <div className="shop-colors">
+                        <strong>Available colors</strong>
+                        <span>{product.colors.join(", ")}</span>
+                      </div>
+                    )}
                     <div className="shop-offers">
                       {badges.map((promo) => (
                         <span
@@ -294,8 +302,8 @@ export default function ShopPage() {
                             {item.availability === "sold_out"
                               ? "Sold out"
                               : item.availability === "low_stock"
-                                ? "Low stock"
-                                : "Available"}
+                                ? `Low stock · ${item.stock} left`
+                                : `${item.stock} available`}
                           </small>
                           {item.reserved_stock > 0 && (
                             <small className="shop-reserved">Reserved qty: {item.reserved_stock}</small>
