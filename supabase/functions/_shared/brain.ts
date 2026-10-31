@@ -214,7 +214,13 @@ export function runIncomingBrain(
       clearSellerHandoff: input.pending.seller_handoff === true,
     };
   }
-  if (input.pending.seller_handoff === true && isAcknowledgement(input.message)) {
+  const clarification = record(input.pending.clarification);
+  if (
+    input.pending.seller_handoff === true &&
+    !clarification.kind &&
+    !input.pending.order &&
+    isAcknowledgement(input.message)
+  ) {
     return base;
   }
   if (/^\s*\/start(?:@[a-z0-9_]+)?(?:\s+.*)?\s*$/i.test(input.message)) {
@@ -236,7 +242,6 @@ export function runIncomingBrain(
     };
   }
 
-  const clarification = record(input.pending.clarification);
   const activePending: BrainPending = { ...input.pending };
   delete activePending.clarification;
 
@@ -341,13 +346,17 @@ export function runIncomingBrain(
   const isYes = /^(yes|yeah|yep|yup|oo|opo|sige|ge|g|go|okay|ok|sure|please do)$/.test(normalizedShortReply);
   const isNo = /^(no|noo+|nope|hindi|wag na|not now|wala|wla|wala na|wla na|none|nothing|never mind|nevermind|nvm)$/.test(normalizedShortReply);
   const isCancel = isCancellationRequest(input.message);
-  const continueReply = (reply: string, pending: BrainPending): BrainResult => ({
-    ...base,
-    action: input.aiMode === "suggest" ? "draft" : "reply",
-    reply: reply + (input.firstContact ? " " + disclosure : ""),
-    pending,
-    clearSellerHandoff: input.status === "needs_seller",
-  });
+  const continueReply = (reply: string, pending: BrainPending): BrainResult => {
+    const nextPending = { ...pending };
+    delete nextPending.seller_handoff;
+    return {
+      ...base,
+      action: input.aiMode === "suggest" ? "draft" : "reply",
+      reply: reply + (input.firstContact ? " " + disclosure : ""),
+      pending: nextPending,
+      clearSellerHandoff: input.status === "needs_seller" || input.pending.seller_handoff === true,
+    };
+  };
   if (isCancel && (
     input.pending.order ||
     clarification.kind === "order_interest" ||

@@ -863,6 +863,42 @@ describe("grounded incoming conversation brain", () => {
     expect(yes.pending.last_product).toMatchObject({ color: "Brown" });
   });
 
+  it.each(["telegram", "web"])("continues color-to-order yes replies despite a stale seller-handoff flag (%s)", async (channel) => {
+    const coloredProduct = { ...product, colors: ["Navy Blue", "White"] };
+    const question = await runIncomingBrain({
+      ...baseInput,
+      channel,
+      status: "needs_seller",
+      message: "Anong color po ang available?",
+      contextProductId: coloredProduct.id,
+      products: [coloredProduct],
+      pending: { seller_handoff: true },
+    });
+    expect(question.pending).toMatchObject({ seller_handoff: true, clarification: { kind: "color" } });
+
+    const color = await runIncomingBrain({
+      ...baseInput,
+      channel,
+      status: "needs_seller",
+      message: "Navy Blue",
+      products: [coloredProduct],
+      pending: question.pending,
+    });
+    expect(color.reply).toContain("Gusto niyo po bang mag-order");
+    expect(color.pending.seller_handoff).toBeUndefined();
+
+    const yes = await runIncomingBrain({
+      ...baseInput,
+      channel,
+      message: "yes po",
+      products: [coloredProduct],
+      pending: color.pending,
+    });
+    expect(yes.action).toBe("reply");
+    expect(yes.needsSeller).toBe(false);
+    expect(yes.reply).toContain("Anong size po");
+  });
+
   it("uses the selected product's active catalog discount instead of calling it fixed price", async () => {
     const discountedProduct = {
       ...product,
