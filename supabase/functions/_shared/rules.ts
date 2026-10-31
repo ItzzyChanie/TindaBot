@@ -168,7 +168,7 @@ const intentPhrases = {
   complaint: ["complaint", "reklamo", "galit", "angry", "not happy", "unacceptable", "sira", "may sira", "damaged", "wrong item", "maling item", "wrong size", "refund", "return", "missing item", "item missing", "parcel missing", "kulang item", "may kulang", "kulang ang laman", "incomplete order", "iba dumating", "iba ang dumating", "iba po ang dumating", "mali dumating", "late delivery", "late parcel", "no updates", "disappointed", "hindi dumating", "did not arrive", "didn't arrive", "not delivered", "received the wrong"],
   other: ["custom", "customize", "customise", "tailor", "alter", "personalized", "personalised", "do you sell", "nagbebenta", "may tinda"],
   status: ["order status", "nasaan order", "asan order", "nasaan na order", "update sa parcel", "track my order", "where is my order", "tracking", "order confirmation", "follow up", "follow-up", "na ship na", "parcel ko"],
-  payment: ["payment", "magbayad", "paano magbayad", "gcash", "maya", "bank transfer", "payment details", "cash on delivery", "cod", "installment", "credit card", "debit card"],
+  payment: ["payment", "magbayad", "paano magbayad", "pwede magbayad", "pwede na magbayad", "down payment", "downpayment", "deposit", "can i pay", "may i pay", "can we pay", "pay now", "send payment", "gcash", "maya", "bank transfer", "payment details", "cash on delivery", "cod", "installment", "credit card", "debit card"],
   order_help: ["paano mag order", "paano umorder", "how to order", "how can i order", "how to buy"],
   bulk: ["bulk order", "bulk orders", "wholesale", "maramihan", "bulk pricing"],
   shop_info: ["physical store", "physical shop", "store address", "shop address", "may tindahan", "may store", "where is your shop"],
@@ -491,7 +491,7 @@ export function understandFromRules(
   else if (hasAny(normalized, intentPhrases.other)) intent = "other";
   else if (hasAny(normalized, intentPhrases.status)) intent = "status";
   else if (/\b(nasaan|asan)\b.*\b(order|parcel)\b/.test(normalized)) intent = "status";
-  else if (hasAny(normalized, intentPhrases.payment)) intent = "payment";
+  else if (hasAny(normalized, intentPhrases.payment) || /\b(pay|paid|paying|downpayment|deposit)\b/.test(normalized)) intent = "payment";
   else if (hasAny(normalized, intentPhrases.order_help)) intent = "order_help";
   else if (hasAny(normalized, intentPhrases.bulk)) intent = "bulk";
   else if (hasAny(normalized, intentPhrases.discount)) intent = "discount";

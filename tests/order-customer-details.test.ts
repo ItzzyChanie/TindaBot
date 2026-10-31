@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { customerDetailsPrompt, isOrderAcknowledgment, parseOrderDetails, validCustomerEmail, validCustomerMobile } from "../supabase/functions/_shared/order-customer-details";
+import { customerDetailsPrompt, isCancellationRequest, isOrderAcknowledgment, isPaymentRequest, parseOrderDetails, validCustomerEmail, validCustomerMobile } from "../supabase/functions/_shared/order-customer-details";
 
 describe("order customer details", () => {
   it("parses a complete labeled details block", () => {
@@ -32,5 +32,19 @@ describe("order customer details", () => {
       expect(isOrderAcknowledgment(message)).toBe(true);
     }
     expect(isOrderAcknowledgment("May update po sa order?")).toBe(false);
+  });
+
+  it("recognizes common order-cancellation wording", () => {
+    expect(isCancellationRequest("Ayy ipa-cancel ko nalang po pala yung order ko")).toBe(true);
+    expect(isCancellationRequest("Please cancel my order")).toBe(true);
+    expect(isCancellationRequest("I don't want to continue my order")).toBe(true);
+    expect(isCancellationRequest("Ayoko na palang ituloy")).toBe(true);
+    expect(isCancellationRequest("Can I ask about my order?")).toBe(false);
+  });
+
+  it("recognizes payment and down-payment messages while collecting details", () => {
+    for (const message of ["Pwede na po bang magbayad?", "Can I send a downpayment?", "May I pay now?", "GCash po?"]) {
+      expect(isPaymentRequest(message)).toBe(true);
+    }
   });
 });

@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { quote, type QuotePromo } from "@/supabase/functions/_shared/quote";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
-type Variant = { id: string; size: string; stock: number };
+type Variant = { id: string; size: string; stock: number; reserved_stock: number };
 type Product = {
   id: string;
   name: string;
@@ -332,7 +332,7 @@ export function CatalogManager({
       const { data: refreshedProducts, error: refreshError } = await supabase
         .from("products")
         .select(
-          "*, variants(id,size,stock), promos(label,kind,min_qty,value,starts_at,ends_at,active)",
+          "*, variants(id,size,stock,reserved_stock), promos(label,kind,min_qty,value,starts_at,ends_at,active)",
         )
         .order("created_at", { ascending: false });
       if (refreshError)
@@ -488,6 +488,7 @@ export function CatalogManager({
                         <span className="size-chip" key={variant.id}>
                           <b>{variant.size}</b>
                           <span>{variant.stock} in stock</span>
+                          <span>{variant.reserved_stock ?? 0} reserved</span>
                           <button
                             onClick={() => void adjustStock(variant, -1)}
                             aria-label={`Remove one ${variant.size} from stock`}

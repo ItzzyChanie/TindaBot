@@ -50,3 +50,14 @@ export function isOrderAcknowledgment(text: string): boolean {
   const normalized = text.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
   return /^(ok|okay|okey|fine|sure|thanks|thank you|salamat|sige|noted|got it|alright|all right)( po)?( thank you| thanks| salamat| po)?$/.test(normalized);
 }
+
+export function isCancellationRequest(text: string): boolean {
+  const normalized = text.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+  return /\b(cancel|cancelled|canceled|cancellation|ipa cancel|ipa kansel|kanselahin|kansel|kancel|don t want to continue|do not want to continue|change my mind|stop.*order|ayoko na.*ituloy|hindi na.*ituloy|wag na.*ituloy)\b/.test(normalized);
+}
+
+export function isPaymentRequest(text: string): boolean {
+  return /\b(payment|pay|paid|paying|down payment|downpayment|deposit|gcash|maya|cash on delivery|cod|bank transfer|installment|credit card|debit card|magbayad|bayad|bayaran)\b/i.test(
+    text.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim(),
+  );
+}

@@ -11,6 +11,7 @@ import {
   type Understanding,
 } from "./rules.ts";
 import { quote, type QuotePromo } from "./quote.ts";
+import { isCancellationRequest } from "./order-customer-details.ts";
 
 export type BrainVariant = { id: string; size: string; stock: number };
 export type BrainProduct = CatalogProduct & {
@@ -70,6 +71,8 @@ export type BrainInput = {
       refund_policy?: string;
       address?: string;
       business_hours?: string;
+      facebook_page_name?: string;
+      facebook_page_url?: string;
       delivery_days?: Record<string, string>;
     };
   };
@@ -335,6 +338,7 @@ export function runIncomingBrain(
     .replace(/\b(po|opo|please|pls)\b/g, " ").replace(/\s+/g, " ").trim();
   const isYes = /^(yes|yeah|yep|yup|oo|opo|sige|ge|g|go|okay|ok|sure|please do)$/.test(normalizedShortReply);
   const isNo = /^(no|noo+|nope|hindi|wag na|not now|wala|wla|wala na|wla na|none|nothing|never mind|nevermind|nvm)$/.test(normalizedShortReply);
+  const isCancel = isCancellationRequest(input.message);
   const continueReply = (reply: string, pending: BrainPending): BrainResult => ({
     ...base,
     action: input.aiMode === "suggest" ? "draft" : "reply",
@@ -342,6 +346,30 @@ export function runIncomingBrain(
     pending,
     clearSellerHandoff: input.status === "needs_seller",
   });
+  if (isCancel && (
+    input.pending.order ||
+    clarification.kind === "order_interest" ||
+    clarification.intent === "order_confirm"
+  )) {
+    return continueReply(
+      "Sige po, kinansela ko ang pending order bago ma-confirm. Wala pang stock na na-reserve o order na nailista.",
+      { ...activePending, order: undefined, clarification: undefined },
+    );
+  }
+  if (isCancel) {
+    if (!input.latestOrder) {
+      return continueReply("Wala po akong nakikitang confirmed order na puwedeng i-cancel. Kung may pending order quote kayo, sabihin lang po kung hindi na itutuloy.", activePending);
+    }
+    const pageName = input.settings.bot_options?.facebook_page_name?.trim();
+    const pageUrl = input.settings.bot_options?.facebook_page_url?.trim();
+    const directMessage = pageUrl && /^https:\/\//i.test(pageUrl)
+      ? " Pwede rin po kayong mag-message sa Facebook page na " + (pageName || "shop page") + ": " + pageUrl + " at ilagay ang order #" + input.latestOrder.id + "."
+      : " Pakihintay po ang seller dito sa chat.";
+    return continueReply(
+      "Naka-confirm na po ang order #" + input.latestOrder.id + ", kaya hindi na ito makakansela ng bot. Pakihintay po ang seller para matulungan kayo." + directMessage,
+      activePending,
+    );
+  }
   if (input.pending.order && isYes) {
     return { ...base, action: "confirm_order", reply: null, orderToConfirm: record(input.pending.order), pending: input.pending };
   }
@@ -636,37 +664,21 @@ export function runIncomingBrain(
     return respond({ fixed_price: true }, reply);
   }
   if (understanding.intent === "payment") {
-    const methods = input.settings.bot_options?.payment_methods ?? [];
-    const otherMethod = input.settings.bot_options?.other_payment?.trim();
-    const available = [...methods, ...(otherMethod ? [otherMethod] : [])];
-    const message = input.message.toLowerCase();
-    const requested = /\b(cod|cash on delivery)\b/.test(message) ? "Cash on Delivery"
-      : /\bgcash\b/.test(message) ? "GCash"
-      : /\bmaya\b/.test(message) ? "Maya"
-      : /\binstallment\b/.test(message) ? "Installment"
-      : /\bbank transfer\b/.test(message) ? "Bank Transfer"
-      : /\b(credit|debit) card\b/.test(message) ? "Credit/Debit Card"
-      : null;
-    if (requested === "Installment")
-      return respond({ payment_method: requested, available: false }, "Wala pa po kaming installment sa ngayon. Available po ang " + (available.join(", ") || "payment methods na makukumpirma ng seller") + ". Alin po ang gusto ninyong gamitin?");
-    if (requested && available.length && !available.includes(requested))
-      return respond({ payment_method: requested, available: false, payment_methods: available }, "Sorry po, wala pa pong " + requested + " sa ngayon. Pero available po ang " + (available.join(", ") || "payment methods na makukumpirma ng seller") + ". Alin po ang mas convenient sa inyo?");
-    if (available.length) {
-      return respond(
-        { payment_methods: available },
-        "Tumatanggap po kami ng " + available.join(", ") + ". Alin po ang gusto ninyong gamitin?",
-      );
-    }
-    if (input.settings.bot_options)
-      return escalate("Wala pang napiling payment method sa shop settings. I-check ko muna sa seller po.");
-    const paymentReply = input.settings.faq_answers?.payment?.trim() || input.settings.payment_instructions.trim();
-    if (!paymentReply)
-      return escalate(
-        "Wala pa po akong payment instructions. I-check ko muna sa seller po.",
-      );
+    const pageName = input.settings.bot_options?.facebook_page_name?.trim();
+    const pageUrl = input.settings.bot_options?.facebook_page_url?.trim();
+    const directMessage = pageUrl && /^https:\/\//i.test(pageUrl)
+      ? " Pwede rin po kayong mag-direct message sa Facebook page na " + (pageName || "shop page") + ": " + pageUrl +
+        (input.latestOrder ? " at ipakita ang order #" + input.latestOrder.id + " para ma-track kayo ni seller." : " para ma-accommodate kayo ni seller.")
+      : "";
+    const orderIsReserved = input.latestOrder?.status === "awaiting_payment";
+    const orderIsPaid = input.latestOrder?.status === "paid" || input.latestOrder?.status === "shipped";
     return respond(
-      { payment_instructions: paymentReply },
-      "Payment instructions po: " + paymentReply,
+      { payment_allowed_now: false, order_reserved: orderIsReserved, payment_already_recorded: orderIsPaid },
+      (orderIsPaid
+        ? "No po muna sa panibagong bayad o downpayment. Naka-record na po ang payment ng order ninyo; huwag na pong magpadala ulit at hintayin ang update ng seller."
+        : "No po muna, huwag muna magbayad o mag-downpayment. Hintayin muna ang real seller para maibigay at ma-confirm niya ang tamang payment method/instructions, para maiwasan ang maling padala o anumang conflict.") +
+        (orderIsReserved ? " Naka-lista at naka-reserve na po ang order ninyo; kalma lang po at maghintay sa seller." : !orderIsPaid ? " Kailangan munang i-confirm ninyo ang order bago ito mailista at ma-reserve." : "") +
+        " Mag-reply po si seller rito sa lalong madaling panahon." + directMessage,
     );
   }
   if (understanding.intent === "status") {
@@ -1031,7 +1043,7 @@ export function runIncomingBrain(
       quantity +
       ": " +
       amountSummary +
-      " I-confirm po ba ang order?"
+      " Paalala po: kapag nag-confirm kayo, maililista at maire-reserve ang stock para sa inyo at hindi na ito makakansela. Siguraduhin pong committed kayo. I-confirm po ba ang order?"
     : understanding.intent === "availability"
       ? "Available po ang " +
         product.name +

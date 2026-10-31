@@ -220,4 +220,16 @@ describe("catalog-grounded message rules", () => {
       expect(understandFromRules(message, catalog).intent).toBe("seller_availability");
     }
   });
+
+  it("classifies Tagalog and English payment and down-payment questions", () => {
+    for (const message of [
+      "Pwede na po bang magbayad?",
+      "Mag down payment po ba ako?",
+      "Can I make a downpayment?",
+      "May I pay now?",
+      "Can I send the deposit?",
+    ]) {
+      expect(understandFromRules(message, catalog).intent).toBe("payment");
+    }
+  });
 });

@@ -10,6 +10,7 @@ import { ChatWidget } from "@/app/chat/chat-widget";
 type PublicSize = {
   size: string;
   availability: "in_stock" | "low_stock" | "sold_out";
+  reserved_stock: number;
 };
 type PublicProduct = {
   id: string;
@@ -54,9 +55,13 @@ export default function ShopPage() {
 
   useEffect(() => {
     let active = true;
-    const controller = new AbortController();
-    const timeout = window.setTimeout(() => controller.abort(), 12000);
-    void (async () => {
+    let loadingCatalog = false;
+    let controller: AbortController | null = null;
+    const loadCatalog = async () => {
+      if (loadingCatalog) return;
+      loadingCatalog = true;
+      controller = new AbortController();
+      const timeout = window.setTimeout(() => controller?.abort(), 12000);
       try {
         const { url, supabaseKey } = getSupabasePublicEnv();
         const response = await fetch(
@@ -71,24 +76,27 @@ export default function ShopPage() {
         const data = (await response.json()) as PublicProduct[];
         if (!active) return;
         setProducts(data);
-        setLoading(false);
+        setError("");
       } catch {
         if (active) {
-          setError(
-            controller.signal.aborted
+          setError((current) => current || (
+            controller?.signal.aborted
               ? "Matagal ang connection. Pakisubukan i-refresh ang shop po."
-              : "Hindi ma-load ang shop ngayon. Pakisubukan ulit po.",
-          );
-          setLoading(false);
+              : "Hindi ma-load ang shop ngayon. Pakisubukan ulit po."
+          ));
         }
       } finally {
         window.clearTimeout(timeout);
+        loadingCatalog = false;
+        if (active) setLoading(false);
       }
-    })();
+    };
+    void loadCatalog();
+    const refreshTimer = window.setInterval(() => void loadCatalog(), 15000);
     return () => {
       active = false;
-      controller.abort();
-      window.clearTimeout(timeout);
+      if (controller) controller.abort();
+      window.clearInterval(refreshTimer);
     };
   }, []);
 
@@ -282,6 +290,9 @@ export default function ShopPage() {
                                 ? "Low stock"
                                 : "Available"}
                           </small>
+                          {item.reserved_stock > 0 && (
+                            <small className="shop-reserved">Reserved qty: {item.reserved_stock}</small>
+                          )}
                         </span>
                       ))}
                     </div>

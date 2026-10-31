@@ -12,7 +12,7 @@ export default async function CatalogPage({
     supabase
       .from("products")
       .select(
-        "*, variants(id,size,stock), promos(label,kind,min_qty,value,starts_at,ends_at,active)",
+        "*, variants(id,size,stock,reserved_stock), promos(label,kind,min_qty,value,starts_at,ends_at,active)",
       )
       .order("created_at", { ascending: false }),
     supabase

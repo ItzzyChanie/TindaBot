@@ -84,9 +84,10 @@ export function OrdersManager() {
   async function setStatus(order: Order, status: Order["status"]) {
     setSavingId(order.id);
     setError("");
-    const { error: updateError } = await createSupabaseBrowserClient()
-      .from("orders").update({ status }).eq("id", order.id);
+    const { data: statusUpdated, error: updateError } = await createSupabaseBrowserClient()
+      .rpc("set_order_status", { p_order_id: order.id, p_status: status });
     if (updateError) setError(updateError.message);
+    else if (statusUpdated !== true) setError("Could not update this order status.");
     else setOrders((current) => current.map((item) => item.id === order.id ? { ...item, status } : item));
     setSavingId(null);
   }

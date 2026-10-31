@@ -1,7 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { labelAutoReply, runIncomingBrain, type BrainPending, type BrainProduct } from "./brain.ts";
 import { quote, type QuotePromo } from "./quote.ts";
-import { customerDetailsPrompt, isOrderAcknowledgment, orderDetailFields, parseOrderDetails, validCustomerEmail, validCustomerMobile, type OrderCustomerDetails } from "./order-customer-details.ts";
+import { customerDetailsPrompt, isCancellationRequest, isOrderAcknowledgment, isPaymentRequest, orderDetailFields, parseOrderDetails, validCustomerEmail, validCustomerMobile, type OrderCustomerDetails } from "./order-customer-details.ts";
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -218,6 +218,42 @@ export async function handleIncoming(
   const settings = settingsRow ?? { shipping_rates: {}, payment_instructions: "", policies: "", size_chart_url: null, greeting_text: "", shipping_text: "", faq_answers: {} };
   const currentPending = object(conversation.pending);
   const detailState = object(currentPending.order_customer_details);
+  if (isCancellationRequest(text) &&
+    (typeof detailState.order_id === "number" || currentPending.order_followup === "done")) {
+    let orderId = typeof detailState.order_id === "number" ? detailState.order_id : Number(currentPending.order_id);
+    if (!Number.isFinite(orderId)) {
+      const { data: latestOrder, error: latestOrderError } = await supabase.from("orders")
+        .select("id").eq("customer_id", customer.id).order("created_at", { ascending: false }).limit(1).maybeSingle();
+      if (latestOrderError) throw latestOrderError;
+      orderId = Number(latestOrder?.id ?? 0);
+    }
+    const options = object(settings.bot_options);
+    const pageName = typeof options.facebook_page_name === "string" ? options.facebook_page_name.trim() : "";
+    const pageUrl = typeof options.facebook_page_url === "string" && /^https:\/\//i.test(options.facebook_page_url) ? options.facebook_page_url.trim() : "";
+    const contact = pageUrl ? " Maaari po kayong mag-message sa Facebook page na " + (pageName || "shop page") + ": " + pageUrl + "." : " Mag-reply po sa seller dito sa chat.";
+    const cancellationReply = "Naka-confirm na po ang order #" + orderId + ", kaya hindi na ito makakansela ng bot. Para matulungan kayo ng seller, pakihintay po ang reply niya." + contact;
+    const reply = aiMode === "auto" ? labelAutoReply(cancellationReply, aiMode) : null;
+    return { conversationId, reply, draft: aiMode === "suggest" ? cancellationReply : null };
+  }
+  if (typeof detailState.order_id === "number" && isPaymentRequest(text)) {
+    const options = object(settings.bot_options);
+    const pageName = typeof options.facebook_page_name === "string" ? options.facebook_page_name.trim() : "";
+    const pageUrl = typeof options.facebook_page_url === "string" && /^https:\/\//i.test(options.facebook_page_url) ? options.facebook_page_url.trim() : "";
+    const directMessage = pageUrl
+      ? " Pwede rin po kayong mag-message sa Facebook page na " + (pageName || "shop page") + ": " + pageUrl + " at ipakita ang order #" + detailState.order_id + "."
+      : "";
+    const paymentReply = "No po muna sa bayad o downpayment. Naka-lista at naka-reserve na po ang order #" + detailState.order_id +
+      ". Kalma lang po at hintayin ang real seller para maibigay ang payment method/instructions. Magcha-chat po siya rito sa lalong madaling panahon." + directMessage;
+    const reply = aiMode === "auto" ? labelAutoReply(paymentReply, aiMode) : null;
+    return { conversationId, reply, draft: aiMode === "suggest" ? paymentReply : null };
+  }
+  if (typeof detailState.order_id === "number" && isOrderAcknowledgment(text)) {
+    const savedDetails = object(detailState.values);
+    const missing = orderDetailFields.filter(([key]) => !String(savedDetails[key] ?? "").trim()).map(([key]) => key);
+    const prompt = customerDetailsPrompt(detailState.order_id, missing);
+    const reply = aiMode === "auto" ? labelAutoReply(prompt, aiMode) : null;
+    return { conversationId, reply, draft: aiMode === "suggest" ? prompt : null };
+  }
   if (typeof detailState.order_id === "number") {
     const details = { ...object(detailState.values) } as OrderCustomerDetails;
     const parsedInput = parseOrderDetails(text);
@@ -263,7 +299,7 @@ export async function handleIncoming(
     }).eq("id", detailState.order_id);
     if (orderDetailsError) throw orderDetailsError;
     const { error: conversationUpdateError } = await supabase.from("conversations")
-      .update({ pending: { order_followup: "done" }, status: "needs_seller" }).eq("id", conversationId);
+      .update({ pending: { order_followup: "done", order_id: detailState.order_id }, status: "needs_seller" }).eq("id", conversationId);
     if (conversationUpdateError) throw conversationUpdateError;
     const options = object(settings.bot_options);
     const pageName = typeof options.facebook_page_name === "string" ? options.facebook_page_name.trim() : "";
@@ -273,7 +309,7 @@ export async function handleIncoming(
         (pageName || "shop page") + " (" + pageUrl + "). Ipakita lang po ang order #" + detailState.order_id + " para ma-track kayo ni seller."
       : "";
     const completion = "Salamat po! Kumpleto na ang details ng order #" + detailState.order_id +
-      ". Pa wait na lang po, magcha-chat dito si seller sa lalong madaling panahon para maibigay ang payment method/instructions. Ang order ninyo ay nailista na." +
+      ". Kalma lang po, naka-lista at naka-reserve na ang item para sa inyo. Pa wait na lang po, magcha-chat dito si seller sa lalong madaling panahon para maibigay ang payment method/instructions." +
       directMessage;
     const reply = aiMode === "auto" ? labelAutoReply(completion, aiMode) : null;
     return { conversationId, reply, draft: aiMode === "suggest" ? completion : null };
@@ -416,7 +452,7 @@ export async function handleIncoming(
                 throw error;
               } else {
                 reply = "Confirmed po, order #" + orderId + " for " + quantity + " " + product.name +
-                  " (" + variant.size + "). Total po ay " + formatPeso(total) + ".\n\n" +
+                  " (" + variant.size + "). Naka-lista at naka-reserve na po ang item para sa inyo. Total po ay " + formatPeso(total) + ".\n\n" +
                   customerDetailsPrompt(Number(orderId), orderDetailFields.map(([key]) => key));
                 pending = { order_customer_details: { order_id: Number(orderId), values: {} } };
               }

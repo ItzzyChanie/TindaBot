@@ -633,24 +633,48 @@ describe("grounded incoming conversation brain", () => {
     expect(result.reply).toContain("SELLER");
   });
 
-  it("lists only payment methods enabled in settings", async () => {
+  it("does not reveal payment methods before the seller responds", async () => {
     const result = await runIncomingBrain({
       ...baseInput,
       message: "What payment methods?",
-      settings: { ...baseInput.settings, bot_options: { payment_methods: ["GCash", "Cash on Delivery"] } },
+      settings: {
+        ...baseInput.settings,
+        payment_instructions: "SECRET PAYMENT INSTRUCTIONS",
+        bot_options: { payment_methods: ["GCash", "Cash on Delivery"] },
+      },
     }, ai(understanding({ intent: "payment", product_query: null, size: null, quantity: null, quantities_mentioned: [] })));
-    expect(result.reply).toContain("GCash, Cash on Delivery");
-    expect(result.reply).not.toContain("Maya");
+    expect(result.reply).toContain("No po muna");
+    expect(result.reply).toContain("Hintayin muna ang real seller");
+    expect(result.reply).not.toContain("GCash");
+    expect(result.reply).not.toContain("SECRET PAYMENT INSTRUCTIONS");
   });
 
-  it("does not claim an unchecked payment method is accepted", async () => {
+  it("blocks an English down-payment request and reassures a buyer with a reserved order", async () => {
     const result = await runIncomingBrain({
       ...baseInput,
-      message: "COD pwede?",
-      settings: { ...baseInput.settings, bot_options: { payment_methods: ["GCash"] } },
+      message: "Can I make a down payment now?",
+      latestOrder: { id: 1042, total: 174.99, shipping: 75, status: "awaiting_payment", created_at: "2026-10-29T00:00:00Z" },
+      settings: { ...baseInput.settings, bot_options: { facebook_page_name: "Jeff's Clothing", facebook_page_url: "https://facebook.com/example" } },
     }, ai(understanding({ intent: "payment", product_query: null, size: null, quantity: null, quantities_mentioned: [] })));
-    expect(result.reply).toContain("wala pa pong Cash on Delivery");
-    expect(result.reply).toContain("GCash");
+    expect(result.reply).toContain("No po muna");
+    expect(result.reply).toContain("naka-reserve na po ang order");
+    expect(result.reply).toContain("https://facebook.com/example");
+    expect(result.reply).not.toContain("Payment instructions");
+  });
+
+  it("cancels an unconfirmed order proposal without placing it", async () => {
+    const proposal = await runIncomingBrain({
+      ...baseInput,
+      message: "I want to order Isla blouse size S, 2 pcs",
+    }, ai(understanding({ intent: "order_confirm", quantity: 2, quantities_mentioned: [2] })));
+    const cancelled = await runIncomingBrain({
+      ...baseInput,
+      message: "Ayy ipa-cancel ko nalang po pala yung order ko",
+      pending: proposal.pending,
+    });
+    expect(cancelled.needsSeller).toBe(false);
+    expect(cancelled.reply).toContain("kinansela ko ang pending order");
+    expect(cancelled.pending.order).toBeUndefined();
   });
 
   it("uses the courier selections from settings", async () => {
@@ -882,6 +906,7 @@ describe("grounded incoming conversation brain", () => {
     });
     expect(area.reply).toContain("1,165.00");
     expect(area.reply).toContain("I-confirm po ba");
+    expect(area.reply).toContain("hindi na ito makakansela");
     expect(area.pending.order).toMatchObject({ size: "L", quantity: 2, subtotal: 1090, shipping: 75 });
   });
 
