@@ -9,6 +9,7 @@ type WidgetMessage = {
   body: string;
   image_urls?: string[];
   created_at: string;
+  pending?: boolean;
 };
 type WidgetResponse = { token?: string; messages?: WidgetMessage[]; cursor?: string | null; error?: string };
 type ChatWidgetProps = {
@@ -69,7 +70,7 @@ export function ChatWidget({ productId: initialProductId, sessionId: initialSess
   const cursorRef = useRef<string | null>(null);
   const seenRef = useRef(new Set<string>());
   const requestBusyRef = useRef(false);
-  const queuedMessagesRef = useRef<string[]>([]);
+  const queuedMessagesRef = useRef<{ id: string; text: string }[]>([]);
   const productIdRef = useRef<string | null>(initialProductId ?? null);
 
   const getToken = useCallback((): Promise<string> => {
@@ -88,25 +89,47 @@ export function ChatWidget({ productId: initialProductId, sessionId: initialSess
 
   const requestMessages = useCallback(async (sessionToken: string, text?: string) => {
     if (text) {
-      queuedMessagesRef.current.push(text);
+      const pendingMessage = {
+        id: `pending-${crypto.randomUUID()}`,
+        text,
+      };
+      queuedMessagesRef.current.push(pendingMessage);
+      setMessages((current) => [...current, {
+        id: pendingMessage.id,
+        sender: "customer",
+        body: text,
+        created_at: new Date().toISOString(),
+        pending: true,
+      }]);
       setSending(true);
     }
     if (requestBusyRef.current) return;
     requestBusyRef.current = true;
+    const nextMessage = queuedMessagesRef.current.shift();
     try {
-      const nextText = queuedMessagesRef.current.shift();
       const result = await widgetRequest("widget-message", {
         token: sessionToken,
         product_id: productIdRef.current,
-        ...(nextText ? { text: nextText } : {}),
+        ...(nextMessage ? { text: nextMessage.text } : {}),
         cursor: cursorRef.current,
       });
       const fresh = (result.messages ?? []).filter((message) => !seenRef.current.has(message.id));
       for (const message of fresh) seenRef.current.add(message.id);
-      if (fresh.length) setMessages((current) => [...current, ...fresh]);
+      if (fresh.length) setMessages((current) => {
+        const next = [...current];
+        for (const message of fresh) {
+          const pendingIndex = message.sender === "customer"
+            ? next.findIndex((item) => item.pending && item.body === message.body)
+            : -1;
+          if (pendingIndex >= 0) next.splice(pendingIndex, 1);
+          if (!next.some((item) => item.id === message.id)) next.push(message);
+        }
+        return next.sort((a, b) => a.created_at.localeCompare(b.created_at));
+      });
       if (result.cursor) cursorRef.current = result.cursor;
       setError("");
     } catch (cause) {
+      if (nextMessage) setMessages((current) => current.filter((item) => item.id !== nextMessage.id));
       const message = cause instanceof Error ? cause.message : "Chat is unavailable. Please try again.";
       if (/session expired|invalid chat session/i.test(message)) {
         localStorage.removeItem(storageKeyRef.current);
@@ -202,7 +225,7 @@ export function ChatWidget({ productId: initialProductId, sessionId: initialSess
               // eslint-disable-next-line @next/next/no-img-element -- Seller-uploaded size charts are served from Supabase Storage.
               <img className="widget-message-image" src={url} alt="Shop size chart" key={url} loading="lazy" />
             ))}
-            <time>{new Intl.DateTimeFormat("en-PH", { hour: "numeric", minute: "2-digit" }).format(new Date(message.created_at))}</time>
+            <time>{message.pending ? "Sending…" : new Intl.DateTimeFormat("en-PH", { hour: "numeric", minute: "2-digit" }).format(new Date(message.created_at))}</time>
           </article>
         ))}
         {sending && <p className="widget-typing" role="status">Sending your message…</p>}

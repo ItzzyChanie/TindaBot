@@ -30,6 +30,7 @@ type Message = {
   body: string;
   image_urls?: string[];
   created_at: string;
+  pending?: boolean;
 };
 type CustomerOrder = {
   id: number;
@@ -213,7 +214,7 @@ export function InboxWorkspace() {
           if (conversationId !== selectedConversationRef.current || typeof record.body !== "string") return;
           const message = record as unknown as Message;
           setMessages((current) => [
-            ...current.filter((item) => item.id !== message.id), message,
+            ...current.filter((item) => item.id !== message.id && !(item.pending && item.sender === message.sender && item.body === message.body)), message,
           ].sort((a, b) => a.created_at.localeCompare(b.created_at)));
           setPreviews((current) => new Map(current).set(conversationId, message));
         },
@@ -383,6 +384,15 @@ export function InboxWorkspace() {
 
     setSending(true);
     setError("");
+    const pendingId = `pending-${crypto.randomUUID()}`;
+    setMessages((current) => [...current, {
+      id: pendingId,
+      conversation_id: selected.id,
+      sender: "seller",
+      body: text,
+      created_at: new Date().toISOString(),
+      pending: true,
+    }]);
     try {
       const supabase = createSupabaseBrowserClient();
       const { error: replyError } = await supabase.functions.invoke(
@@ -394,6 +404,7 @@ export function InboxWorkspace() {
       if (replyError) throw replyError;
       setDraft("");
     } catch (cause) {
+      setMessages((current) => current.filter((message) => message.id !== pendingId));
       setError(
         cause instanceof Error
           ? cause.message
@@ -708,7 +719,7 @@ export function InboxWorkspace() {
                         // eslint-disable-next-line @next/next/no-img-element -- Seller-uploaded chart images are served from Supabase Storage.
                         <img className="inbox-message-image" src={url} alt="Size chart" key={url} loading="lazy" />
                       ))}
-                      <time>{formatTime(message.created_at)}</time>
+                      <time>{message.pending ? "Sending…" : formatTime(message.created_at)}</time>
                     </div>
                   </article>
                 ))

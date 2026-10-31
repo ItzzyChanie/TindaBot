@@ -229,6 +229,44 @@ export function OverviewLive({
             ))}
           </div>
         </article>
+        <section className="dashboard-shortcuts" aria-label="Shop shortcuts">
+          <Link className="shortcut-card" href="/catalog">
+            <span className="shortcut-icon catalog-shortcut" aria-hidden="true">
+              <NavShortcutIcon kind="catalog" />
+            </span>
+            <span>
+              <strong>Manage catalog</strong>
+              <small>Products, sizes, and stock</small>
+            </span>
+            <span className="shortcut-arrow" aria-hidden="true">
+              ↗
+            </span>
+          </Link>
+          <Link className="shortcut-card" href="/orders">
+            <span className="shortcut-icon orders-shortcut" aria-hidden="true">
+              <NavShortcutIcon kind="orders" />
+            </span>
+            <span>
+              <strong>Review orders</strong>
+              <small>Payment and delivery status</small>
+            </span>
+            <span className="shortcut-arrow" aria-hidden="true">
+              ↗
+            </span>
+          </Link>
+          <Link className="shortcut-card" href="/storefront">
+            <span className="shortcut-icon store-shortcut" aria-hidden="true">
+              <NavShortcutIcon kind="store" />
+            </span>
+            <span>
+              <strong>Open storefront</strong>
+              <small>Preview the live customer shop</small>
+            </span>
+            <span className="shortcut-arrow" aria-hidden="true">
+              ↗
+            </span>
+          </Link>
+        </section>
         <article className="panel activity-panel">
           <div className="panel-heading">
             <div>
@@ -264,44 +302,6 @@ export function OverviewLive({
             </p>
           )}
         </article>
-      </section>
-      <section className="dashboard-shortcuts" aria-label="Shop shortcuts">
-        <Link className="shortcut-card" href="/catalog">
-          <span className="shortcut-icon catalog-shortcut" aria-hidden="true">
-            <NavShortcutIcon kind="catalog" />
-          </span>
-          <span>
-            <strong>Manage catalog</strong>
-            <small>Products, sizes, and stock</small>
-          </span>
-          <span className="shortcut-arrow" aria-hidden="true">
-            ↗
-          </span>
-        </Link>
-        <Link className="shortcut-card" href="/orders">
-          <span className="shortcut-icon orders-shortcut" aria-hidden="true">
-            <NavShortcutIcon kind="orders" />
-          </span>
-          <span>
-            <strong>Review orders</strong>
-            <small>Payment and delivery status</small>
-          </span>
-          <span className="shortcut-arrow" aria-hidden="true">
-            ↗
-          </span>
-        </Link>
-        <Link className="shortcut-card" href="/storefront">
-          <span className="shortcut-icon store-shortcut" aria-hidden="true">
-            <NavShortcutIcon kind="store" />
-          </span>
-          <span>
-            <strong>Open storefront</strong>
-            <small>Preview the live customer shop</small>
-          </span>
-          <span className="shortcut-arrow" aria-hidden="true">
-            ↗
-          </span>
-        </Link>
       </section>
     </div>
   );
