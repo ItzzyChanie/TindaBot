@@ -1979,6 +1979,15 @@ h2 {
   overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
+.message-delivery-status {
+  display: block;
+  margin: 0 0 6px;
+  color: var(--muted);
+  font-size: 10px;
+}
+.message-delivery-status.failed {
+  color: #b42318;
+}
 .inbox-message-image {
   display: block;
   width: auto;

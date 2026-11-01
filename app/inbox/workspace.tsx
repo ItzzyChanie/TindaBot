@@ -31,6 +31,8 @@ type Message = {
   sender: "customer" | "ai" | "seller" | "system";
   body: string;
   image_urls?: string[];
+  delivery_status?: "pending" | "sent" | "failed";
+  failure_reason?: string | null;
   created_at: string;
   pending?: boolean;
 };
@@ -281,7 +283,7 @@ export function InboxWorkspace() {
       const supabase = createSupabaseBrowserClient();
       const [messageResult, orderResult] = await Promise.all([
         supabase.from("messages")
-          .select("id, conversation_id, sender, body, image_urls, created_at")
+          .select("id, conversation_id, sender, body, image_urls, created_at, delivery_status, failure_reason")
           .eq("conversation_id", selectedId)
           .order("created_at", { ascending: false })
           .limit(MESSAGES_PER_PAGE),
@@ -312,7 +314,7 @@ export function InboxWorkspace() {
     setLoadingOlder(true);
     const { data, error: olderError } = await createSupabaseBrowserClient()
       .from("messages")
-      .select("id, conversation_id, sender, body, image_urls, created_at")
+      .select("id, conversation_id, sender, body, image_urls, created_at, delivery_status, failure_reason")
       .eq("conversation_id", selectedId)
       .lt("created_at", oldest.created_at)
       .order("created_at", { ascending: false })
@@ -751,6 +753,8 @@ export function InboxWorkspace() {
                               : "System"}
                       </span>
                       <p>{message.body}</p>
+                      {message.delivery_status === "pending" && <small className="message-delivery-status">Sending to channel…</small>}
+                      {message.delivery_status === "failed" && <small className="message-delivery-status failed">Not delivered{message.failure_reason === "outside_window" ? ": reply window closed" : ": check Edge Function logs"}</small>}
                       {message.image_urls?.filter((url) => /^https:\/\//i.test(url)).map((url) => (
                         // eslint-disable-next-line @next/next/no-img-element -- Seller-uploaded chart images are served from Supabase Storage.
                         <img className="inbox-message-image" src={url} alt="Size chart" key={url} loading="lazy" />

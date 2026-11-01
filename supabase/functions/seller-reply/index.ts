@@ -110,6 +110,7 @@ Deno.serve(async (request: Request) => {
     conversation_id: conversation.id,
     sender: sendDraft ? "ai" : "seller",
     body: text,
+    delivery_status: customer.channel === "web" ? "sent" : "pending",
   }).select("id").single();
   if (messageError)
     return Response.json(
@@ -150,6 +151,9 @@ Deno.serve(async (request: Request) => {
       );
     }
     await sendToChannel(channel, customer.external_id, text);
+    const { error: deliveredError } = await supabase.from("messages")
+      .update({ delivery_status: "sent", failure_reason: null }).eq("id", savedMessage.id);
+    if (deliveredError) throw deliveredError;
   } catch {
     await supabase.from("messages").update({ delivery_status: "failed", failure_reason: "delivery_failed" }).eq("id", savedMessage.id);
     return Response.json(

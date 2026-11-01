@@ -541,11 +541,13 @@ export async function saveAssistantReply(
   conversationId: string,
   body: string,
   imageUrls: string[] = [],
+  deliveryStatus: "sent" | "pending" = "sent",
 ) {
   const { data: message, error } = await supabase.from("messages").insert({
     conversation_id: conversationId,
     sender: "ai",
     body,
+    delivery_status: deliveryStatus,
     image_urls: imageUrls.filter((url) => /^https:\/\//i.test(url)).slice(0, 5),
   }).select("id").single();
   if (error) throw error;

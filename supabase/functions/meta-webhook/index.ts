@@ -38,7 +38,10 @@ function logMetaEvent(
 async function getCustomerName(channel: "messenger" | "instagram", senderId: string): Promise<string | undefined> {
   const { data: customer, error } = await supabase.from("customers")
     .select("name").eq("channel", channel).eq("external_id", senderId).maybeSingle();
-  if (!error && typeof customer?.name === "string" && customer.name.trim()) return customer.name;
+  const savedName = typeof customer?.name === "string" ? customer.name.trim() : "";
+  const genericName = !savedName || savedName.toLowerCase() === "instagram customer" ||
+    savedName.toLowerCase() === "instagram user" || savedName === senderId;
+  if (!error && !genericName) return savedName;
 
   const token = channel === "messenger"
     ? Deno.env.get("MESSENGER_PAGE_TOKEN")
@@ -50,10 +53,17 @@ async function getCustomerName(channel: "messenger" | "instagram", senderId: str
     const response = await fetch(`https://${graphHost}/v26.0/${encodeURIComponent(senderId)}?fields=${fields}`, {
       headers: { authorization: `Bearer ${token}` },
     });
-    if (!response.ok) return undefined;
+    if (!response.ok) {
+      console.info("Meta customer profile lookup failed", { channel, httpStatus: response.status });
+      return undefined;
+    }
     const profile = await response.json() as Record<string, unknown>;
     return metaCustomerDisplayName(channel, profile);
-  } catch {
+  } catch (error) {
+    console.info("Meta customer profile lookup failed", {
+      channel,
+      failure: error instanceof Error ? error.name : "unknown_error",
+    });
     return undefined;
   }
 }
@@ -108,7 +118,7 @@ async function processEvents(events: MetaInboundMessage[]): Promise<void> {
       const imageUrls = incoming.imageUrls?.length
         ? incoming.imageUrls.slice(0, 5)
         : incoming.imageUrl ? [incoming.imageUrl] : [];
-      replyId = await saveAssistantReply(incoming.conversationId, incoming.reply, imageUrls);
+      replyId = await saveAssistantReply(incoming.conversationId, incoming.reply, imageUrls, "pending");
       const { data: activity, error: activityError } = await supabase.from("conversations")
         .select("last_customer_message_at").eq("id", incoming.conversationId).single();
       if (activityError) throw activityError;
@@ -121,6 +131,9 @@ async function processEvents(events: MetaInboundMessage[]): Promise<void> {
       }
 
       await sendToChannel(event.channel, senderId, incoming.reply, { imageUrls });
+      const { error: deliveredError } = await supabase.from("messages")
+        .update({ delivery_status: "sent", failure_reason: null }).eq("id", replyId);
+      if (deliveredError) throw deliveredError;
       logMetaEvent(event, true, null);
     } catch (error) {
       if (replyId) {

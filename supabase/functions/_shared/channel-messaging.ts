@@ -54,7 +54,27 @@ export async function sendToChannel(
       console.info("Channel send result", { channel, requestKind, httpStatus: null, transportError: true });
       throw new Error(`${channel} message delivery failed`);
     }
-    console.info("Channel send result", { channel, requestKind, httpStatus: response.status, success: response.ok });
+    let responseData: Record<string, unknown> = {};
+    try {
+      const parsed = await response.clone().json();
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) responseData = parsed as Record<string, unknown>;
+    } catch {
+      // Some successful send responses have no JSON body.
+    }
+    const apiError = responseData.error && typeof responseData.error === "object"
+      ? responseData.error as Record<string, unknown>
+      : {};
+    console.info("Channel send result", {
+      channel,
+      requestKind,
+      httpStatus: response.status,
+      success: response.ok,
+      ...(channel !== "telegram" && !response.ok ? {
+        metaErrorCode: typeof apiError.code === "number" ? apiError.code : null,
+        metaErrorSubcode: typeof apiError.error_subcode === "number" ? apiError.error_subcode : null,
+        metaErrorType: typeof apiError.type === "string" ? apiError.type : null,
+      } : {}),
+    });
     if (!response.ok) throw new Error(`${channel} message delivery failed`);
   };
   await send(url, body, "text");
