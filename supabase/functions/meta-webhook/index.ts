@@ -48,7 +48,10 @@ async function processPayload(payload: Record<string, unknown>): Promise<void> {
     const name = await getCustomerName(channel, senderId);
     const incoming = await handleIncoming(channel, senderId, text, { externalMessageId: messageId, name });
     if (!incoming.reply || incoming.duplicate) continue;
-    const replyId = await saveAssistantReply(incoming.conversationId, incoming.reply);
+    const imageUrls = incoming.imageUrls?.length
+      ? incoming.imageUrls.slice(0, 5)
+      : incoming.imageUrl ? [incoming.imageUrl] : [];
+    const replyId = await saveAssistantReply(incoming.conversationId, incoming.reply, imageUrls);
     try {
       const { data: activity, error: activityError } = await supabase.from("conversations")
         .select("last_customer_message_at").eq("id", incoming.conversationId).single();
@@ -58,7 +61,7 @@ async function processPayload(payload: Record<string, unknown>): Promise<void> {
           .eq("id", replyId);
         continue;
       }
-      await sendToChannel(channel, senderId, incoming.reply);
+      await sendToChannel(channel, senderId, incoming.reply, { imageUrls });
     } catch (error) {
       await supabase.from("messages").update({ delivery_status: "failed", failure_reason: "delivery_failed" }).eq("id", replyId);
       console.error("Meta reply delivery failed", { channel, error: error instanceof Error ? error.message : "unknown" });

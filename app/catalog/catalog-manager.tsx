@@ -43,15 +43,17 @@ async function compressImage(file: File): Promise<File> {
   canvas.height = Math.round(image.height * scale);
   const context = canvas.getContext("2d");
   if (!context) throw new Error("Could not prepare this photo.");
+  context.fillStyle = "#fff";
+  context.fillRect(0, 0, canvas.width, canvas.height);
   context.drawImage(image, 0, 0, canvas.width, canvas.height);
   image.close();
   for (const quality of [0.82, 0.68, 0.52, 0.38]) {
     const blob = await new Promise<Blob | null>((resolve) =>
-      canvas.toBlob(resolve, "image/webp", quality),
+      canvas.toBlob(resolve, "image/jpeg", quality),
     );
     if (blob && blob.size < 300_000)
-      return new File([blob], `${crypto.randomUUID()}.webp`, {
-        type: "image/webp",
+      return new File([blob], `${crypto.randomUUID()}.jpg`, {
+        type: "image/jpeg",
       });
   }
   throw new Error("Choose a smaller photo. Photos must compress under 300 KB.");
@@ -200,10 +202,10 @@ export function CatalogManager({
         : null;
       if (photo) {
         const compressed = await compressImage(photo);
-        const path = `${crypto.randomUUID()}.webp`;
+        const path = `${crypto.randomUUID()}.jpg`;
         const { error: uploadError } = await supabase.storage
           .from("product-images")
-          .upload(path, compressed, { contentType: "image/webp" });
+          .upload(path, compressed, { contentType: "image/jpeg" });
         if (uploadError) throw uploadError;
         imageUrl = supabase.storage.from("product-images").getPublicUrl(path)
           .data.publicUrl;
@@ -214,10 +216,10 @@ export function CatalogManager({
       const uploadedImages: string[] = [];
       for (const file of extraPhotos) {
         const compressed = await compressImage(file);
-        const path = `${crypto.randomUUID()}.webp`;
+        const path = `${crypto.randomUUID()}.jpg`;
         const { error: uploadError } = await supabase.storage
           .from("product-images")
-          .upload(path, compressed, { contentType: "image/webp" });
+          .upload(path, compressed, { contentType: "image/jpeg" });
         if (uploadError) throw uploadError;
         uploadedImages.push(supabase.storage.from("product-images").getPublicUrl(path).data.publicUrl);
       }

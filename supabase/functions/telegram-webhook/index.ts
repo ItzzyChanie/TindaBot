@@ -139,7 +139,7 @@ async function processTelegramUpdate(
           }
         }
       } else {
-        await sendToChannel("telegram", String(chatId), incoming.reply, replyMarkup);
+        await sendToChannel("telegram", String(chatId), incoming.reply, { replyMarkup });
       }
     }
     succeeded = true;

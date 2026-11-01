@@ -38,14 +38,16 @@ async function compressSizeChart(file: File): Promise<File> {
   canvas.height = Math.round(image.height * scale);
   const context = canvas.getContext("2d");
   if (!context) throw new Error("Could not prepare the size chart image.");
+  context.fillStyle = "#fff";
+  context.fillRect(0, 0, canvas.width, canvas.height);
   context.drawImage(image, 0, 0, canvas.width, canvas.height);
   image.close();
   for (const quality of [0.86, 0.72, 0.58, 0.44, 0.3]) {
     const blob = await new Promise<Blob | null>((resolve) =>
-      canvas.toBlob(resolve, "image/webp", quality),
+      canvas.toBlob(resolve, "image/jpeg", quality),
     );
     if (blob && blob.size <= 300_000) {
-      return new File([blob], "size-chart.webp", { type: "image/webp" });
+      return new File([blob], "size-chart.jpg", { type: "image/jpeg" });
     }
   }
   throw new Error(
@@ -121,10 +123,10 @@ export function SettingsForm({
       let uploadedPath: string | null = null;
       if (sizeChartFile) {
         const compressed = await compressSizeChart(sizeChartFile);
-        uploadedPath = `size-charts/${SHOP_ID}/${crypto.randomUUID()}.webp`;
+        uploadedPath = `size-charts/${SHOP_ID}/${crypto.randomUUID()}.jpg`;
         const { error: uploadError } = await supabase.storage
           .from("product-images")
-          .upload(uploadedPath, compressed, { contentType: "image/webp" });
+          .upload(uploadedPath, compressed, { contentType: "image/jpeg" });
         if (uploadError) throw uploadError;
         sizeChartUrl = supabase.storage
           .from("product-images")

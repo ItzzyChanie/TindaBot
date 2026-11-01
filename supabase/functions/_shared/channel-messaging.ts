@@ -1,41 +1,68 @@
 export type MessageChannel = "telegram" | "messenger" | "instagram";
+export type ChannelSendOptions = {
+  replyMarkup?: Record<string, unknown>;
+  imageUrls?: string[];
+};
+
+function envValue(name: string): string {
+  const runtime = globalThis as typeof globalThis & { Deno?: { env: { get(key: string): string | undefined } } };
+  return runtime.Deno?.env.get(name) ?? "";
+}
 
 export async function sendToChannel(
   channel: MessageChannel,
   recipientId: string,
   text: string,
-  replyMarkup?: Record<string, unknown>,
+  options: ChannelSendOptions = {},
 ): Promise<void> {
   let url: string;
   let body: Record<string, unknown>;
   let token: string;
 
   if (channel === "telegram") {
-    token = Deno.env.get("TELEGRAM_BOT_TOKEN") ?? "";
+    token = envValue("TELEGRAM_BOT_TOKEN");
     url = `https://api.telegram.org/bot${token}/sendMessage`;
-    body = { chat_id: recipientId, text, ...(replyMarkup ? { reply_markup: replyMarkup } : {}) };
+    body = { chat_id: recipientId, text, ...(options.replyMarkup ? { reply_markup: options.replyMarkup } : {}) };
   } else if (channel === "messenger") {
-    token = Deno.env.get("MESSENGER_PAGE_TOKEN") ?? "";
+    token = envValue("MESSENGER_PAGE_TOKEN");
     url = "https://graph.facebook.com/v26.0/me/messages";
     body = { recipient: { id: recipientId }, message: { text } };
   } else {
-    token = Deno.env.get("INSTAGRAM_ACCESS_TOKEN") ?? "";
-    const accountId = Deno.env.get("INSTAGRAM_ACCOUNT_ID") ?? "";
+    token = envValue("INSTAGRAM_ACCESS_TOKEN");
+    const accountId = envValue("INSTAGRAM_ACCOUNT_ID");
     if (!accountId) throw new Error("Instagram messaging is not configured");
     url = `https://graph.instagram.com/v26.0/${encodeURIComponent(accountId)}/messages`;
     body = { recipient: { id: recipientId }, message: { text } };
   }
 
   if (!token) throw new Error(`${channel} messaging is not configured`);
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      ...(channel === "telegram" ? {} : { authorization: `Bearer ${token}` }),
-    },
-    body: JSON.stringify(body),
-  });
-  if (!response.ok) throw new Error(`${channel} message delivery failed`);
+  const headers = {
+    "content-type": "application/json",
+    ...(channel === "telegram" ? {} : { authorization: `Bearer ${token}` }),
+  };
+  const send = async (messageBody: Record<string, unknown>) => {
+    const response = await fetch(url, { method: "POST", headers, body: JSON.stringify(messageBody) });
+    if (!response.ok) throw new Error(`${channel} message delivery failed`);
+  };
+  await send(body);
+
+  const imageUrls = (options.imageUrls ?? []).filter((imageUrl) => /^https:\/\//i.test(imageUrl)).slice(0, 5);
+  for (const imageUrl of imageUrls) {
+    if (channel === "telegram") {
+      const photoUrl = `https://api.telegram.org/bot${token}/sendPhoto`;
+      const response = await fetch(photoUrl, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ chat_id: recipientId, photo: imageUrl }),
+      });
+      if (!response.ok) throw new Error("telegram image delivery failed");
+    } else {
+      await send({
+        recipient: { id: recipientId },
+        message: { attachment: { type: "image", payload: { url: imageUrl } } },
+      });
+    }
+  }
 }
 
 export function isWithinCustomerWindow(lastCustomerMessageAt: string | null, channel: string): boolean {
