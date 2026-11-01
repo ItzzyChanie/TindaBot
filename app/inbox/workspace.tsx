@@ -51,6 +51,10 @@ type CustomerOrder = {
 const CONVERSATIONS_PER_PAGE = 30;
 const MESSAGES_PER_PAGE = 100;
 
+function customerDisplayName(customer: Customer | null | undefined) {
+  return customer?.name || (customer?.channel === "instagram" ? "Instagram customer" : customer?.external_id || "Customer");
+}
+
 function formatTime(value: string) {
   return new Intl.DateTimeFormat("en-PH", {
     hour: "numeric",
@@ -640,15 +644,14 @@ export function InboxWorkspace() {
                   }}
                 >
                   <span className="conversation-avatar">
-                    {(contact?.name ?? contact?.external_id ?? "?")
+                    {customerDisplayName(contact)
                       .slice(0, 1)
                       .toUpperCase()}
                   </span>
                   <span className="conversation-main">
                     <span className="conversation-title">
                       <strong>
-                        {contact?.name ||
-                          contact?.external_id ||
+                        {customerDisplayName(contact) ||
                           conversation.customer_id}
                       </strong>
                       {conversation.status === "needs_seller" && (
@@ -691,12 +694,12 @@ export function InboxWorkspace() {
                 ←
               </button>
               <span className="conversation-avatar">
-                {(customer?.name ?? customer?.external_id ?? "?")
+                {customerDisplayName(customer)
                   .slice(0, 1)
                   .toUpperCase()}
               </span>
               <div className="thread-contact">
-                <strong>{customer?.name || customer?.external_id}</strong>
+                <strong>{customerDisplayName(customer)}</strong>
                 <span>{channelLabel(customer?.channel, channelStatus, channelStatusError)}</span>
               </div>
               <div className="thread-header-actions">
@@ -752,7 +755,7 @@ export function InboxWorkspace() {
                     <div className="message-bubble">
                       <span className="message-sender">
                         {message.sender === "customer"
-                          ? customer?.name || "Customer"
+                          ? customerDisplayName(customer)
                           : message.sender === "ai"
                             ? "TindaBot"
                             : message.sender === "seller"
@@ -859,11 +862,11 @@ export function InboxWorkspace() {
             </div>
             <div className="customer-profile">
               <span className="customer-avatar">
-                {(customer.name ?? customer.external_id)
+                {customerDisplayName(customer)
                   .slice(0, 1)
                   .toUpperCase()}
               </span>
-              <h2>{customer.name || "Customer"}</h2>
+              <h2>{customerDisplayName(customer)}</h2>
               <span className="channel-badge">
                 {channelLabel(customer.channel, channelStatus, channelStatusError)}
               </span>
