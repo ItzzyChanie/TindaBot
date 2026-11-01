@@ -341,6 +341,10 @@ export default function ShopPage() {
         <span>
           Need a person? Open a product chat and choose “Talk to the seller.”
         </span>
+        <nav className="shop-legal-links" aria-label="Privacy links">
+          <Link href="/privacy">Privacy</Link>
+          <Link href="/data-deletion">Data deletion</Link>
+        </nav>
       </footer>
       {chatSession && (
         <>

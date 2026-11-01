@@ -9,6 +9,7 @@ import {
   type FormEvent,
 } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { fetchChannelStatus, type ChannelStatus } from "@/lib/channel-status";
 
 type Customer = { channel: string; external_id: string; name: string | null };
 type Conversation = {
@@ -18,6 +19,7 @@ type Conversation = {
   ai_mode: "auto" | "suggest" | "human";
   pending: { ai_draft?: string; [key: string]: unknown };
   last_message_at: string;
+  last_customer_message_at: string | null;
   seller_read_at: string | null;
   is_hidden: boolean;
   created_at: string;
@@ -60,13 +62,27 @@ function isSimulatedChannel(channel?: string) {
   return channel === "messenger_simulated" || channel === "instagram_simulated";
 }
 
-function channelLabel(channel?: string | null) {
+function channelLabel(channel: string | null | undefined, status: ChannelStatus | null, statusError: boolean) {
   if (channel === "web") return "Web chat";
+  if (channel === "messenger")
+    return `Messenger - ${statusError ? "Status unavailable" : status ? status.messenger ? "Test mode" : "Coming soon" : "Checking"}`;
+  if (channel === "instagram")
+    return `Instagram - ${statusError ? "Status unavailable" : status ? status.instagram ? "Test mode" : "Coming soon" : "Checking"}`;
   if (channel === "messenger_simulated")
     return "Messenger · Coming soon (simulated)";
   if (channel === "instagram_simulated")
     return "Instagram · Coming soon (simulated)";
   return channel ?? "Unknown channel";
+}
+
+function isMetaChannel(channel?: string | null) {
+  return channel === "messenger" || channel === "instagram";
+}
+
+function isWithinReplyWindow(value: string | null | undefined, now: number) {
+  if (!value) return false;
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) && now - timestamp <= 24 * 60 * 60 * 1000;
 }
 
 export function InboxWorkspace() {
@@ -82,6 +98,9 @@ export function InboxWorkspace() {
   const [savingMode, setSavingMode] = useState(false);
   const [error, setError] = useState("");
   const [liveError, setLiveError] = useState("");
+  const [channelStatus, setChannelStatus] = useState<ChannelStatus | null>(null);
+  const [channelStatusError, setChannelStatusError] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
   const [showHidden, setShowHidden] = useState(false);
   const [conversationPage, setConversationPage] = useState(0);
   const [conversationCount, setConversationCount] = useState(0);
@@ -95,7 +114,7 @@ export function InboxWorkspace() {
     const { data, error: queryError, count } = await createSupabaseBrowserClient()
       .from("conversations")
       .select(
-        "id, customer_id, status, ai_mode, pending, last_message_at, seller_read_at, is_hidden, created_at, customers(channel, external_id, name)",
+        "id, customer_id, status, ai_mode, pending, last_message_at, last_customer_message_at, seller_read_at, is_hidden, created_at, customers(channel, external_id, name)",
         { count: "exact" },
       )
       .eq("is_hidden", showHidden)
@@ -140,7 +159,7 @@ export function InboxWorkspace() {
         const { data, error: conversationError, count } = await supabase
           .from("conversations")
           .select(
-            "id, customer_id, status, ai_mode, pending, last_message_at, seller_read_at, is_hidden, created_at, customers(channel, external_id, name)",
+            "id, customer_id, status, ai_mode, pending, last_message_at, last_customer_message_at, seller_read_at, is_hidden, created_at, customers(channel, external_id, name)",
             { count: "exact" },
           )
           .eq("is_hidden", showHidden)
@@ -180,6 +199,12 @@ export function InboxWorkspace() {
   useEffect(() => {
     void loadInbox(true);
   }, [loadInbox]);
+
+  useEffect(() => {
+    void fetchChannelStatus().then(setChannelStatus).catch(() => setChannelStatusError(true));
+    const timer = window.setInterval(() => setNow(Date.now()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();
@@ -372,6 +397,7 @@ export function InboxWorkspace() {
     if (
       !selected ||
       isSimulatedChannel(selected.customers?.channel) ||
+      replyDisabled ||
       !draft.trim() ||
       sending
     )
@@ -419,6 +445,7 @@ export function InboxWorkspace() {
     if (
       !selected?.pending.ai_draft ||
       isSimulatedChannel(selected.customers?.channel) ||
+      replyDisabled ||
       sending
     )
       return;
@@ -522,6 +549,16 @@ export function InboxWorkspace() {
   }
 
   const customer = selected?.customers;
+  const selectedChannel = customer?.channel;
+  const selectedIsMeta = isMetaChannel(selectedChannel);
+  const selectedMetaConfigured = selectedChannel === "messenger"
+    ? channelStatus?.messenger === true
+    : selectedChannel === "instagram"
+      ? channelStatus?.instagram === true
+      : true;
+  const replyWindowOpen = !selectedIsMeta || isWithinReplyWindow(selected?.last_customer_message_at, now);
+  const replyUnavailable = selectedIsMeta && (!selectedMetaConfigured || !replyWindowOpen || channelStatusError);
+  const replyDisabled = isSimulatedChannel(selectedChannel) || replyUnavailable;
   const customerOrders = selected
     ? orders.filter((order) => order.customer_id === selected.customer_id)
     : [];
@@ -564,6 +601,14 @@ export function InboxWorkspace() {
             placeholder="Search this page"
           />
         </label>
+        <div className="inbox-channel-status" aria-label="Messaging channel status">
+          <span className={`channel-status-chip${channelStatus?.messenger ? " ready" : ""}`}>
+            Messenger · {channelStatusError ? "Status unavailable" : channelStatus ? channelStatus.messenger ? "Test mode" : "Coming soon" : "Checking"}
+          </span>
+          <span className={`channel-status-chip${channelStatus?.instagram ? " ready" : ""}`}>
+            Instagram · {channelStatusError ? "Status unavailable" : channelStatus ? channelStatus.instagram ? "Test mode" : "Coming soon" : "Checking"}
+          </span>
+        </div>
         {loading ? (
           <p className="inbox-state">Loading conversations…</p>
         ) : error && conversations.length === 0 ? (
@@ -614,7 +659,7 @@ export function InboxWorkspace() {
                       {latest?.body ?? "No messages yet"}
                     </span>
                     <span className="channel-badge">
-                      {channelLabel(contact?.channel)}
+                      {channelLabel(contact?.channel, channelStatus, channelStatusError)}
                     </span>
                   </span>
                   <time className="conversation-time">
@@ -652,7 +697,7 @@ export function InboxWorkspace() {
               </span>
               <div className="thread-contact">
                 <strong>{customer?.name || customer?.external_id}</strong>
-                <span>{channelLabel(customer?.channel)}</span>
+                <span>{channelLabel(customer?.channel, channelStatus, channelStatusError)}</span>
               </div>
               <div className="thread-header-actions">
                 {selected.status === "needs_seller" && (
@@ -733,7 +778,7 @@ export function InboxWorkspace() {
                   <button
                     className="button button-primary"
                     onClick={() => void sendDraft()}
-                    disabled={sending}
+                    disabled={replyDisabled || sending}
                   >
                     {sending ? "Sending…" : "Send draft"}
                   </button>
@@ -749,8 +794,19 @@ export function InboxWorkspace() {
             )}
             {isSimulatedChannel(customer?.channel) ? (
               <p className="simulated-note thread-simulated-note">
-                Coming soon (simulated) po ito. This sample thread is read-only
-                and sends no message to Messenger or Instagram.
+                Coming soon po ang channel na ito. Hindi pa available ang customer replies.
+              </p>
+            ) : selectedIsMeta && channelStatusError ? (
+              <p className="channel-window-note" role="status">
+                Hindi ma-verify ang channel setup ngayon. Refresh po muna bago mag-reply.
+              </p>
+            ) : selectedIsMeta && !selectedMetaConfigured ? (
+              <p className="channel-window-note" role="status">
+                Coming soon po ang {customer?.channel === "messenger" ? "Messenger" : "Instagram"} dahil hindi pa kumpleto ang channel setup.
+              </p>
+            ) : selectedIsMeta && !replyWindowOpen ? (
+              <p className="channel-window-note" role="status">
+                Closed na po ang 24-hour reply window. Magiging available ulit ang reply box kapag nag-message ulit ang customer.
               </p>
             ) : (
               <form className="reply-form" onSubmit={sendReply}>
@@ -762,6 +818,7 @@ export function InboxWorkspace() {
                   value={draft}
                   onChange={(event) => setDraft(event.target.value)}
                   maxLength={4000}
+                  disabled={replyDisabled}
                   placeholder="Write a reply…"
                   rows={2}
                 />
@@ -770,7 +827,7 @@ export function InboxWorkspace() {
                   <button
                     className="button button-primary"
                     type="submit"
-                    disabled={sending || !draft.trim()}
+                    disabled={replyDisabled || sending || !draft.trim()}
                   >
                     {sending ? "Sending…" : "Send reply"}
                   </button>
@@ -808,7 +865,7 @@ export function InboxWorkspace() {
               </span>
               <h2>{customer.name || "Customer"}</h2>
               <span className="channel-badge">
-                {channelLabel(customer.channel)}
+                {channelLabel(customer.channel, channelStatus, channelStatusError)}
               </span>
             </div>
             <dl className="customer-details">

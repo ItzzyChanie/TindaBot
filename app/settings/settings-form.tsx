@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { fetchChannelStatus, type ChannelStatus } from "@/lib/channel-status";
 
 const SHOP_ID = "00000000-0000-4000-8000-000000000001";
 const regions = ["Metro Manila", "Luzon", "Visayas", "Mindanao"] as const;
@@ -98,7 +99,13 @@ export function SettingsForm({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(initialError);
   const [notice, setNotice] = useState("");
+  const [channelStatus, setChannelStatus] = useState<ChannelStatus | null>(null);
+  const [channelStatusError, setChannelStatusError] = useState(false);
   const options = { ...defaultOptions, ...settings.bot_options, after_sales: { ...defaultOptions.after_sales, ...settings.bot_options.after_sales }, delivery_days: { ...defaultOptions.delivery_days, ...settings.bot_options.delivery_days } };
+
+  useEffect(() => {
+    void fetchChannelStatus().then(setChannelStatus).catch(() => setChannelStatusError(true));
+  }, []);
   function updateOptions(patch: Partial<BotOptions>) {
     setSettings((current) => ({ ...current, bot_options: { ...defaultOptions, ...current.bot_options, ...patch } }));
   }
@@ -189,6 +196,7 @@ export function SettingsForm({
       >
         <nav className="settings-index" aria-label="Settings sections">
           <a href="#seller-profile">Profile</a>
+          <a href="#channels">Channels</a>
           <a href="#assistant-replies">Assistant replies</a>
           <a href="#delivery-rates">Shipping rates</a>
           <a href="#bot-controls">Delivery and order options</a>
@@ -197,6 +205,25 @@ export function SettingsForm({
           <a href="#payment-details">Payment instructions</a>
           <a href="#shop-policies">Policies</a>
         </nav>
+        <section>
+          <div id="channels" className="settings-anchor" />
+          <p className="eyebrow">CHANNEL CONNECTIONS</p>
+          <h2>Messaging channels</h2>
+          <p className="muted">We only check whether the required secrets are present. Secret values are never shown here.</p>
+          <div className="channel-settings-grid">
+            {(["telegram", "messenger", "instagram"] as const).map((channel) => {
+              const configured = channelStatus?.[channel] ?? null;
+              const title = channel === "telegram" ? "Telegram" : channel === "messenger" ? "Messenger" : "Instagram";
+              const label = channelStatusError ? "Status unavailable" : configured === null ? "Checking" : configured ? channel === "telegram" ? "Configured" : "Configured · Test mode" : "Coming soon";
+              return (
+                <div className={`channel-settings-card${configured ? " ready" : ""}`} key={channel}>
+                  <strong>{title}</strong>
+                  <span>{label}</span>
+                </div>
+              );
+            })}
+          </div>
+        </section>
         <section>
           <div id="seller-profile" className="settings-anchor" />
           <p className="eyebrow">SELLER PROFILE</p>

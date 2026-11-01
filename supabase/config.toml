@@ -47,6 +47,10 @@ import_map = "./functions/import_map.json"
 verify_jwt = false
 import_map = "./functions/import_map.json"
 
+[functions.channel-status]
+verify_jwt = true
+import_map = "./functions/import_map.json"
+
 [functions.widget-session]
 verify_jwt = false
 import_map = "./functions/import_map.json"

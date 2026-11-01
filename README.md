@@ -18,6 +18,14 @@ The message-understanding eval is rules-based and runs offline: `npm run eval:un
 
 This repository contains mock UI data only. Keep credentials in local environment files and never commit them. To enable the staged-secret commit check, run `git config core.hooksPath .githooks` once in this clone.
 
+## Test-mode messaging channels
+
+Messenger and Instagram Login can receive test messages in the shared seller inbox. The inbox labels these channels **Test mode** when their Edge Function secrets are present, and **Coming soon** otherwise. Settings reports only whether secrets are present; it never displays their values. The `channel-status` function requires a seller JWT.
+
+See [Meta test-mode setup](docs/meta-test-mode.md) for required variable names, Meta app setup, deployment commands, and a smoke test. The reply flow is rules-based and does not call an AI or external language service.
+
+Public chat and storefront pages link to the [privacy notice](/privacy) and [data deletion instructions](/data-deletion).
+
 ## Chat privacy and retention
 
 The chat widget and the assistant's first reply disclose that the assistant is automated and that chat messages are retained for 90 days. Do not send payment credentials or other sensitive information in chat. For this MVP, the 90-day retention period is the operating rule; expired chat records must be deleted by the shop operator from Supabase. Automated deletion is not configured yet.

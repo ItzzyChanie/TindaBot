@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import Link from "next/link";
 import { getSupabasePublicEnv } from "@/lib/supabase/env";
 
 type WidgetMessage = {
@@ -238,6 +239,10 @@ export function ChatWidget({ productId: initialProductId, sessionId: initialSess
         <textarea id="widget-message" value={draft} onChange={(event) => setDraft(event.target.value.slice(0, 500))} placeholder="Isulat ang tanong ninyo po…" maxLength={500} rows={2} disabled={loading} />
         <div><span>{[...draft].length}/500</span><button className="button button-primary" disabled={loading || sending || !draft.trim()}>Send</button></div>
       </form>
+      <nav className="widget-legal-links" aria-label="Privacy links">
+        <Link href="/privacy">Privacy</Link>
+        <Link href="/data-deletion">Data deletion</Link>
+      </nav>
       <p className="widget-session-note">{token ? "Secure web chat session" : "Starting secure chat…"}</p>
     </section>
   );

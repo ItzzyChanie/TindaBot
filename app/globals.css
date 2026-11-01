@@ -4677,3 +4677,113 @@ h2 {
   padding: 13px 17px;
   font-size: 16px;
 }
+
+.inbox-channel-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  padding: 0 14px 12px;
+}
+.channel-status-chip,
+.channel-settings-card span {
+  border: 1px solid rgba(52, 115, 82, 0.2);
+  border-radius: 999px;
+  background: rgba(52, 115, 82, 0.13);
+  color: #52665a;
+  padding: 5px 9px;
+  font-size: 11px;
+}
+.channel-status-chip.ready,
+.channel-settings-card.ready span {
+  background: rgba(52, 115, 82, 0.2);
+  color: #286344;
+}
+.channel-window-note {
+  margin: 12px;
+  padding: 12px 14px;
+  border: 1px solid rgba(52, 115, 82, 0.2);
+  border-radius: 10px;
+  background: var(--green-soft);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.55;
+}
+.channel-settings-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+.channel-settings-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 13px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+}
+.channel-settings-card span {
+  white-space: nowrap;
+}
+.widget-legal-links,
+.shop-legal-links {
+  display: flex;
+  gap: 14px;
+  font-size: 12px;
+}
+.widget-legal-links {
+  padding: 0 14px;
+}
+.shop-legal-links a,
+.widget-legal-links a,
+.public-legal-page a {
+  color: var(--green);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.public-legal-page {
+  width: min(820px, calc(100% - 32px));
+  margin: 42px auto;
+  padding: clamp(22px, 5vw, 48px);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface);
+  color: var(--text);
+  line-height: 1.7;
+}
+.public-legal-page h1 {
+  margin: 4px 0 12px;
+  font-size: clamp(30px, 5vw, 44px);
+}
+.public-legal-page h2 {
+  margin: 26px 0 8px;
+}
+.public-legal-page p,
+.public-legal-page li {
+  color: var(--muted);
+}
+.public-legal-page li {
+  margin: 7px 0;
+}
+.public-legal-page .legal-back-link {
+  display: inline-block;
+  margin-bottom: 28px;
+}
+.public-legal-page .legal-note {
+  margin-top: 28px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--green-soft);
+  font-size: 13px;
+}
+
+@media (max-width: 800px) {
+  .channel-settings-grid {
+    grid-template-columns: 1fr;
+  }
+  .shop-legal-links {
+    padding-top: 4px;
+  }
+}
