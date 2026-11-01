@@ -153,9 +153,13 @@ export async function handleIncoming(
     productId = contextProduct?.id ?? null;
   }
 
+  const { data: currentCustomer, error: currentCustomerError } = await supabase.from("customers")
+    .select("name").eq("channel", channel).eq("external_id", externalId).maybeSingle();
+  if (currentCustomerError) throw currentCustomerError;
+  const customerName = context.name?.trim() || currentCustomer?.name || null;
   const { data: customer, error: customerError } = await supabase
     .from("customers")
-    .upsert({ channel, external_id: externalId, name: context.name ?? null }, { onConflict: "channel,external_id" })
+    .upsert({ channel, external_id: externalId, name: customerName?.slice(0, 160) ?? null }, { onConflict: "channel,external_id" })
     .select("id")
     .single();
   if (customerError) throw customerError;

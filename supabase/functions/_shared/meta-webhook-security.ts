@@ -30,6 +30,19 @@ export type MetaInboundMessage = {
   hasAttachments: boolean;
 };
 
+export function metaCustomerDisplayName(
+  channel: "messenger" | "instagram",
+  profile: Record<string, unknown>,
+): string | undefined {
+  const name = channel === "messenger"
+    ? [profile.first_name, profile.last_name]
+      .filter((part): part is string => typeof part === "string" && !!part.trim())
+      .join(" ")
+    : (typeof profile.name === "string" && profile.name.trim()) ||
+      (typeof profile.username === "string" && profile.username.trim() ? `@${profile.username.trim()}` : "");
+  return name.trim() ? name.trim().slice(0, 160) : undefined;
+}
+
 export function extractMetaInboundMessages(payload: unknown): MetaInboundMessage[] {
   const root = payload && typeof payload === "object" ? payload as Record<string, unknown> : {};
   const channel = root.object === "page" ? "messenger" : root.object === "instagram" ? "instagram" : null;

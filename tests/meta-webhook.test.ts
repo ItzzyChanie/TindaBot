@@ -1,6 +1,6 @@
 import { createHmac } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { extractMetaInboundMessages, verifyMetaSignature } from "../supabase/functions/_shared/meta-webhook-security";
+import { extractMetaInboundMessages, metaCustomerDisplayName, verifyMetaSignature } from "../supabase/functions/_shared/meta-webhook-security";
 
 describe("Meta webhook security", () => {
   it("accepts the HMAC signature for the exact raw payload", async () => {
@@ -31,5 +31,12 @@ describe("Meta webhook security", () => {
     expect(extractMetaInboundMessages({ object: "instagram", entry: [{ id: "ig-account", messaging: [{ sender: { id: "ig-customer" }, message: { mid: "ig-2", attachments: [{ type: "image" }] } }] }] })).toMatchObject([
       { channel: "instagram", senderId: "ig-customer", messageId: "ig-2", hasAttachments: true },
     ]);
+  });
+
+  it("formats Messenger and Instagram profile names with safe fallbacks", () => {
+    expect(metaCustomerDisplayName("messenger", { first_name: "Ana", last_name: "Santos" })).toBe("Ana Santos");
+    expect(metaCustomerDisplayName("instagram", { name: "Ana Santos", username: "ana" })).toBe("Ana Santos");
+    expect(metaCustomerDisplayName("instagram", { username: "ana" })).toBe("@ana");
+    expect(metaCustomerDisplayName("messenger", {})).toBeUndefined();
   });
 });

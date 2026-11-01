@@ -1,11 +1,34 @@
 import { createClient } from "@supabase/supabase-js";
 import { handleIncoming, saveAssistantReply } from "../_shared/handleIncoming.ts";
 import { isWithinCustomerWindow, sendToChannel } from "../_shared/channel-messaging.ts";
-import { extractMetaInboundMessages, verifyMetaSignature } from "../_shared/meta-webhook-security.ts";
+import { extractMetaInboundMessages, metaCustomerDisplayName, verifyMetaSignature } from "../_shared/meta-webhook-security.ts";
 
 const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
   auth: { autoRefreshToken: false, persistSession: false },
 });
+
+async function getCustomerName(channel: "messenger" | "instagram", senderId: string): Promise<string | undefined> {
+  const { data: customer, error } = await supabase.from("customers")
+    .select("name").eq("channel", channel).eq("external_id", senderId).maybeSingle();
+  if (!error && typeof customer?.name === "string" && customer.name.trim()) return customer.name;
+
+  const token = channel === "messenger"
+    ? Deno.env.get("MESSENGER_PAGE_TOKEN")
+    : Deno.env.get("INSTAGRAM_ACCESS_TOKEN");
+  if (!token) return undefined;
+  const graphHost = channel === "messenger" ? "graph.facebook.com" : "graph.instagram.com";
+  const fields = channel === "messenger" ? "first_name,last_name" : "name,username";
+  try {
+    const response = await fetch(`https://${graphHost}/v26.0/${encodeURIComponent(senderId)}?fields=${fields}`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    if (!response.ok) return undefined;
+    const profile = await response.json() as Record<string, unknown>;
+    return metaCustomerDisplayName(channel, profile);
+  } catch {
+    return undefined;
+  }
+}
 
 async function processPayload(payload: Record<string, unknown>): Promise<void> {
   for (const event of extractMetaInboundMessages(payload)) {
@@ -22,7 +45,8 @@ async function processPayload(payload: Record<string, unknown>): Promise<void> {
         ? "Pasensya na po, text messages lang muna ang naiintindihan ko. Puwede rin pong magtanong sa seller."
         : "";
     if (!text) continue;
-    const incoming = await handleIncoming(channel, senderId, text, { externalMessageId: messageId });
+    const name = await getCustomerName(channel, senderId);
+    const incoming = await handleIncoming(channel, senderId, text, { externalMessageId: messageId, name });
     if (!incoming.reply || incoming.duplicate) continue;
     const replyId = await saveAssistantReply(incoming.conversationId, incoming.reply);
     try {

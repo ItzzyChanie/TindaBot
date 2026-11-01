@@ -4664,6 +4664,12 @@ h2 {
   padding: 6px 10px;
   font-size: 13px;
 }
+.inbox-page .channel-badge {
+  border: 1px solid rgba(52, 115, 82, 0.24);
+  border-radius: 999px;
+  background: rgba(52, 115, 82, 0.17);
+  color: #286344;
+}
 .catalog-notice,
 .form-error,
 .inbox-alert {
