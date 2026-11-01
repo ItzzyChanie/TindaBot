@@ -189,7 +189,6 @@ Deno.serve(async (request: Request) => {
   const secret = metaSignatureSecretForObject(
     objectType,
     Deno.env.get("META_APP_SECRET") ?? "",
-    Deno.env.get("INSTAGRAM_APP_SECRET") ?? "",
   );
   const signaturePassed = await verifyMetaSignature(rawBody, request.headers.get("X-Hub-Signature-256"), secret);
   const fieldTypes = [...new Set(events.map((event) => event.fieldType))];

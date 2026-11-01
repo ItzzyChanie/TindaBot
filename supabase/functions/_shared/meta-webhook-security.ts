@@ -24,10 +24,8 @@ export async function verifyMetaSignature(
 export function metaSignatureSecretForObject(
   objectType: unknown,
   metaAppSecret: string,
-  instagramAppSecret: string,
 ): string {
-  if (objectType === "instagram") return instagramAppSecret;
-  if (objectType === "page") return metaAppSecret;
+  if (objectType === "instagram" || objectType === "page") return metaAppSecret;
   return "";
 }
 

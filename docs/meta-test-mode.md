@@ -8,7 +8,6 @@ Add the following variable names to the ignored `.env.functions` file and to Sup
 
 - `META_VERIFY_TOKEN`
 - `META_APP_SECRET`
-- `INSTAGRAM_APP_SECRET`
 - `MESSENGER_PAGE_TOKEN`
 - `INSTAGRAM_ACCESS_TOKEN`
 - `INSTAGRAM_ACCOUNT_ID`
@@ -23,11 +22,11 @@ Supabase supplies `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROL
 1. Configure the webhook callback as `https://<project-ref>.supabase.co/functions/v1/meta-webhook` and use the same `META_VERIFY_TOKEN` in Meta and Supabase.
 2. Subscribe the Page webhook to `messages` and the Instagram account webhook to `messages` (plus postbacks/reactions if enabled in the app dashboard).
 3. For Messenger, store the Page access token as `MESSENGER_PAGE_TOKEN`.
-4. For Instagram Login, store its Instagram product app secret as `INSTAGRAM_APP_SECRET`, access token as `INSTAGRAM_ACCESS_TOKEN`, and professional account ID as `INSTAGRAM_ACCOUNT_ID`. Grant `instagram_business_basic` and `instagram_business_manage_messages`. Messenger webhook signatures continue to use `META_APP_SECRET`.
+4. For Unified Login, use the Meta app secret from App Settings > Basic (`META_APP_SECRET`) to verify Instagram webhook signatures. Store the Instagram access token as `INSTAGRAM_ACCESS_TOKEN` and professional account ID as `INSTAGRAM_ACCOUNT_ID`. Grant `instagram_business_basic` and `instagram_business_manage_messages`.
 5. Add the people who will test to the Meta app roles and Instagram account roles required by the test-mode app.
 6. Set `ALLOWED_ORIGINS` to the seller app's local and deployed origins so authenticated browser functions can accept requests.
 
-For Unified Login, Instagram webhook signatures are verified with `INSTAGRAM_APP_SECRET` from the Instagram API setup; Messenger continues to use `META_APP_SECRET`. An incoming Instagram DM has `object: "instagram"`, `entry[].id` for the shop account, and `entry[].messaging[]` containing `sender.id` (the customer's IGSID), `recipient.id` (the shop account ID), and `message.mid` plus `message.text` or attachments. Replies use the customer's `sender.id` as `recipient.id`.
+For Unified Login, Instagram and Messenger webhook signatures use the Meta app secret (`META_APP_SECRET`) from App Settings > Basic. An incoming Instagram DM has `object: "instagram"`, `entry[].id` for the shop account, and `entry[].messaging[]` containing `sender.id` (the customer's IGSID), `recipient.id` (the shop account ID), and `message.mid` plus `message.text` or attachments. Replies use the customer's `sender.id` as `recipient.id`.
 
 The code uses Graph API v26.0. Messenger sends use `POST https://graph.facebook.com/v26.0/me/messages`; Instagram Login sends use `POST https://graph.instagram.com/v26.0/{INSTAGRAM_ACCOUNT_ID}/messages`. The webhook is `https://<project-ref>.supabase.co/functions/v1/meta-webhook`.
 

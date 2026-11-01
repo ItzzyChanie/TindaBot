@@ -16,15 +16,15 @@ describe("Meta webhook security", () => {
     await expect(verifyMetaSignature("{}", `sha256=${"0".repeat(64)}`, "test-secret")).resolves.toBe(false);
   });
 
-  it("selects the Instagram Login app secret for Instagram webhook signatures", async () => {
+  it("uses the Meta app secret for Instagram and Messenger webhook signatures", async () => {
     const body = JSON.stringify({ object: "instagram", entry: [] });
-    const instagramSecret = metaSignatureSecretForObject("instagram", "meta-secret", "instagram-secret");
-    const messengerSecret = metaSignatureSecretForObject("page", "meta-secret", "instagram-secret");
-    const signature = `sha256=${createHmac("sha256", "instagram-secret").update(body).digest("hex")}`;
-    expect(instagramSecret).toBe("instagram-secret");
+    const instagramSecret = metaSignatureSecretForObject("instagram", "meta-secret");
+    const messengerSecret = metaSignatureSecretForObject("page", "meta-secret");
+    const signature = `sha256=${createHmac("sha256", "meta-secret").update(body).digest("hex")}`;
+    expect(instagramSecret).toBe("meta-secret");
     expect(messengerSecret).toBe("meta-secret");
     await expect(verifyMetaSignature(body, signature, instagramSecret)).resolves.toBe(true);
-    await expect(verifyMetaSignature(body, signature, messengerSecret)).resolves.toBe(false);
+    await expect(verifyMetaSignature(body, signature, messengerSecret)).resolves.toBe(true);
   });
 
   it("deduplicates message ids from mock Messenger and Instagram payloads", () => {

@@ -45,7 +45,7 @@ Deno.serve(async (request: Request) => {
     return Response.json({ error: "Unauthorized" }, { status: 401, headers: cors ?? {} });
 
   const messengerWebhookReady = secretIsSet("META_VERIFY_TOKEN") && secretIsSet("META_APP_SECRET");
-  const instagramWebhookReady = secretIsSet("META_VERIFY_TOKEN") && secretIsSet("INSTAGRAM_APP_SECRET");
+  const instagramWebhookReady = secretIsSet("META_VERIFY_TOKEN") && secretIsSet("META_APP_SECRET");
   return Response.json({
     channels: {
       telegram: secretIsSet("TELEGRAM_BOT_TOKEN") && secretIsSet("TELEGRAM_WEBHOOK_SECRET"),
