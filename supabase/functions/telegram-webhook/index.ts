@@ -5,6 +5,7 @@ import {
   saveAssistantReply,
 } from "../_shared/handleIncoming.ts";
 import faq from "../_shared/faq.json" with { type: "json" };
+import { sendToChannel } from "../_shared/channel-messaging.ts";
 
 const telegramToken = Deno.env.get("TELEGRAM_BOT_TOKEN");
 const webhookSecret = Deno.env.get("TELEGRAM_WEBHOOK_SECRET");
@@ -138,7 +139,7 @@ async function processTelegramUpdate(
           }
         }
       } else {
-        await sendTelegramMessage(chatId, incoming.reply);
+        await sendToChannel("telegram", String(chatId), incoming.reply, replyMarkup);
       }
     }
     succeeded = true;

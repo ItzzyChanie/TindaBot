@@ -1,8 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
+import { isWithinCustomerWindow, sendToChannel, type MessageChannel } from "../_shared/channel-messaging.ts";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
 const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
-const telegramToken = Deno.env.get("TELEGRAM_BOT_TOKEN");
 const allowedOrigins = (Deno.env.get("ALLOWED_ORIGINS") ?? "")
   .split(",")
   .map((origin: string) => origin.trim())
@@ -100,23 +100,17 @@ Deno.serve(async (request: Request) => {
     .select("channel, external_id")
     .eq("id", conversation.customer_id)
     .maybeSingle();
-  if (customerError || !customer || !["telegram", "web"].includes(customer.channel)) {
+  if (customerError || !customer || !["telegram", "messenger", "instagram", "web"].includes(customer.channel)) {
     return Response.json(
       { error: "This conversation channel cannot receive seller replies" },
       { status: 400, headers: cors ?? {} },
     );
   }
-  if (customer.channel === "telegram" && !telegramToken)
-    return Response.json(
-      { error: "Telegram is not configured" },
-      { status: 500, headers: cors ?? {} },
-    );
-
-  const { error: messageError } = await supabase.from("messages").insert({
+  const { data: savedMessage, error: messageError } = await supabase.from("messages").insert({
     conversation_id: conversation.id,
     sender: sendDraft ? "ai" : "seller",
     body: text,
-  });
+  }).select("id").single();
   if (messageError)
     return Response.json(
       { error: "Could not save the reply" },
@@ -144,22 +138,22 @@ Deno.serve(async (request: Request) => {
     return Response.json({ ok: true }, { headers: cors ?? {} });
 
   try {
-    const telegramResponse = await fetch(
-      `https://api.telegram.org/bot${telegramToken}/sendMessage`,
-      {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ chat_id: customer.external_id, text }),
-      },
-    );
-    if (!telegramResponse.ok)
+    const channel = customer.channel as MessageChannel;
+    const { data: activity, error: activityError } = await supabase.from("conversations")
+      .select("last_customer_message_at").eq("id", conversation.id).single();
+    if (activityError) throw activityError;
+    if (!isWithinCustomerWindow(activity.last_customer_message_at, channel)) {
+      await supabase.from("messages").update({ delivery_status: "failed", failure_reason: "outside_window" }).eq("id", savedMessage.id);
       return Response.json(
-        { error: "Reply saved, but Telegram could not deliver it" },
-        { status: 502, headers: cors ?? {} },
+        { error: "Reply saved, but the 24-hour reply window has closed" },
+        { status: 409, headers: cors ?? {} },
       );
+    }
+    await sendToChannel(channel, customer.external_id, text);
   } catch {
+    await supabase.from("messages").update({ delivery_status: "failed", failure_reason: "delivery_failed" }).eq("id", savedMessage.id);
     return Response.json(
-      { error: "Reply saved, but Telegram could not be reached" },
+      { error: "Reply saved, but the channel could not deliver it" },
       { status: 502, headers: cors ?? {} },
     );
   }

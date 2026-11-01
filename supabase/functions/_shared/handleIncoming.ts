@@ -17,6 +17,7 @@ type ProductRow = Omit<BrainProduct, "price" | "discount_value" | "variants" | "
 };
 
 export type IncomingContext = {
+  externalMessageId?: string;
   name?: string | null;
   productId?: string | null;
   paymentProof?: {
@@ -68,8 +69,8 @@ async function sellerPresentForOrder(conversationId: string, orderId: number, ai
   ]);
   if (orderError) throw orderError;
   if (sellerMessageError) throw sellerMessageError;
-  return Boolean(order && sellerMessage) &&
-    (aiMode === "human" || sellerRepliedAfterOrder(order.created_at, sellerMessage?.created_at));
+  if (!order || !sellerMessage) return false;
+  return aiMode === "human" || sellerRepliedAfterOrder(order.created_at, sellerMessage.created_at);
 }
 
 async function savePaymentProof(conversationId: string, customerId: string, proof: NonNullable<IncomingContext["paymentProof"]>, text: string) {
@@ -191,11 +192,15 @@ export async function handleIncoming(
     conversation_id: conversationId,
     sender: "customer",
     body: text,
+    external_message_id: context.externalMessageId ?? null,
   });
+  if (messageError?.code === "23505" && context.externalMessageId) {
+    return { conversationId, reply: null, draft: null, duplicate: true };
+  }
   if (messageError) throw messageError;
 
   const { error: updateError } = await supabase.from("conversations")
-    .update({ last_message_at: new Date().toISOString(), seller_read_at: null, is_hidden: false }).eq("id", conversationId);
+    .update({ last_message_at: new Date().toISOString(), last_customer_message_at: new Date().toISOString(), seller_read_at: null, is_hidden: false }).eq("id", conversationId);
   if (updateError) throw updateError;
 
   let conversation = existing ?? { status: "open", ai_mode: "auto", pending: {} };
@@ -241,7 +246,7 @@ export async function handleIncoming(
     .eq("shop_id", "00000000-0000-4000-8000-000000000001")
     .maybeSingle();
   if (settingsError) throw settingsError;
-  const settings = settingsRow ?? { shipping_rates: {}, payment_instructions: "", policies: "", size_chart_url: null, greeting_text: "", shipping_text: "", faq_answers: {} };
+  const settings = settingsRow ?? { shipping_rates: {}, payment_instructions: "", policies: "", size_chart_url: null, greeting_text: "", shipping_text: "", faq_answers: {}, bot_options: {} };
   const currentPending = object(conversation.pending);
   const detailState = object(currentPending.order_customer_details);
   if (isCancellationRequest(text) &&
@@ -533,15 +538,16 @@ export async function saveAssistantReply(
   body: string,
   imageUrls: string[] = [],
 ) {
-  const { error } = await supabase.from("messages").insert({
+  const { data: message, error } = await supabase.from("messages").insert({
     conversation_id: conversationId,
     sender: "ai",
     body,
     image_urls: imageUrls.filter((url) => /^https:\/\//i.test(url)).slice(0, 5),
-  });
+  }).select("id").single();
   if (error) throw error;
 
   const { error: updateError } = await supabase.from("conversations")
     .update({ last_message_at: new Date().toISOString() }).eq("id", conversationId);
   if (updateError) throw updateError;
+  return message.id as string;
 }

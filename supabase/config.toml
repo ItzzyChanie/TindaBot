@@ -43,6 +43,10 @@ import_map = "./functions/import_map.json"
 [functions.telegram-webhook]
 import_map = "./functions/import_map.json"
 
+[functions.meta-webhook]
+verify_jwt = false
+import_map = "./functions/import_map.json"
+
 [functions.widget-session]
 verify_jwt = false
 import_map = "./functions/import_map.json"
