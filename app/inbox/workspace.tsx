@@ -66,16 +66,12 @@ function isSimulatedChannel(channel?: string) {
   return channel === "messenger_simulated" || channel === "instagram_simulated";
 }
 
-function channelLabel(channel: string | null | undefined, status: ChannelStatus | null, statusError: boolean) {
+function channelLabel(channel: string | null | undefined) {
   if (channel === "web") return "Web chat";
-  if (channel === "messenger")
-    return `Messenger - ${statusError ? "Status unavailable" : status ? status.messenger ? "Test mode" : "Coming soon" : "Checking"}`;
-  if (channel === "instagram")
-    return `Instagram - ${statusError ? "Status unavailable" : status ? status.instagram ? "Test mode" : "Coming soon" : "Checking"}`;
-  if (channel === "messenger_simulated")
-    return "Messenger · Coming soon (simulated)";
-  if (channel === "instagram_simulated")
-    return "Instagram · Coming soon (simulated)";
+  if (channel === "messenger") return "Messenger";
+  if (channel === "instagram") return "Instagram";
+  if (channel === "messenger_simulated") return "Messenger (Coming soon)";
+  if (channel === "instagram_simulated") return "Instagram (Coming soon)";
   return channel ?? "Unknown channel";
 }
 
@@ -605,14 +601,6 @@ export function InboxWorkspace() {
             placeholder="Search this page"
           />
         </label>
-        <div className="inbox-channel-status" aria-label="Messaging channel status">
-          <span className={`channel-status-chip${channelStatus?.messenger ? " ready" : ""}`}>
-            Messenger · {channelStatusError ? "Status unavailable" : channelStatus ? channelStatus.messenger ? "Test mode" : "Coming soon" : "Checking"}
-          </span>
-          <span className={`channel-status-chip${channelStatus?.instagram ? " ready" : ""}`}>
-            Instagram · {channelStatusError ? "Status unavailable" : channelStatus ? channelStatus.instagram ? "Test mode" : "Coming soon" : "Checking"}
-          </span>
-        </div>
         {loading ? (
           <p className="inbox-state">Loading conversations…</p>
         ) : error && conversations.length === 0 ? (
@@ -662,7 +650,7 @@ export function InboxWorkspace() {
                       {latest?.body ?? "No messages yet"}
                     </span>
                     <span className="channel-badge">
-                      {channelLabel(contact?.channel, channelStatus, channelStatusError)}
+                      {channelLabel(contact?.channel)}
                     </span>
                   </span>
                   <time className="conversation-time">
@@ -700,7 +688,7 @@ export function InboxWorkspace() {
               </span>
               <div className="thread-contact">
                 <strong>{customerDisplayName(customer)}</strong>
-                <span>{channelLabel(customer?.channel, channelStatus, channelStatusError)}</span>
+                <span>{channelLabel(customer?.channel)}</span>
               </div>
               <div className="thread-header-actions">
                 {selected.status === "needs_seller" && (
@@ -868,7 +856,7 @@ export function InboxWorkspace() {
               </span>
               <h2>{customerDisplayName(customer)}</h2>
               <span className="channel-badge">
-                {channelLabel(customer.channel, channelStatus, channelStatusError)}
+                {channelLabel(customer.channel)}
               </span>
             </div>
             <dl className="customer-details">

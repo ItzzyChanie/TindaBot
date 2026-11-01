@@ -39,13 +39,13 @@ supabase functions deploy channel-status
 supabase functions deploy seller-reply
 ```
 
-`channel-status` reports booleans only. Settings shows each channel as configured, test mode, coming soon, or status unavailable without returning secret values.
+`channel-status` reports booleans only. Settings shows each channel as configured, coming soon, or status unavailable without returning secret values. Inbox conversation badges show only Messenger or Instagram.
 
 ## Smoke test
 
-1. Confirm Settings shows Messenger and Instagram as configured · Test mode.
+1. Confirm Settings shows Messenger and Instagram as configured.
 2. Send a text DM from an app-role test account to the connected Page and Instagram professional account.
-3. Confirm the inbox creates a real `messenger` or `instagram` conversation, displays the customer's name/username when Meta provides it, and labels the channel Test mode.
+3. Confirm the inbox creates a real `messenger` or `instagram` conversation, displays the customer's name/username when Meta provides it, and labels the channel Messenger or Instagram.
 4. Check a rules-based catalog/shop reply, then try a seller reply inside the 24-hour window.
 5. Confirm the reply box is disabled after the window closes. Ask the customer to message again to reopen it.
 

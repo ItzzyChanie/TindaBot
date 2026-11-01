@@ -214,7 +214,7 @@ export function SettingsForm({
             {(["telegram", "messenger", "instagram"] as const).map((channel) => {
               const configured = channelStatus?.[channel] ?? null;
               const title = channel === "telegram" ? "Telegram" : channel === "messenger" ? "Messenger" : "Instagram";
-              const label = channelStatusError ? "Status unavailable" : configured === null ? "Checking" : configured ? channel === "telegram" ? "Configured" : "Configured · Test mode" : "Coming soon";
+              const label = channelStatusError ? "Status unavailable" : configured === null ? "Checking" : configured ? "Configured" : "Coming soon";
               return (
                 <div className={`channel-settings-card${configured ? " ready" : ""}`} key={channel}>
                   <strong>{title}</strong>

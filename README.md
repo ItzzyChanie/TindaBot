@@ -20,7 +20,7 @@ This repository contains mock UI data only. Keep credentials in local environmen
 
 ## Test-mode messaging channels
 
-Messenger and Instagram Login can receive test messages in the shared seller inbox. The inbox labels these channels **Test mode** when their Edge Function secrets are present, and **Coming soon** otherwise. Settings reports only whether secrets are present; it never displays their values. The `channel-status` function requires a seller JWT.
+Messenger and Instagram Login receive messages in the shared seller inbox. Conversation badges show the channel name only. Settings reports whether each channel is configured; it never displays secret values. The `channel-status` function requires a seller JWT.
 
 See [Meta test-mode setup](docs/meta-test-mode.md) for required variable names, Meta app setup, deployment commands, and a smoke test. The reply flow is rules-based and does not call an AI or external language service.
 
