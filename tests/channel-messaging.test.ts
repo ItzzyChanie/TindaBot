@@ -24,4 +24,35 @@ describe("channel image delivery", () => {
       message: { attachment: { type: "image", payload: { url: "https://example.com/chart.png" } } },
     });
   });
+
+  it("uses the Instagram Login Send API and logs only its HTTP status", async () => {
+    vi.stubGlobal("Deno", {
+      env: { get: (name: string) => ({
+        INSTAGRAM_ACCESS_TOKEN: "private-test-token",
+        INSTAGRAM_ACCOUNT_ID: "ig-business-id",
+      } as Record<string, string>)[name] },
+    });
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response("{}", { status: 200 }));
+    const logSpy = vi.spyOn(console, "info").mockImplementation(() => {});
+    vi.stubGlobal("fetch", fetchMock);
+
+    await sendToChannel("instagram", "ig-scoped-customer-id", "Private test message");
+
+    expect(fetchMock.mock.calls[0][0]).toBe("https://graph.instagram.com/v26.0/ig-business-id/messages");
+    expect(fetchMock.mock.calls[0][1]?.headers).toMatchObject({ authorization: "Bearer private-test-token" });
+    expect(JSON.parse(fetchMock.mock.calls[0][1]?.body as string)).toEqual({
+      recipient: { id: "ig-scoped-customer-id" },
+      message: { text: "Private test message" },
+    });
+    expect(logSpy).toHaveBeenCalledWith("Channel send result", {
+      channel: "instagram",
+      requestKind: "text",
+      httpStatus: 200,
+      success: true,
+    });
+    const serializedLogs = JSON.stringify(logSpy.mock.calls);
+    expect(serializedLogs).not.toContain("private-test-token");
+    expect(serializedLogs).not.toContain("Private test message");
+    logSpy.mockRestore();
+  });
 });

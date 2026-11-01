@@ -30,37 +30,45 @@ export async function sendToChannel(
   } else {
     token = envValue("INSTAGRAM_ACCESS_TOKEN");
     const accountId = envValue("INSTAGRAM_ACCOUNT_ID");
-    if (!accountId) throw new Error("Instagram messaging is not configured");
+    if (!accountId) {
+      console.info("Channel send result", { channel, requestKind: "text", httpStatus: null, failure: "missing_account_configuration" });
+      throw new Error("Instagram messaging is not configured");
+    }
     url = `https://graph.instagram.com/v26.0/${encodeURIComponent(accountId)}/messages`;
     body = { recipient: { id: recipientId }, message: { text } };
   }
 
-  if (!token) throw new Error(`${channel} messaging is not configured`);
+  if (!token) {
+    console.info("Channel send result", { channel, requestKind: "text", httpStatus: null, failure: "missing_token_configuration" });
+    throw new Error(`${channel} messaging is not configured`);
+  }
   const headers = {
     "content-type": "application/json",
     ...(channel === "telegram" ? {} : { authorization: `Bearer ${token}` }),
   };
-  const send = async (messageBody: Record<string, unknown>) => {
-    const response = await fetch(url, { method: "POST", headers, body: JSON.stringify(messageBody) });
+  const send = async (sendUrl: string, messageBody: Record<string, unknown>, requestKind: "text" | "image") => {
+    let response: Response;
+    try {
+      response = await fetch(sendUrl, { method: "POST", headers, body: JSON.stringify(messageBody) });
+    } catch {
+      console.info("Channel send result", { channel, requestKind, httpStatus: null, transportError: true });
+      throw new Error(`${channel} message delivery failed`);
+    }
+    console.info("Channel send result", { channel, requestKind, httpStatus: response.status, success: response.ok });
     if (!response.ok) throw new Error(`${channel} message delivery failed`);
   };
-  await send(body);
+  await send(url, body, "text");
 
   const imageUrls = (options.imageUrls ?? []).filter((imageUrl) => /^https:\/\//i.test(imageUrl)).slice(0, 5);
   for (const imageUrl of imageUrls) {
     if (channel === "telegram") {
       const photoUrl = `https://api.telegram.org/bot${token}/sendPhoto`;
-      const response = await fetch(photoUrl, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({ chat_id: recipientId, photo: imageUrl }),
-      });
-      if (!response.ok) throw new Error("telegram image delivery failed");
+      await send(photoUrl, { chat_id: recipientId, photo: imageUrl }, "image");
     } else {
-      await send({
+      await send(url, {
         recipient: { id: recipientId },
         message: { attachment: { type: "image", payload: { url: imageUrl } } },
-      });
+      }, "image");
     }
   }
 }

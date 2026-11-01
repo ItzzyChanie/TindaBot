@@ -44,12 +44,13 @@ Deno.serve(async (request: Request) => {
   if (error || !user)
     return Response.json({ error: "Unauthorized" }, { status: 401, headers: cors ?? {} });
 
-  const metaWebhookReady = secretIsSet("META_VERIFY_TOKEN") && secretIsSet("META_APP_SECRET");
+  const messengerWebhookReady = secretIsSet("META_VERIFY_TOKEN") && secretIsSet("META_APP_SECRET");
+  const instagramWebhookReady = secretIsSet("META_VERIFY_TOKEN") && secretIsSet("INSTAGRAM_APP_SECRET");
   return Response.json({
     channels: {
       telegram: secretIsSet("TELEGRAM_BOT_TOKEN") && secretIsSet("TELEGRAM_WEBHOOK_SECRET"),
-      messenger: metaWebhookReady && secretIsSet("MESSENGER_PAGE_TOKEN"),
-      instagram: metaWebhookReady && secretIsSet("INSTAGRAM_ACCESS_TOKEN") && secretIsSet("INSTAGRAM_ACCOUNT_ID"),
+      messenger: messengerWebhookReady && secretIsSet("MESSENGER_PAGE_TOKEN"),
+      instagram: instagramWebhookReady && secretIsSet("INSTAGRAM_ACCESS_TOKEN") && secretIsSet("INSTAGRAM_ACCOUNT_ID"),
     },
   }, { headers: cors ?? { "Cache-Control": "no-store" } });
 });

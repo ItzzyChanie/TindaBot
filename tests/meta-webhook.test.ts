@@ -1,6 +1,6 @@
 import { createHmac } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { extractMetaInboundMessages, metaCustomerDisplayName, verifyMetaSignature } from "../supabase/functions/_shared/meta-webhook-security";
+import { extractMetaInboundMessages, metaCustomerDisplayName, metaSignatureSecretForObject, verifyMetaSignature } from "../supabase/functions/_shared/meta-webhook-security";
 
 describe("Meta webhook security", () => {
   it("accepts the HMAC signature for the exact raw payload", async () => {
@@ -16,6 +16,17 @@ describe("Meta webhook security", () => {
     await expect(verifyMetaSignature("{}", `sha256=${"0".repeat(64)}`, "test-secret")).resolves.toBe(false);
   });
 
+  it("selects the Instagram Login app secret for Instagram webhook signatures", async () => {
+    const body = JSON.stringify({ object: "instagram", entry: [] });
+    const instagramSecret = metaSignatureSecretForObject("instagram", "meta-secret", "instagram-secret");
+    const messengerSecret = metaSignatureSecretForObject("page", "meta-secret", "instagram-secret");
+    const signature = `sha256=${createHmac("sha256", "instagram-secret").update(body).digest("hex")}`;
+    expect(instagramSecret).toBe("instagram-secret");
+    expect(messengerSecret).toBe("meta-secret");
+    await expect(verifyMetaSignature(body, signature, instagramSecret)).resolves.toBe(true);
+    await expect(verifyMetaSignature(body, signature, messengerSecret)).resolves.toBe(false);
+  });
+
   it("deduplicates message ids from mock Messenger and Instagram payloads", () => {
     const payload = {
       object: "page",
@@ -26,10 +37,52 @@ describe("Meta webhook security", () => {
       ] }],
     };
     expect(extractMetaInboundMessages(payload)).toMatchObject([
-      { channel: "messenger", accountId: "page-1", senderId: "customer-1", messageId: "m-1", text: "hello" },
+      { channel: "messenger", accountId: "page-1", senderId: "customer-1", recipientId: null, messageId: "m-1", text: "hello", ignoredReason: null },
+      { senderId: "customer-1", messageId: "m-1", ignoredReason: "duplicate_in_payload" },
+      { senderId: "page-1", messageId: "echo-1", ignoredReason: "echo" },
     ]);
-    expect(extractMetaInboundMessages({ object: "instagram", entry: [{ id: "ig-account", messaging: [{ sender: { id: "ig-customer" }, message: { mid: "ig-2", attachments: [{ type: "image" }] } }] }] })).toMatchObject([
-      { channel: "instagram", senderId: "ig-customer", messageId: "ig-2", hasAttachments: true },
+    const instagramPayload = {
+      object: "instagram",
+      entry: [{
+        id: "17841400000000001",
+        messaging: [{
+          sender: { id: "17841400000000002" },
+          recipient: { id: "17841400000000001" },
+          timestamp: 1793560000000,
+          message: { mid: "aWdf-test-message", text: "Hi po" },
+        }],
+      }],
+    };
+    expect(extractMetaInboundMessages(instagramPayload, "17841400000000001")).toMatchObject([
+      {
+        objectType: "instagram",
+        fieldType: "messaging",
+        eventType: "message",
+        accountId: "17841400000000001",
+        senderId: "17841400000000002",
+        recipientId: "17841400000000001",
+        messageId: "aWdf-test-message",
+        text: "Hi po",
+        ignoredReason: null,
+      },
+    ]);
+    const mismatchPayload = structuredClone(instagramPayload);
+    mismatchPayload.entry[0].messaging[0].recipient.id = "wrong-account";
+    expect(extractMetaInboundMessages(mismatchPayload, "17841400000000001")[0].ignoredReason)
+      .toBe("recipient_account_mismatch");
+  });
+
+  it("records postbacks and reactions as ignored events", () => {
+    const payload = {
+      object: "instagram",
+      entry: [{ id: "ig-business", messaging: [
+        { sender: { id: "ig-customer" }, recipient: { id: "ig-business" }, postback: { title: "Shop" } },
+        { sender: { id: "ig-customer" }, recipient: { id: "ig-business" }, reaction: { action: "react" } },
+      ] }],
+    };
+    expect(extractMetaInboundMessages(payload, "ig-business")).toMatchObject([
+      { eventType: "postback", ignoredReason: "unsupported_event_type" },
+      { eventType: "reaction", ignoredReason: "unsupported_event_type" },
     ]);
   });
 
