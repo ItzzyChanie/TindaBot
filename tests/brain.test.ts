@@ -190,6 +190,55 @@ describe("grounded incoming conversation brain", () => {
     expect(result.missedRequest).toBe(true);
   });
 
+  it("replies warmly to thank-you messages with spelling variations", async () => {
+    for (const message of ["Thank you po", "salamaat", "thnks", "tyyy po", "thanks!"]) {
+      const result = await runIncomingBrain({ ...baseInput, message });
+      expect(result.reply).toBe("You're welcome po! Thank you din po for asking/message us. Balik lang po kayo if may gusto pa po kayong itanong.");
+      expect(result.needsSeller).toBe(false);
+    }
+  });
+
+  it("checks the requested quantity against the selected product's quote for discounts", async () => {
+    const promotedProduct = {
+      ...product,
+      promos: [{ label: "Buy 3 save 20%", kind: "qty_percent" as const, min_qty: 3, value: 20, active: true }],
+    };
+    const result = await runIncomingBrain({
+      ...baseInput,
+      message: "May discount ba sa Isla blouse kapag bumili ako ng tatlo?",
+      products: [promotedProduct],
+    });
+    expect(result.reply).toContain("Buy 3 save 20%");
+    expect(result.reply).toContain("Para sa 3 piraso");
+    expect(result.reply).toContain("bawas po ang ₱20.00");
+    expect(result.reply).toContain("item total ay ₱79.99");
+  });
+
+  it("says when an identified item has no active discount", async () => {
+    const result = await runIncomingBrain({
+      ...baseInput,
+      message: "May bawas po ba sa Isla blouse kung bibili ako ng 3?",
+    });
+    expect(result.reply).toContain("Wala pong active discount");
+    expect(result.reply).toContain("Regular item total po para sa 3 piraso ay ₱99.99");
+    expect(result.needsSeller).toBe(false);
+
+    const followUp = await runIncomingBrain({
+      ...baseInput,
+      message: "may bawas po ba dito?",
+      pending: { last_product: { product_id: product.id, size: "S" } },
+    });
+    expect(followUp.reply).toContain("Wala pong active discount");
+    expect(followUp.reply).toContain(product.name);
+  });
+
+  it("hands uncertain discount questions to the seller", async () => {
+    const result = await runIncomingBrain({ ...baseInput, message: "May discount po ba?" });
+    expect(result.reply).toContain("Hindi po ako sigurado");
+    expect(result.needsSeller).toBe(true);
+    expect(result.missedRequest).toBe(true);
+  });
+
   it("answers deictic availability questions using the linked shop item", async () => {
     const result = await runIncomingBrain({
       ...baseInput,
@@ -851,7 +900,8 @@ describe("grounded incoming conversation brain", () => {
       expect(result.reply).toContain("Aling item");
     }
     const bargaining = await runIncomingBrain({ ...baseInput, message: "Pwede po ba tawad?" });
-    expect(bargaining.reply).toContain("Fixed price");
+    expect(bargaining.reply).toContain("Hindi po ako sigurado");
+    expect(bargaining.needsSeller).toBe(true);
     const namedItem = await runIncomingBrain({ ...baseInput, message: "May discount sa Isla blouse?" });
     expect(namedItem.reply).toContain("Isla Linen Top");
     expect(namedItem.reply).toContain("33.33");

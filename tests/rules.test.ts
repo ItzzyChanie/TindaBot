@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isAcknowledgement, matchCatalogSize, matchQuantityAnswer, resolveProduct, resolveProductChoice, understandFromRules, type CatalogProduct } from "../supabase/functions/_shared/rules";
+import { isAcknowledgement, isThankYou, matchCatalogSize, matchQuantityAnswer, resolveProduct, resolveProductChoice, understandFromRules, type CatalogProduct } from "../supabase/functions/_shared/rules";
 
 const catalog: CatalogProduct[] = [
   {
@@ -233,6 +233,29 @@ describe("catalog-grounded message rules", () => {
       expect(isAcknowledgement(message)).toBe(true);
     }
     expect(isAcknowledgement("okay, how much is the shirt?")).toBe(false);
+  });
+
+  it("recognizes thank-you messages with extra or missing letters", () => {
+    for (const message of [
+      "Thank you", "thank you po", "thanks", "thankssss", "thnk you", "thx", "ty po", "tyyyy",
+      "salamat po", "salamaat", "salamatt", "maraming salamat po", "thank you so much",
+    ]) {
+      expect(isThankYou(message)).toBe(true);
+    }
+    expect(isThankYou("Thanks, how much is this?" )).toBe(false);
+  });
+
+  it("recognizes common discount and bawas questions as discount intent", () => {
+    for (const message of [
+      "May discount po ba?",
+      "May bawas po ba dito?",
+      "May discount sa Isla blouse kapag bumili ako ng 3?",
+      "May promo ba sa basic tee?",
+      "May less po ba kapag lima ang kukunin?",
+      "Pwede pang bawas sa Isla blouse?",
+    ]) {
+      expect(understandFromRules(message, catalog).intent).toBe("discount");
+    }
   });
 
   it("recognizes questions about the seller's availability time", () => {

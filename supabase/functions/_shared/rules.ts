@@ -175,7 +175,7 @@ const intentPhrases = {
   business_hours: ["business hours", "opening hours", "store hours", "what time do you open", "what time are you open", "anong oras kayo bukas"],
   after_sales: ["exchange", "return policy", "refund policy", "can i return", "pwede mag return", "pwede mag exchange", "do you accept returns", "do you accept exchange"],
   seller_handoff: ["restock", "material", "materials", "fabric", "fabrics", "see through", "see thru", "stretch", "stretchable", "stretchy", "thick ba", "thin", "makapal", "manipis", "true to size", "size fit sa akin", "fit sa akin", "anong size ang fit", "what size would fit", "recommend a size", "height weight", "actual photo", "actual photos", "real photo", "real photos", "actual images", "same as picture", "same as photo", "sa picture", "picture lang", "photo", "photos", "picture", "video", "model", "height of the model", "available colors", "what colors", "what color", "which colors", "which color", "colors", "color", "colours", "colour", "ibang color", "other color", "other colors", "anong kulay", "kulay", "reviews", "review", "testimonials", "feedback", "reseller", "reseller price", "dropship", "dropshipping", "dropshipper"],
-  discount: ["discount", "tawad", "less pa", "best price", "may bawas", "can you lower", "lower the price"],
+  discount: ["discount", "tawad", "less pa", "best price", "may bawas", "may bawas pa", "bawas ba", "bawasan pa", "pwede pang bawas", "may discount ba", "may discount pa", "may less", "may less pa", "may promo", "promo ba", "promos", "sale ba", "on sale", "price cut", "marked down", "can you lower", "lower the price", "give me a discount"],
   price: ["magkano", "how much", "price", "presyo", "hm", "total", "cost", "pm price"],
   availability: ["available", "availability", "avail", "may stock", "in stock", "meron", "mayroon", "anong sizes", "anong size", "available sizes"],
   shipping: ["shipping", "delivery fee", "shipping fee", "pa deliver", "padeliver", "deliver sa", "ship to", "shipping to", "delivery", "deliver", "ship out", "ship-out", "nag ship", "nagship", "ship with", "dispatch", "cut off", "cutoff", "same day", "same-day", "lalamove", "move it", "j t", "lbc", "flash", "ninja van", "spx", "jrs", "gaano katagal", "courier", "couriers", "which courier", "what courier", "ibang lugar", "other places", "other areas", "outside metro manila", "outside manila", "outside ncr", "elsewhere", "provincial shipping"],
@@ -202,6 +202,37 @@ export function isAcknowledgement(message: string): boolean {
   return words.some((word) => ["ok", "okay", "okey", "oki", "okie", "sure", "sige", "sge", "ge", "yes", "yeah", "yep", "oo", "opo", "no", "noted", "alright", "allright", "salamat", "thanks", "thank", "ty", "thx"].includes(word));
 }
 
+function withinOneEdit(value: string, target: string): boolean {
+  if (Math.abs(value.length - target.length) > 1) return false;
+  const previous = Array.from({ length: target.length + 1 }, (_, index) => index);
+  for (let row = 1; row <= value.length; row += 1) {
+    const current = [row];
+    for (let column = 1; column <= target.length; column += 1) {
+      current[column] = Math.min(
+        current[column - 1] + 1,
+        previous[column] + 1,
+        previous[column - 1] + (value[row - 1] === target[column - 1] ? 0 : 1),
+      );
+    }
+    if (Math.min(...current) > 1) return false;
+    for (let column = 0; column <= target.length; column += 1) previous[column] = current[column];
+  }
+  return previous[target.length] <= 1;
+}
+
+export function isThankYou(message: string): boolean {
+  const words = normalizeMessage(message).split(" ")
+    .map((word) => word.replace(/(.)\1+/g, "$1"))
+    .filter((word) => !["po", "opo", "please", "pls", "so", "much", "very", "a", "lot", "again", "din", "maraming"].includes(word));
+  if (!words.length || words.length > 4) return false;
+  const thanks = ["thanks", "thank", "thankyou", "salamat", "ty", "thx", "tnx"];
+  const thankWord = (word: string) => thanks.some((target) => withinOneEdit(word, target));
+  const youWord = (word: string) => withinOneEdit(word, "you") || word === "u";
+  return (words.length === 1 && thankWord(words[0])) ||
+    (words.length === 2 && thankWord(words[0]) && youWord(words[1])) ||
+    (words.length > 1 && words.every((word) => thankWord(word) || youWord(word)) && words.some(thankWord));
+}
+
 const stopWords = new Set([
   "magkano", "how", "much", "price", "presyo", "hm", "pm", "mp", "cost", "total", "ilan", "kapag", "when", "available",
   "availability", "avail", "stock", "meron", "mayroon", "may", "ba", "have", "do", "you", "it",
@@ -211,7 +242,7 @@ const stopWords = new Set([
   "quantity", "size", "sizes", "order", "gusto", "ko", "nito", "iyan", "ito", "dito", "diyan", "dun", "na",
   "with", "and", "or", "medium", "med", "small", "large", "extra", "xl", "xxl", "kayo", "kayong", "kami", "nyo", "ninyo", "ninyong", "what", "are", "have",
   "this", "that", "ibang", "lugar", "other", "place", "places", "area", "areas", "outside", "province", "provinces", "provincial", "elsewhere", "another", "different", "location", "locations",
-  "material", "fabric", "through", "stretchable", "stretchy", "thick", "makapal", "manipis", "true", "fit", "recommend", "restock", "colors", "color", "kulay", "photo", "photos", "image", "images", "picture", "video", "model", "legit", "scam", "reviews", "review", "testimonials", "feedback", "reseller", "dropship", "dropshipping", "dropshipper", "actual", "discount", "tawad",
+  "material", "fabric", "through", "stretchable", "stretchy", "thick", "makapal", "manipis", "true", "fit", "recommend", "restock", "colors", "color", "kulay", "photo", "photos", "image", "images", "picture", "video", "model", "legit", "scam", "reviews", "review", "testimonials", "feedback", "reseller", "dropship", "dropshipping", "dropshipper", "actual", "discount", "tawad", "bawas", "less", "promo", "promos", "sale", "off",
   ...Object.keys(numberWords).flatMap((word) => word.split(" ")),
 ]);
 

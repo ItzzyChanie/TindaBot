@@ -4,6 +4,7 @@ import {
   matchQuantityAnswer,
   normalizeMessage,
   isAcknowledgement,
+  isThankYou,
   resolveProduct,
   resolveProductChoice,
   understandFromRules,
@@ -214,6 +215,15 @@ export function runIncomingBrain(
       clearSellerHandoff: input.pending.seller_handoff === true,
     };
   }
+  if (isThankYou(input.message)) {
+    return {
+      ...base,
+      action: input.aiMode === "suggest" ? "draft" : "reply",
+      reply: "You're welcome po! Thank you din po for asking/message us. Balik lang po kayo if may gusto pa po kayong itanong." +
+        (input.firstContact ? " " + disclosure : ""),
+      pending: input.pending,
+    };
+  }
   const clarification = record(input.pending.clarification);
   if (
     input.pending.seller_handoff === true &&
@@ -271,7 +281,7 @@ export function runIncomingBrain(
   const refersToSelectedProduct = /\b(this|that|it|these|those|ito|dito|nito|iyan|diyan|iyon|yun|dun|yung item|item na ito)\b/i
     .test(input.message.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase());
   if (
-    (contextProduct || lastProduct) && ["price", "discount"].includes(understanding.intent) &&
+    (contextProduct || lastProduct || understanding.intent === "discount") && ["price", "discount"].includes(understanding.intent) &&
     understanding.quantities_mentioned.length === 0
   ) {
     const quantity = matchQuantityAnswer(input.message);
@@ -675,33 +685,33 @@ export function runIncomingBrain(
     return respond({ after_sales: kind, enabled: true }, "Opo, available po ang " + kind + ". Anong item po ito? Pakisend din po ang order number para matulungan kayo.");
   }
   if (understanding.intent === "discount") {
-    const options = input.settings.bot_options;
     const resolution = resolveProduct(understanding.product_query, input.products.filter((item) => item.active));
-    if (resolution.status === "matched") {
-      const product = resolution.product as BrainProduct;
-      const pricing = quote(product, 1, input.now ?? new Date(), product.promos);
-      const benefits = [
-        ...(pricing.label ? ["May " + pricing.label + " po sa item na ito."] : ["Fixed price po ito; wala pong additional tawad sa catalog price."]),
-        ...(Number(options?.free_shipping_minimum) > 0 ? ["Free shipping po kapag umabot sa " + peso(Number(options?.free_shipping_minimum)) + "."] : []),
-        ...(options?.bulk_orders ? [options.bulk_details?.trim() || "Tumatanggap po kami ng bulk orders; seller ang magko-confirm ng quote."] : []),
-      ];
-      const reply = prefersEnglish(input.message)
-        ? `${product.name} is ${peso(pricing.unit)}. ${benefits.join(" ")} Would you like to order?`
-        : `${product.name}: ${peso(pricing.unit)} po. ${benefits.join(" ")} Gusto niyo po bang mag-order?`;
-      return respond({ product: product.name, unit_price: pricing.unit, offer: pricing.label }, reply, {
-        ...activePending,
-        last_product: { product_id: product.id },
-        clarification: { kind: "order_interest", product_id: product.id },
-      });
+    const product = resolution.status === "matched"
+      ? resolution.product as BrainProduct
+      : !understanding.product_query ? contextProduct ?? lastProduct ?? null : null;
+    if (!product) {
+      return escalate("Hindi po ako sigurado kung may discount o bawas sa item na tinutukoy ninyo. I-aask ko po muna ito sa seller. Kaya ko pong tumulong sa presyo, sizes, stock, shipping, bayad, at order status.");
     }
-    const benefits = [
-      ...(Number(options?.free_shipping_minimum) > 0 ? ["May free shipping po kapag umabot sa " + peso(Number(options?.free_shipping_minimum)) + "."] : []),
-      ...(options?.bulk_orders ? ["Tumatanggap din po kami ng bulk orders."] : []),
-    ];
-    const reply = prefersEnglish(input.message)
-      ? "Catalog prices are fixed; promotions depend on the item. " + (benefits.length ? benefits.join(" ") + " " : "") + "Which item would you like me to check?"
-      : "Fixed price po ang catalog items; ang promo ay depende sa item. " + (benefits.length ? benefits.join(" ") + " " : "") + "Aling item po ang gusto ninyong i-check?";
-    return respond({ fixed_price: true }, reply);
+    const quantity = understanding.quantity ?? 1;
+    const pricing = quote(product, quantity, input.now ?? new Date(), product.promos);
+    const reply = pricing.saved > 0 && pricing.label
+      ? "Opo, may " + pricing.label + " po sa " + product.name + ". Para sa " + quantity +
+        " piraso, bawas po ang " + peso(pricing.saved) + " at item total ay " + peso(pricing.total) + "."
+      : "Wala pong active discount o promo na naka-lista sa catalog para sa " + product.name +
+        " ngayon. Regular item total po para sa " + quantity + " piraso ay " + peso(pricing.total) + ".";
+    return respond({
+      product: product.name,
+      quantity,
+      unit_price: pricing.unit,
+      subtotal: pricing.subtotal,
+      item_total: pricing.total,
+      saved: pricing.saved,
+      offer: pricing.label,
+    }, reply, {
+      ...activePending,
+      last_product: { ...lastProductContext, product_id: product.id, quantity },
+      clarification: { kind: "order_interest", product_id: product.id },
+    });
   }
   if (understanding.intent === "payment") {
     const orderIsReserved = input.latestOrder?.status === "awaiting_payment";
