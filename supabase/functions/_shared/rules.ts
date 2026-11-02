@@ -176,7 +176,7 @@ const intentPhrases = {
   after_sales: ["exchange", "return policy", "refund policy", "can i return", "pwede mag return", "pwede mag exchange", "do you accept returns", "do you accept exchange"],
   seller_handoff: ["restock", "material", "materials", "fabric", "fabrics", "see through", "see thru", "stretch", "stretchable", "stretchy", "thick ba", "thin", "makapal", "manipis", "true to size", "size fit sa akin", "fit sa akin", "anong size ang fit", "what size would fit", "recommend a size", "height weight", "actual photo", "actual photos", "real photo", "real photos", "actual images", "same as picture", "same as photo", "sa picture", "picture lang", "photo", "photos", "picture", "video", "model", "height of the model", "available colors", "what colors", "what color", "which colors", "which color", "colors", "color", "colours", "colour", "ibang color", "other color", "other colors", "anong kulay", "kulay", "reviews", "review", "testimonials", "feedback", "reseller", "reseller price", "dropship", "dropshipping", "dropshipper"],
   discount: ["discount", "tawad", "less pa", "best price", "may bawas", "can you lower", "lower the price"],
-  price: ["magkano", "how much", "price", "presyo", "hm", "total magkano", "cost", "pm price"],
+  price: ["magkano", "how much", "price", "presyo", "hm", "total", "cost", "pm price"],
   availability: ["available", "availability", "avail", "may stock", "in stock", "meron", "mayroon", "anong sizes", "anong size", "available sizes"],
   shipping: ["shipping", "delivery fee", "shipping fee", "pa deliver", "padeliver", "deliver sa", "ship to", "shipping to", "delivery", "deliver", "ship out", "ship-out", "nag ship", "nagship", "ship with", "dispatch", "cut off", "cutoff", "same day", "same-day", "lalamove", "move it", "j t", "lbc", "flash", "ninja van", "spx", "jrs", "gaano katagal", "courier", "couriers", "which courier", "what courier", "ibang lugar", "other places", "other areas", "outside metro manila", "outside manila", "outside ncr", "elsewhere", "provincial shipping"],
   order_confirm: ["order na", "order ko na", "confirm order", "confirm", "i-confirm", "sige kunin", "kuha ko na", "kukuha", "kunin ko", "pabili", "checkout", "mine", "go na"],
@@ -203,7 +203,7 @@ export function isAcknowledgement(message: string): boolean {
 }
 
 const stopWords = new Set([
-  "magkano", "how", "much", "price", "presyo", "hm", "pm", "mp", "cost", "available",
+  "magkano", "how", "much", "price", "presyo", "hm", "pm", "mp", "cost", "total", "ilan", "kapag", "when", "available",
   "availability", "avail", "stock", "meron", "mayroon", "may", "ba", "have", "do", "you", "it",
   "the", "a", "an", "is", "are", "in", "from", "at", "of", "to", "for", "me", "please", "paki", "po",
   "ang", "yung", "ng", "sa", "pa", "ano", "anong", "deliver", "delivery", "ship", "shipping",

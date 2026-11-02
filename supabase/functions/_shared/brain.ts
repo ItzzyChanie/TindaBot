@@ -264,10 +264,14 @@ export function runIncomingBrain(
   const contextProduct = input.products.find((product) =>
     product.active && product.id === input.contextProductId
   );
+  let lastProductContext = record(input.pending.last_product);
+  const lastProduct = input.products.find((item) =>
+    item.active && item.id === lastProductContext.product_id
+  );
   const refersToSelectedProduct = /\b(this|that|it|these|those|ito|dito|nito|iyan|diyan|iyon|yun|dun|yung item|item na ito)\b/i
     .test(input.message.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase());
   if (
-    contextProduct && ["price", "discount"].includes(understanding.intent) &&
+    (contextProduct || lastProduct) && ["price", "discount"].includes(understanding.intent) &&
     understanding.quantities_mentioned.length === 0
   ) {
     const quantity = matchQuantityAnswer(input.message);
@@ -337,10 +341,6 @@ export function runIncomingBrain(
       }
     }
   }
-  let lastProductContext = record(input.pending.last_product);
-  const lastProduct = input.products.find((item) =>
-    item.active && item.id === lastProductContext.product_id
-  );
   if (lastProduct && !understanding.product_query &&
     ["price", "discount", "availability", "question", "seller_handoff"].includes(understanding.intent)) {
     understanding = {
@@ -753,7 +753,27 @@ export function runIncomingBrain(
     const options = input.settings.bot_options;
     const couriers = [...(options?.couriers ?? []), ...(options?.other_courier?.trim() ? [options.other_courier.trim()] : [])];
     const minimum = Number(options?.free_shipping_minimum ?? 0);
-    const asksFreeShipping = /\bfree shipping\b/i.test(input.message);
+    const normalizedShippingQuestion = normalizeMessage(input.message);
+    const asksFreeShipping = /\b(free|libre|libre na|wala|walang|without)\b.*\b(shipping|delivery|fee)\b|\b(shipping|delivery)\b.*\b(free|libre|wala|walang)\b/i
+      .test(normalizedShippingQuestion);
+    if (asksFreeShipping) {
+      const rates = Object.entries(input.settings.shipping_rates)
+        .filter(([, amount]) => Number.isFinite(amount))
+        .map(([area, amount]) => area + " " + peso(amount));
+      const rateSummary = rates.length
+        ? " Standard rates po ayon sa settings: " + rates.join(", ") + "."
+        : " Wala pa pong naka-save na shipping rate sa settings.";
+      const freeShipping = minimum > 0
+        ? " May free shipping po kapag umabot sa " + peso(minimum) + " ang item subtotal."
+        : " Sa ngayon po, walang naka-configure na free shipping.";
+      return escalate(
+        "Sorry po, " + (minimum > 0
+          ? "may free shipping lang po kapag umabot sa " + peso(minimum) + " ang subtotal; kung hindi, may shipping fee po."
+          : "hindi po free shipping ayon sa shop settings.") +
+        rateSummary + freeShipping +
+        " Puwede po kayong mag-type ng /seller o SELLER para makipag-negotiate sa seller. Kaya ko pong tumulong sa presyo, sizes, stock, shipping rates, bayad, at order status.",
+      );
+    }
     if (/\b(same day|same-day)\b/i.test(input.message)) {
       const sameDayCouriers = couriers.filter((courier) => /^(lalamove|move it)$/i.test(courier));
       if (!sameDayCouriers.length)
@@ -784,14 +804,6 @@ export function runIncomingBrain(
     const asksOtherAreas = asksOtherAreaShipping(input.message);
     const region = regionFor(understanding.location);
     const rate = region ? input.settings.shipping_rates[region] : undefined;
-    if (asksFreeShipping && minimum > 0)
-      return respond({ free_shipping_minimum: minimum }, prefersEnglish(input.message)
-        ? `Free shipping applies to orders of ${peso(minimum)} or more. What is your cart total so I can check?`
-        : "Free shipping po kapag umabot sa " + peso(minimum) + " ang order. Magkano po ang items sa cart ninyo para ma-check natin?");
-    if (asksFreeShipping && minimum === 0 && !region)
-      return respond({ free_shipping_minimum: 0 }, prefersEnglish(input.message)
-        ? "Free shipping isn’t currently enabled. What area should I check the shipping fee for?"
-        : "Wala pa pong free shipping sa ngayon. Saan po ang delivery area ninyo para ma-check ang shipping fee?");
     if (!region && asksOtherAreas) {
       const otherRates = Object.entries(input.settings.shipping_rates)
         .filter(([area, amount]) => area.toLocaleLowerCase() !== "metro manila" && Number.isFinite(amount));

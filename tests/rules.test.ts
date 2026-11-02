@@ -189,6 +189,30 @@ describe("catalog-grounded message rules", () => {
     }
   });
 
+  it("recognizes quantity total follow-ups without repeating the product name", () => {
+    for (const [message, quantity] of [
+      ["magkano po kapag tatlo?", 3],
+      ["how much po kapag apat?", 4],
+      ["ilan total sa kapag lima?", 5],
+    ] as const) {
+      expect(understandFromRules(message, catalog)).toMatchObject({
+        intent: "price",
+        product_query: null,
+      });
+      expect(matchQuantityAnswer(message)).toBe(quantity);
+    }
+  });
+
+  it("recognizes free-shipping questions in Taglish", () => {
+    for (const message of [
+      "free shipping po ba ito?",
+      "wala po ba itong shipping fee?",
+      "libre na ba shipping nito?",
+    ]) {
+      expect(understandFromRules(message, catalog).intent).toBe("shipping");
+    }
+  });
+
   it("recognizes natural and reordered size-chart requests", () => {
     for (const message of [
       "Meron po ba kayong picture ng size chart?",

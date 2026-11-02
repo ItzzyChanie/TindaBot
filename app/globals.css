@@ -409,6 +409,13 @@ select:focus-visible {
   min-height: 100vh;
   margin-left: 258px;
 }
+@media (min-width: 1051px) {
+  .main-area:has(.inbox-page) {
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+  }
+}
 .workspace-topbar {
   position: sticky;
   top: 0;
@@ -1495,8 +1502,8 @@ h2 {
 }
 .inbox-page {
   display: grid;
-  height: calc(100vh - 66px);
-  min-height: 620px;
+  height: calc(100dvh - 110px);
+  min-height: 0;
   grid-template-columns: minmax(270px, 320px) minmax(350px, 1fr) minmax(
       230px,
       270px
@@ -2362,6 +2369,7 @@ h2 {
   }
   .inbox-page {
     height: calc(100vh - 102px);
+    min-height: 0;
     margin: 20px;
     border-radius: 14px;
     grid-template-columns: minmax(240px, 290px) minmax(300px, 1fr);

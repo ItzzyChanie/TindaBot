@@ -157,6 +157,39 @@ describe("grounded incoming conversation brain", () => {
     expect(result.reply).toContain("₱99.99");
   });
 
+  it("re-quotes the last product and size when a customer asks for a new quantity", async () => {
+    for (const [message, quantity] of [
+      ["magkano po kapag tatlo?", 3],
+      ["how much po kapag apat?", 4],
+      ["ilan total sa kapag lima?", 5],
+    ] as const) {
+      const result = await runIncomingBrain({
+        ...baseInput,
+        message,
+        pending: { last_product: { product_id: product.id, size: "S", quantity: 1 } },
+      });
+      expect(result.reply).toContain(product.name);
+      expect(result.reply).toContain("(S) x" + quantity);
+      expect(result.reply).toContain("Subtotal po ay ₱" + (33.33 * quantity).toFixed(2));
+      expect(result.reply).toContain("Sabihin po ang area ninyo");
+      expect(result.pending.clarification).toMatchObject({
+        kind: "location", product_id: product.id, size: "S", quantity,
+      });
+    }
+  });
+
+  it("answers free-shipping questions from shop settings and flags seller handoff", async () => {
+    const result = await runIncomingBrain({
+      ...baseInput,
+      message: "wala po ba itong shipping fee?",
+    });
+    expect(result.reply).toContain("hindi po free shipping");
+    expect(result.reply).toContain("Visayas ₱75.00");
+    expect(result.reply).toContain("SELLER");
+    expect(result.needsSeller).toBe(true);
+    expect(result.missedRequest).toBe(true);
+  });
+
   it("answers deictic availability questions using the linked shop item", async () => {
     const result = await runIncomingBrain({
       ...baseInput,
@@ -837,7 +870,9 @@ describe("grounded incoming conversation brain", () => {
     const threshold = await runIncomingBrain({ ...baseInput, message: "Is there free shipping?", settings: { ...baseInput.settings, bot_options: { free_shipping_minimum: 500 } } });
     expect(threshold.reply).toContain("500.00");
     const disabled = await runIncomingBrain({ ...baseInput, message: "Free shipping?", settings: { ...baseInput.settings, bot_options: { free_shipping_minimum: 0 } } });
-    expect(disabled.reply).toContain("Wala pa pong free shipping");
+    expect(disabled.reply).toContain("walang naka-configure na free shipping");
+    expect(disabled.needsSeller).toBe(true);
+    expect(disabled.missedRequest).toBe(true);
     const couriers = await runIncomingBrain({ ...baseInput, message: "Saan po kayo nag-ship? J&T? LBC? Flash?", settings: { ...baseInput.settings, bot_options: { couriers: ["J&T", "LBC", "Flash Express"] } } });
     expect(couriers.reply).toContain("J&T, LBC, Flash Express");
   });
