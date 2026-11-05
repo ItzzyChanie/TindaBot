@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { labelAutoReply, runIncomingBrain, type BrainRules, type BrainInput, type BrainProduct } from "../supabase/functions/_shared/brain";
 import type { Understanding } from "../supabase/functions/_shared/rules";
-import { resolveProductChoice } from "../supabase/functions/_shared/rules";
+import { resolveProductChoice, understandFromRules } from "../supabase/functions/_shared/rules";
 
 const product: BrainProduct = {
   id: "product-1",
@@ -429,6 +429,42 @@ describe("grounded incoming conversation brain", () => {
     expect(answer.reply).toContain("S: 4 available");
     expect(answer.reply).toContain("M: 8 available");
     expect(answer.reply).toContain("L: sold out");
+  });
+
+  it("asks which item when a size question has no product, then answers the follow-up", async () => {
+    const tee: BrainProduct = {
+      ...product,
+      id: "tee",
+      name: "Bayanihan Basic T-Shirt",
+      aliases: ["Bayanihan tshirt"],
+      variants: [
+        { id: "tee-s", size: "S", stock: 4 },
+        { id: "tee-m", size: "M", stock: 0 },
+      ],
+    };
+    expect(understandFromRules("May size po ba nito?", [{ name: tee.name, aliases: tee.aliases, sizes: tee.variants.map((item) => item.size) }]).intent)
+      .toBe("availability");
+    const clarify = await runIncomingBrain({ ...baseInput, message: "May size po ba nito?", products: [tee] });
+    expect(clarify.reply).toContain("Aling item");
+    const answer = await runIncomingBrain({
+      ...baseInput,
+      message: "Bayanihan Basic T-Shirt po",
+      pending: clarify.pending,
+      products: [tee],
+    });
+    expect(answer.reply).toContain("S: 4 available");
+    expect(answer.reply).toContain("M: sold out");
+  });
+
+  it("uses a uniquely matched product in the message being replied to", async () => {
+    const result = await runIncomingBrain({
+      ...baseInput,
+      message: "May size po ba nito?",
+      replyContextText: "Seller: Isla blouse available po in sizes S and M.",
+    });
+    expect(result.reply).toContain("Isla Linen Top po");
+    expect(result.reply).toContain("S: 5 available");
+    expect(result.reply).toContain("M: sold out");
   });
 
   it("answers the price FAQ with Metro Manila shipping for a selected catalog item", async () => {

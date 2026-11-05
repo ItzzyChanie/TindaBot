@@ -45,6 +45,7 @@ export type BrainPending = Record<string, unknown> & {
 };
 export type BrainInput = {
   message: string;
+  replyContextText?: string | null;
   channel?: string;
   sellerPresent?: boolean;
   contextProductId?: string | null;
@@ -271,9 +272,16 @@ export function runIncomingBrain(
     });
     return escalate(unknownMessageReply);
   }
+  const activeProducts = input.products.filter((product) => product.active);
+  const replyProductResolution = input.replyContextText
+    ? resolveProduct(input.replyContextText, activeProducts)
+    : { status: "not_found" as const, candidates: [] };
+  const replyContextProduct = replyProductResolution.status === "matched"
+    ? replyProductResolution.product as BrainProduct
+    : null;
   const contextProduct = input.products.find((product) =>
     product.active && product.id === input.contextProductId
-  );
+  ) ?? replyContextProduct;
   let lastProductContext = record(input.pending.last_product);
   const lastProduct = input.products.find((item) =>
     item.active && item.id === lastProductContext.product_id

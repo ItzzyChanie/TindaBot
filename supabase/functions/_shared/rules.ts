@@ -513,10 +513,12 @@ export function understandFromRules(
   const quantities = extractQuantities(normalized, productStart);
   const location = extractLocation(normalized);
   const orderIntent = hasAny(normalized, intentPhrases.order_confirm);
-  const availabilityRequested = hasAny(normalized, intentPhrases.availability);
+  const asksIfAnySize = /\bmay\s+(?:available\s+)?sizes?\s+(?:(?:po|opo)\s+)?ba\b/.test(normalized);
+  const availabilityRequested = hasAny(normalized, intentPhrases.availability) || asksIfAnySize;
   const ambiguousQuery = Boolean(productQuery) &&
     resolveProduct(productQuery, catalog).status === "ambiguous";
   const availabilityCue = hasAny(normalized, intentPhrases.availability) ||
+    asksIfAnySize ||
     (bestMatch && size !== null && /\b(may|meron|mayroon)\b/.test(normalized));
   const sellerAvailability = /\b(what time|anong oras|anong araw|kailan|kelan|when)\b/.test(normalized) &&
     /\b(seller|siya|sya|kayo|owner|shop)\b/.test(normalized) &&

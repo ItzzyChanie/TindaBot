@@ -390,6 +390,7 @@ export async function handleIncoming(
 
   const brain = await runIncomingBrain({
     message: text,
+    replyContextText: replyTarget?.body ?? null,
     channel,
     sellerPresent: channel === "telegram" && latestOrderRow
       ? await sellerPresentForOrder(conversationId, Number(latestOrderRow.id), aiMode)
