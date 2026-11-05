@@ -176,6 +176,7 @@ export function InboxWorkspace() {
   const [showHidden, setShowHidden] = useState(false);
   const [needsSellerOnly, setNeedsSellerOnly] = useState(false);
   const [mobileDetailsOpen, setMobileDetailsOpen] = useState(false);
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [savingName, setSavingName] = useState(false);
   const [retryingMessageId, setRetryingMessageId] = useState<string | null>(null);
   const [nameDraft, setNameDraft] = useState("");
@@ -322,13 +323,14 @@ export function InboxWorkspace() {
   }, []);
 
   useEffect(() => {
-    if (!mobileDetailsOpen) return;
+    if (!mobileDetailsOpen && !profileMenuOpen) return;
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") setMobileDetailsOpen(false);
+      if (event.key === "Escape") setProfileMenuOpen(false);
     };
     window.addEventListener("keydown", closeOnEscape);
     return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [mobileDetailsOpen]);
+  }, [mobileDetailsOpen, profileMenuOpen]);
 
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();
@@ -813,6 +815,16 @@ export function InboxWorkspace() {
     await refreshConversationList();
   }
 
+  async function copyProfileValue(value: string, label: string) {
+    try {
+      await navigator.clipboard.writeText(value);
+      setError(`${label} copied.`);
+    } catch {
+      setError(`Could not copy the ${label.toLowerCase()}.`);
+    }
+    setProfileMenuOpen(false);
+  }
+
   async function deleteConversation() {
     if (
       !selected ||
@@ -1233,12 +1245,21 @@ export function InboxWorkspace() {
           <>
             <div className="details-heading">
               <p className="eyebrow">CUSTOMER PROFILE</p>
-              <button className="mobile-details-close text-button" type="button" onClick={() => setMobileDetailsOpen(false)}>
+              <button className="mobile-details-close text-button" type="button" aria-label="Close customer profile" onClick={() => setMobileDetailsOpen(false)}>
                 Close
               </button>
-              <span className="details-more" aria-hidden="true">
+              <button className="details-more" type="button" aria-label="Customer profile actions" aria-haspopup="menu" aria-expanded={profileMenuOpen} onClick={() => setProfileMenuOpen((open) => !open)}>
                 •••
-              </span>
+              </button>
+              {profileMenuOpen && (
+                <div className="details-menu" role="menu">
+                  <button type="button" role="menuitem" onClick={() => void copyProfileValue(customer.id, "Customer ID")}>Copy customer ID</button>
+                  <button type="button" role="menuitem" onClick={() => void copyProfileValue(selected.id, "Conversation ID")}>Copy conversation ID</button>
+                  <button type="button" role="menuitem" onClick={() => { setProfileMenuOpen(false); void setHidden(!selected.is_hidden); }}>
+                    {selected.is_hidden ? "Unhide conversation" : "Hide conversation"}
+                  </button>
+                </div>
+              )}
             </div>
             <div className="customer-profile">
               <span className="customer-avatar">
