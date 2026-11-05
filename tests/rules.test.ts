@@ -15,6 +15,13 @@ const catalog: CatalogProduct[] = [
 ];
 
 describe("catalog-grounded message rules", () => {
+  it.each(["reserve this", "pa-reserve po", "magpa reservation", "save one for me"])(
+    "recognizes reservation wording: %s",
+    (message) => {
+      expect(understandFromRules(message, catalog).intent).toBe("order_confirm");
+    },
+  );
+
   it("extracts product, size, quantity, and Metro Manila from the sample message", () => {
     expect(understandFromRules(
       "Magkano po ang 2 medium t-shirt, pa-deliver sa Malabon?",

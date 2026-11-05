@@ -179,7 +179,7 @@ const intentPhrases = {
   price: ["magkano", "how much", "price", "presyo", "hm", "total", "cost", "pm price"],
   availability: ["available", "availability", "avail", "may stock", "in stock", "meron", "mayroon", "anong sizes", "anong size", "available sizes"],
   shipping: ["shipping", "delivery fee", "shipping fee", "pa deliver", "padeliver", "deliver sa", "ship to", "shipping to", "delivery", "deliver", "ship out", "ship-out", "nag ship", "nagship", "ship with", "dispatch", "cut off", "cutoff", "same day", "same-day", "lalamove", "move it", "j t", "lbc", "flash", "ninja van", "spx", "jrs", "gaano katagal", "courier", "couriers", "which courier", "what courier", "ibang lugar", "other places", "other areas", "outside metro manila", "outside manila", "outside ncr", "elsewhere", "provincial shipping"],
-  order_confirm: ["order na", "order ko na", "confirm order", "confirm", "i-confirm", "sige kunin", "kuha ko na", "kukuha", "kunin ko", "pabili", "checkout", "mine", "go na"],
+  order_confirm: ["order na", "order ko na", "confirm order", "confirm", "i-confirm", "sige kunin", "kuha ko na", "kukuha", "kunin ko", "pabili", "checkout", "mine", "go na", "reserve", "reservation", "pa reserve", "ipa reserve", "magpa reserve", "pa reservation", "i reserve", "save one"],
   greeting: ["hi", "hello", "hey", "good morning", "good afternoon", "good evening", "kamusta", "kumusta", "musta"],
 };
 const otherAreaShippingPhrases = [
@@ -242,7 +242,7 @@ const stopWords = new Set([
   "quantity", "size", "sizes", "order", "gusto", "ko", "nito", "iyan", "ito", "dito", "diyan", "dun", "na",
   "with", "and", "or", "medium", "med", "small", "large", "extra", "xl", "xxl", "kayo", "kayong", "kami", "nyo", "ninyo", "ninyong", "what", "are", "have",
   "this", "that", "ibang", "lugar", "other", "place", "places", "area", "areas", "outside", "province", "provinces", "provincial", "elsewhere", "another", "different", "location", "locations",
-  "material", "fabric", "through", "stretchable", "stretchy", "thick", "makapal", "manipis", "true", "fit", "recommend", "restock", "colors", "color", "kulay", "photo", "photos", "image", "images", "picture", "video", "model", "legit", "scam", "reviews", "review", "testimonials", "feedback", "reseller", "dropship", "dropshipping", "dropshipper", "actual", "discount", "tawad", "bawas", "less", "promo", "promos", "sale", "off",
+  "material", "fabric", "through", "stretchable", "stretchy", "thick", "makapal", "manipis", "true", "fit", "recommend", "restock", "colors", "color", "kulay", "photo", "photos", "image", "images", "picture", "video", "model", "legit", "scam", "reviews", "review", "testimonials", "feedback", "reseller", "dropship", "dropshipping", "dropshipper", "actual", "discount", "tawad", "bawas", "less", "promo", "promos", "sale", "off", "reserve", "reserved", "reservation", "save", "magpa", "ipa",
   ...Object.keys(numberWords).flatMap((word) => word.split(" ")),
 ]);
 

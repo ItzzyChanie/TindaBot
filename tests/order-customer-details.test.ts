@@ -1,7 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { customerDetailsPrompt, isCancellationRequest, isOrderAcknowledgment, isPaymentRequest, missingCustomerDetails, parseOrderDetails, paymentSafetyMessage, sellerRepliedAfterOrder, validCustomerEmail, validCustomerMobile } from "../supabase/functions/_shared/order-customer-details";
+import { customerDetailsPrompt, isCancellationRequest, isOrderAcknowledgment, isPaymentRequest, missingCustomerDetails, parseOrderDetails, paymentSafetyMessage, reservationDetailsPrompt, sellerRepliedAfterOrder, validCustomerEmail, validCustomerMobile } from "../supabase/functions/_shared/order-customer-details";
 
 describe("order customer details", () => {
+  it("asks for reservation details without asking for the delivery area again", () => {
+    const prompt = reservationDetailsPrompt(true);
+    expect(prompt).toContain("Full name:");
+    expect(prompt).toContain("Complete address:");
+    expect(prompt).toContain("Mobile number:");
+    expect(prompt).toContain("Email address:");
+    expect(prompt).toContain("Nakuha ko na po ang delivery area");
+    expect(prompt).not.toContain("Anong area");
+  });
+
   it("parses a complete labeled details block", () => {
     expect(parseOrderDetails([
       "Full name: Juan Dela Cruz",

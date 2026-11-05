@@ -157,6 +157,49 @@ describe("grounded incoming conversation brain", () => {
     expect(result.reply).toContain("₱99.99");
   });
 
+  it("uses the product named in the replied-to bot answer for a short price follow-up", async () => {
+    const bayanihan: BrainProduct = {
+      ...product,
+      id: "bayanihan-shirt",
+      name: "Bayanihan T-Shirt",
+      aliases: ["Bayanihan tshirt"],
+    };
+    const result = await runIncomingBrain({
+      ...baseInput,
+      message: "Magkano po ito?",
+      products: [bayanihan],
+      replyContextText: "TindaBot: Bayanihan T-Shirt po, available sizes S and M. Size S: 5 stock; M: 3 stock.",
+    });
+
+    expect(result.reply).toContain("Bayanihan T-Shirt");
+    expect(result.reply).toContain("Subtotal po");
+  });
+
+  it("prompts customers to reserve after quoting a price with shipping", async () => {
+    const result = await runIncomingBrain({
+      ...baseInput,
+      message: "magkano po ito?",
+      contextProductId: product.id,
+      pending: { last_product: { product_id: product.id, size: "S", location: "Cebu" } },
+    });
+
+    expect(result.reply).toContain("RESERVE");
+    expect(result.reply).toContain("108.33");
+    expect(result.reply).not.toContain("Sabihin po ang area");
+  });
+
+  it("turns a short reserve request into a stock checked order confirmation", async () => {
+    const result = await runIncomingBrain({
+      ...baseInput,
+      message: "reserve po",
+      pending: { last_product: { product_id: product.id, size: "S", quantity: 1, location: "Cebu" } },
+    });
+
+    expect(result.pending.order).toMatchObject({ product_id: product.id, variant_id: "variant-s", region: "Visayas" });
+    expect(result.reply).toContain("Available pa po ito");
+    expect(result.reply).toContain("Sumagot po ng YES");
+  });
+
   it("re-quotes the last product and size when a customer asks for a new quantity", async () => {
     for (const [message, quantity] of [
       ["magkano po kapag tatlo?", 3],
@@ -1288,8 +1331,7 @@ describe("grounded incoming conversation brain", () => {
       ...baseInput, message: "Cebu", products: [trousers], settings, pending: quantity.pending,
     });
     expect(area.reply).toContain("1,165.00");
-    expect(area.reply).toContain("I-confirm po ba");
-    expect(area.reply).toContain("hindi na ito makakansela");
+    expect(area.reply).toContain("Sumagot po ng YES");
     expect(area.pending.order).toMatchObject({ size: "L", quantity: 2, subtotal: 1090, shipping: 75 });
   });
 

@@ -52,6 +52,12 @@ export function customerDetailsPrompt(orderId: number, missing: string[]): strin
   return "Salamat po. Pakisend naman po ang " + (field?.[1] ?? "kulang na details") + " para sa order #" + orderId + ".";
 }
 
+export function reservationDetailsPrompt(includeArea: boolean): string {
+  return "Sige po, i-check ko ang availability habang kinukuha ang details. Wala pang stock na na-reserve. " +
+    (includeArea ? "Nakuha ko na po ang delivery area ninyo. " : "") +
+    "Para ma-reserve ang order, pakisend po ang details sa format na ito:\nFull name:\nComplete address:\nMobile number:\nEmail address:\nOptional delivery notes:";
+}
+
 export function validCustomerEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }

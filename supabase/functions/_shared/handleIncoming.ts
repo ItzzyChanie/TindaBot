@@ -1,7 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { labelAutoReply, runIncomingBrain, type BrainPending, type BrainProduct } from "./brain.ts";
 import { quote, type QuotePromo } from "./quote.ts";
-import { customerDetailsPrompt, isCancellationRequest, isOrderAcknowledgment, isPaymentRequest, missingCustomerDetails, orderDetailFields, parseOrderDetails, paymentSafetyMessage, sellerRepliedAfterOrder, type OrderCustomerDetails } from "./order-customer-details.ts";
+import { customerDetailsPrompt, isCancellationRequest, isOrderAcknowledgment, isPaymentRequest, missingCustomerDetails, orderDetailFields, parseOrderDetails, paymentSafetyMessage, reservationDetailsPrompt, sellerRepliedAfterOrder, type OrderCustomerDetails } from "./order-customer-details.ts";
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -242,7 +242,7 @@ export async function handleIncoming(
     }).eq("id", conversationId);
   if (updateError) throw updateError;
 
-  const conversation = existing
+  let conversation = existing
     ? { ...existing, status: existing.status === "resolved" ? "open" : existing.status }
     : { status: "open", ai_mode: "auto", pending: {} };
   const aiMode = conversation.ai_mode as "auto" | "suggest" | "human";
@@ -290,6 +290,16 @@ export async function handleIncoming(
   const settings = settingsRow ?? { shipping_rates: {}, payment_instructions: "", policies: "", size_chart_url: null, greeting_text: "", shipping_text: "", faq_answers: {}, bot_options: {} };
   const currentPending = object(conversation.pending);
   const detailState = object(currentPending.order_customer_details);
+  const provisionalOrder = object(detailState.order);
+  const hasProvisionalOrder = typeof provisionalOrder.variant_id === "string";
+  if (hasProvisionalOrder && isCancellationRequest(text)) {
+    const remainingPending = { ...currentPending };
+    delete remainingPending.order_customer_details;
+    const { error } = await supabase.from("conversations").update({ pending: remainingPending }).eq("id", conversationId);
+    if (error) throw error;
+    const cancellation = "Noted po, kinansela ko ang reservation request. Wala pang stock na na-reserve o order na nailista.";
+    return { conversationId, reply: aiMode === "auto" ? labelAutoReply(cancellation, aiMode) : null, draft: aiMode === "suggest" ? cancellation : null };
+  }
   if (isCancellationRequest(text) &&
     (typeof detailState.order_id === "number" || currentPending.order_followup === "done")) {
     let orderId = typeof detailState.order_id === "number" ? detailState.order_id : Number(currentPending.order_id);
@@ -331,7 +341,11 @@ export async function handleIncoming(
     const reply = aiMode === "auto" ? labelAutoReply(prompt, aiMode) : null;
     return { conversationId, reply, draft: aiMode === "suggest" ? prompt : null };
   }
-  if (typeof detailState.order_id === "number") {
+  if (hasProvisionalOrder && isOrderAcknowledgment(text)) {
+    const prompt = reservationDetailsPrompt(typeof provisionalOrder.region === "string");
+    return { conversationId, reply: aiMode === "auto" ? labelAutoReply(prompt, aiMode) : null, draft: aiMode === "suggest" ? prompt : null };
+  }
+  if (typeof detailState.order_id === "number" || hasProvisionalOrder) {
     const details = { ...object(detailState.values) } as OrderCustomerDetails;
     const parsedInput = parseOrderDetails(text);
     Object.assign(details, Object.fromEntries(
@@ -350,15 +364,83 @@ export async function handleIncoming(
     if (missing.includes("customer_mobile") && details.customer_mobile) details.customer_mobile = "";
     if (missing.includes("customer_email") && details.customer_email) details.customer_email = "";
     if (missing.length) {
-      const nextPending = { ...currentPending, order_customer_details: { order_id: detailState.order_id, values: details } };
+      const nextPending = {
+        ...currentPending,
+        order_customer_details: hasProvisionalOrder
+          ? { order: provisionalOrder, values: details }
+          : { order_id: detailState.order_id, values: details },
+      };
       const { error } = await supabase.from("conversations").update({ pending: nextPending }).eq("id", conversationId);
       if (error) throw error;
       const missingKey = missing[0];
       const prompt = missingKey === "customer_email"
-        ? "Pakisend po ang valid na email address para sa order #" + detailState.order_id + "."
-        : customerDetailsPrompt(detailState.order_id, missing);
+        ? "Pakisend po ang valid na email address" + (typeof detailState.order_id === "number" ? " para sa order #" + detailState.order_id : "") + "."
+        : hasProvisionalOrder
+          ? "Pakisend po ang " + (orderDetailFields.find(([key]) => key === missingKey)?.[1] ?? "kulang na details") + "."
+          : customerDetailsPrompt(detailState.order_id as number, missing);
       const reply = aiMode === "auto" ? labelAutoReply(prompt, aiMode) : null;
       return { conversationId, reply, draft: aiMode === "suggest" ? prompt : null };
+    }
+
+    let orderId = Number(detailState.order_id);
+    if (hasProvisionalOrder) {
+      const quantity = Number(provisionalOrder.quantity);
+      const product = products.find((item) => item.id === provisionalOrder.product_id && item.active);
+      const variant = product?.variants.find((item) => item.id === provisionalOrder.variant_id);
+      if (!product || !variant || !Number.isInteger(quantity) || quantity <= 0) {
+        const { error } = await supabase.from("conversations").update({ pending: {}, status: "needs_seller" }).eq("id", conversationId);
+        if (error) throw error;
+        const message = "Pasensya na po, hindi ko na ma-verify ang item para sa reservation. Ipa-check ko muna sa seller po.";
+        const { error: missedError } = await supabase.from("missed_requests").insert({
+          conversation_id: conversationId,
+          request_text: "Reservation could not be completed because the catalog item is unavailable.",
+        });
+        if (missedError) throw missedError;
+        return { conversationId, reply: aiMode === "auto" ? labelAutoReply(message, aiMode) : null, draft: aiMode === "suggest" ? message : null };
+      }
+      const pricing = quote(product, quantity, new Date(), product.promos);
+      const shipping = Number(provisionalOrder.shipping);
+      const total = Math.round((pricing.total + shipping + Number.EPSILON) * 100) / 100;
+      if (Math.round(Number(provisionalOrder.total) * 100) !== Math.round(total * 100)) {
+        const { error } = await supabase.from("conversations").update({ pending: {}, status: "needs_seller" }).eq("id", conversationId);
+        if (error) throw error;
+        const message = "Nagbago po ang quote habang kinukuha ang details. Ipa-confirm ko muna sa seller ang latest price bago mag-reserve.";
+        const { error: missedError } = await supabase.from("missed_requests").insert({
+          conversation_id: conversationId,
+          request_text: "Reservation quote changed before customer details were completed.",
+        });
+        if (missedError) throw missedError;
+        return { conversationId, reply: aiMode === "auto" ? labelAutoReply(message, aiMode) : null, draft: aiMode === "suggest" ? message : null };
+      }
+      const { data: createdOrderId, error: createOrderError } = await supabase.rpc("create_order", {
+        p_conversation_id: conversationId,
+        p_items: [{
+          variant_id: variant.id,
+          qty: quantity,
+          unit_price: pricing.unit,
+          offer_label: pricing.label,
+          color: typeof provisionalOrder.color === "string" ? provisionalOrder.color : null,
+        }],
+        p_shipping: shipping,
+        p_total: total,
+      });
+      if (createOrderError?.message.includes("OUT_OF_STOCK")) {
+        const { error } = await supabase.from("conversations").update({ pending: {}, status: "needs_seller" }).eq("id", conversationId);
+        if (error) throw error;
+        const message = "Pasensya na po, naubos na ang stock habang kinukuha ang details kaya hindi ko na-reserve. Ipa-check ko muna sa seller ang ibang available na option po.";
+        const { error: missedError } = await supabase.from("missed_requests").insert({
+          conversation_id: conversationId,
+          request_text: "Reservation stock ran out before customer details were completed.",
+        });
+        if (missedError) throw missedError;
+        return { conversationId, reply: aiMode === "auto" ? labelAutoReply(message, aiMode) : null, draft: aiMode === "suggest" ? message : null };
+      }
+      if (createOrderError) throw createOrderError;
+      orderId = Number(createdOrderId);
+      const { error: reservationStateError } = await supabase.from("conversations")
+        .update({ pending: { ...currentPending, order_customer_details: { order_id: orderId, values: details } } })
+        .eq("id", conversationId);
+      if (reservationStateError) throw reservationStateError;
     }
 
     const { error: orderDetailsError } = await supabase.from("orders").update({
@@ -367,21 +449,21 @@ export async function handleIncoming(
       customer_mobile: details.customer_mobile,
       customer_email: details.customer_email,
       customer_notes: details.customer_notes ?? null,
-    }).eq("id", detailState.order_id);
+    }).eq("id", orderId);
     if (orderDetailsError) throw orderDetailsError;
     const { error: conversationUpdateError } = await supabase.from("conversations")
-      .update({ pending: { order_followup: "done", order_id: detailState.order_id }, status: "needs_seller" }).eq("id", conversationId);
+      .update({ pending: { order_followup: "done", order_id: orderId }, status: "needs_seller" }).eq("id", conversationId);
     if (conversationUpdateError) throw conversationUpdateError;
     const options = object(settings.bot_options);
     const pageName = typeof options.facebook_page_name === "string" ? options.facebook_page_name.trim() : "";
     const pageUrl = typeof options.facebook_page_url === "string" && /^https:\/\//i.test(options.facebook_page_url) ? options.facebook_page_url.trim() : "";
-    const completion = "Salamat po! Kumpleto na ang details ng order #" + detailState.order_id +
+    const completion = "Salamat po! Kumpleto na ang details ng order #" + orderId +
       ". " + paymentSafetyMessage({
         channel,
-        orderId: detailState.order_id,
+        orderId,
         orderReserved: true,
         sellerPresent: channel === "telegram"
-          ? await sellerPresentForOrder(conversationId, detailState.order_id, aiMode)
+          ? await sellerPresentForOrder(conversationId, orderId, aiMode)
           : false,
         facebookPageName: pageName,
         facebookPageUrl: pageUrl,
@@ -509,41 +591,12 @@ export async function handleIncoming(
               reply = "Nagbago po ang presyo. Ang bagong total ay " + formatPeso(total) +
                 ". I-confirm po ulit kung itutuloy.";
             } else {
-              const { data: orderId, error } = await supabase.rpc("create_order", {
-                p_conversation_id: conversationId,
-                p_items: [{
-                  variant_id: variant.id,
-                  qty: quantity,
-                  unit_price: pricing.unit,
-                  offer_label: pricing.label,
-                  color: typeof order.color === "string" ? order.color : null,
-                }],
-                p_shipping: shipping,
-                p_total: total,
-              });
-              if (error && error.message.includes("OUT_OF_STOCK")) {
-                const { data: freshVariants, error: stockError } = await supabase.from("variants")
-                  .select("size, stock").eq("product_id", product.id);
-                if (stockError) throw stockError;
-                const freshAlternatives = (freshVariants ?? [])
-                  .filter((item: { size: string; stock: number }) => item.size !== variant.size && item.stock >= quantity)
-                  .map((item: { size: string }) => item.size);
-                reply = freshAlternatives.length
-                  ? "Pasensya na po, sold out na ang size " + variant.size + ". Available pa po ang size " + freshAlternatives.join(", ") + "."
-                  : "Pasensya na po, sold out na ang item. I-check ko muna sa seller po.";
-                pending = {};
-                if (!freshAlternatives.length) {
-                  needsSeller = true;
-                  missedRequest = true;
-                }
-              } else if (error) {
-                throw error;
-              } else {
-                reply = "Confirmed po, order #" + orderId + " for " + quantity + " " + product.name +
-                  " (" + variant.size + "). Naka-lista at naka-reserve na po ang item para sa inyo. Total po ay " + formatPeso(total) + ".\n\n" +
-                  customerDetailsPrompt(Number(orderId), orderDetailFields.map(([key]) => key));
-                pending = { order_customer_details: { order_id: Number(orderId), values: {} } };
-              }
+              const orderDetailsPrompt = reservationDetailsPrompt(typeof order.region === "string");
+              reply = "Sige po, noted ang request na i-reserve ang " + product.name + " (" + variant.size + ") x" + quantity +
+                " sa total na " + formatPeso(total) + ". Wala pang stock na na-reserve; makukumpleto ito pagkatapos ma-verify ang details ninyo.\n\n" + orderDetailsPrompt;
+              const nextPending = { ...pending };
+              delete nextPending.order;
+              pending = { ...nextPending, order_customer_details: { order: updatedOrder, values: {} } };
             }
           }
         }

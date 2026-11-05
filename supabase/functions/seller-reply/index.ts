@@ -167,7 +167,7 @@ Deno.serve(async (request: Request) => {
       return Response.json({ error: "Meta does not allow this message to be edited or unsent through TindaBot" }, { status: 409, headers: cors ?? {} });
     }
     if (customer.channel === "telegram" && Date.now() - Date.parse(target.created_at) > 48 * 60 * 60 * 1000) {
-      return Response.json({ error: "Telegram only allows deleting messages sent within the last 48 hours" }, { status: 409, headers: cors ?? {} });
+      return Response.json({ error: action === "edit" ? "Telegram only allows editing messages sent within the last 48 hours" : "Telegram only allows deleting messages sent within the last 48 hours" }, { status: 409, headers: cors ?? {} });
     }
     try {
       const providerIds = Array.isArray(target.channel_message_ids) ? target.channel_message_ids as string[] : [];

@@ -345,9 +345,13 @@ export function runIncomingBrain(
   }
   if (contextProduct && (!understanding.product_query || refersToSelectedProduct) &&
     ["price", "discount", "availability", "question", "order_confirm", "seller_handoff"].includes(understanding.intent)) {
+    const hasLastProductContext = lastProductContext.product_id === contextProduct.id;
     understanding = {
       ...understanding,
       product_query: contextProduct.name,
+      size: understanding.size ?? (hasLastProductContext && typeof lastProductContext.size === "string" ? lastProductContext.size : null),
+      quantity: understanding.quantity ?? (hasLastProductContext && typeof lastProductContext.quantity === "number" ? lastProductContext.quantity : null),
+      location: understanding.location ?? (hasLastProductContext && typeof lastProductContext.location === "string" ? lastProductContext.location : null),
       confidence: Math.max(understanding.confidence, 0.9),
     };
   }
@@ -410,11 +414,12 @@ export function runIncomingBrain(
     }
   }
   if (lastProduct && !understanding.product_query &&
-    ["price", "discount", "availability", "question", "seller_handoff"].includes(understanding.intent)) {
+    ["price", "discount", "availability", "question", "order_confirm", "seller_handoff"].includes(understanding.intent)) {
     understanding = {
       ...understanding,
       product_query: lastProduct.name,
       size: understanding.size ?? (typeof lastProductContext.size === "string" ? lastProductContext.size : null),
+      quantity: understanding.quantity ?? (typeof lastProductContext.quantity === "number" ? lastProductContext.quantity : null),
       location: understanding.location ?? (typeof lastProductContext.location === "string" ? lastProductContext.location : null),
     };
   }
@@ -1208,7 +1213,9 @@ export function runIncomingBrain(
       quantity +
       ": " +
       amountSummary +
-      " Paalala po: kapag nag-confirm kayo, maililista at maire-reserve ang stock para sa inyo at hindi na ito makakansela. Siguraduhin pong committed kayo. I-confirm po ba ang order?"
+      (typeof shipping === "number"
+        ? " Available pa po ito base sa latest check. Wala pang stock na na-reserve. Gusto niyo po bang ituloy? Sumagot po ng YES para mahingi ko ang delivery details at ma-reserve ang stock."
+        : " Wala pang stock na na-reserve. Sabihin po ang delivery area ninyo para makuha ang shipping at final total bago magpatuloy.")
     : understanding.intent === "availability"
       ? "Available po ang " +
         product.name +
@@ -1220,7 +1227,10 @@ export function runIncomingBrain(
         amountSummary
     : product.name + (understanding.size ? " (" + variant.size + ")" : "") +
       (understanding.quantity ? " x" + quantity : "") + " po: " + amountSummary +
-      (understanding.availability_requested ? " May " + variant.stock + " stock po sa size " + variant.size + "." : "");
+      (understanding.availability_requested ? " May " + variant.stock + " stock po sa size " + variant.size + "." : "") +
+      (understanding.intent === "price" && typeof shipping === "number"
+        ? " Gusto niyo po bang ituloy para ma-reserve habang available pa? Sabihin lang po ang RESERVE."
+        : "");
 
   const responsePending = typeof shipping === "number" ? pending : {
     ...pending,

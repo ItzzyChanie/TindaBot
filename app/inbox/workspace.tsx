@@ -561,7 +561,7 @@ export function InboxWorkspace() {
     if (
       !selected ||
       isSimulatedChannel(selected.customers?.channel) ||
-      replyDisabled ||
+      (replyDisabled && !editingMessageId) ||
       (!draft.trim() && !attachment) ||
       sending
     )
@@ -1098,7 +1098,7 @@ export function InboxWorkspace() {
                                   const canChange = channel === "web" || channel === "telegram";
                                   const telegramExpired = channel === "telegram" && now > 0 && now - Date.parse(message.created_at) > 48 * 60 * 60 * 1000;
                                   return <>
-                                    <button type="button" role="menuitem" disabled={!canChange || !textOnly || sending || (channel === "telegram" && !message.channel_message_ids?.length)} title={!canChange ? "Meta does not support editing sent messages through this API" : !textOnly ? "Text-only messages can be edited" : channel === "telegram" && !message.channel_message_ids?.length ? "Telegram message ID is unavailable for this older reply" : undefined} onClick={() => startEdit(message)}>Edit</button>
+                                    <button type="button" role="menuitem" disabled={!canChange || !textOnly || sending || telegramExpired || (channel === "telegram" && !message.channel_message_ids?.length)} title={!canChange ? "Meta does not support editing sent messages through this API" : !textOnly ? "Text-only messages can be edited" : telegramExpired ? "Telegram allows editing within 48 hours" : channel === "telegram" && !message.channel_message_ids?.length ? "Telegram message ID is unavailable for this older reply" : undefined} onClick={() => startEdit(message)}>Edit</button>
                                     <button type="button" role="menuitem" disabled={!canChange || !textOnly || sending || telegramExpired || (channel === "telegram" && !message.channel_message_ids?.length)} title={!canChange ? "Meta does not support unsending sent messages through this API" : !textOnly ? "Text-only messages can be unsent" : telegramExpired ? "Telegram allows deletion within 48 hours" : channel === "telegram" && !message.channel_message_ids?.length ? "Telegram message ID is unavailable for this older reply" : undefined} onClick={() => void unsendMessage(message)}>Unsend for everyone</button>
                                     {!canChange && <small>Meta messages can’t be edited or unsent through TindaBot.</small>}
                                   </>;
@@ -1215,14 +1215,14 @@ export function InboxWorkspace() {
                     value={draft}
                     onChange={(event) => setDraft(event.target.value)}
                     maxLength={4000}
-                    disabled={replyDisabled}
+                    disabled={replyDisabled && !editingMessageId}
                     placeholder={editingMessageId ? "Edit your message…" : "Write a reply…"}
                     rows={2}
                   />
                   <button
                     className="button button-primary reply-send-button"
                     type="submit"
-                    disabled={replyDisabled || sending || (!draft.trim() && !attachment)}
+                    disabled={(replyDisabled && !editingMessageId) || sending || (!draft.trim() && !attachment)}
                   >
                     {sending ? "Sending…" : editingMessageId ? "Save" : "Send"}
                   </button>
@@ -1298,24 +1298,6 @@ export function InboxWorkspace() {
                 {selected.status === "needs_seller" && <button className="text-button" onClick={() => void markResolved()}>Mark handled</button>}
               </section>
             )}
-            <dl className="customer-details">
-              <div>
-                <dt>Customer ID</dt>
-                <dd>{customer.external_id}</dd>
-              </div>
-              <div>
-                <dt>Conversation</dt>
-                <dd>{selected.id.slice(0, 8)}</dd>
-              </div>
-              <div>
-                <dt>Started</dt>
-                <dd>
-                  {new Intl.DateTimeFormat("en-PH", {
-                    dateStyle: "medium",
-                  }).format(new Date(selected.created_at))}
-                </dd>
-              </div>
-            </dl>
             <section className="customer-orders">
               <p className="eyebrow">ORDERS</p>
               {customerOrders.length === 0 ? (
