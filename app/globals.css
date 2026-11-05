@@ -171,6 +171,13 @@ select:focus-visible {
   border: 1px solid rgb(255 255 255 / 12%);
   border-radius: 11px;
   background: rgb(255 255 255 / 5%);
+  color: inherit;
+  text-decoration: none;
+  transition: background-color 140ms ease, border-color 140ms ease;
+}
+.sidebar-store:hover {
+  border-color: rgb(255 255 255 / 28%);
+  background: rgb(255 255 255 / 10%);
 }
 .sidebar-store .shop-avatar {
   background: #d7e7d9;

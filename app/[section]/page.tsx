@@ -19,11 +19,6 @@ const pages: Record<
     description: "Keep track of customer orders from chat to checkout.",
     icon: "â–£",
   },
-  storefront: {
-    title: "Storefront",
-    description: "A simple place for customers to browse your products.",
-    icon: "â†—",
-  },
 };
 
 export function generateStaticParams() {

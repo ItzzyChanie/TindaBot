@@ -34,4 +34,4 @@
 4. Search by a product name and partial description. Check images, availability labels, sizes, and crossed-out sold-out sizes. The public result must never reveal exact stock counts.
 5. Click **Ask about this**. The URL should open `/chat?product=ID`; ask “magkano po ito?” and confirm the reply uses that product context. Refresh and confirm the context remains.
 6. Click **Ask on Telegram**. `/start product_ID` should greet the customer with the item name, current `quote()` price, and in-stock sizes, with the FAQ keyboard visible.
-7. In the seller app, open **Storefront**, copy the shop link, and verify it ends in `/shop`.
+7. Click **Your shop** in the seller sidebar. Confirm the public `/shop` page opens in a new tab.

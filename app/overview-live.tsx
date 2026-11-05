@@ -254,7 +254,7 @@ export function OverviewLive({
               ↗
             </span>
           </Link>
-          <Link className="shortcut-card" href="/storefront">
+          <Link className="shortcut-card" href="/shop" target="_blank" rel="noopener noreferrer">
             <span className="shortcut-icon store-shortcut" aria-hidden="true">
               <NavShortcutIcon kind="store" />
             </span>

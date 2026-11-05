@@ -12,7 +12,6 @@ const links = [
   { href: "/inbox", label: "Inbox", icon: "inbox" },
   { href: "/catalog", label: "Catalog", icon: "catalog" },
   { href: "/orders", label: "Orders", icon: "orders" },
-  { href: "/storefront", label: "Storefront", icon: "storefront" },
   { href: "/settings", label: "Settings", icon: "settings" },
 ] as const;
 
@@ -23,7 +22,6 @@ function NavIcon({ name }: { name: (typeof links)[number]["icon"] }) {
     inbox: <><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M3 13h5l2 3h4l2-3h5" /></>,
     catalog: <><path d="m12 3 9 5-9 5-9-5 9-5Z" /><path d="m3 12 9 5 9-5M3 16l9 5 9-5" /></>,
     orders: <><path d="M6 3h12l2 4v14H4V7l2-4Z" /><path d="M4 7h16M9 11h6" /></>,
-    storefront: <><path d="M3 10v10h18V10M2 4h20l-2 6H4L2 4Z" /><path d="M9 4v6m6-6v6" /></>,
     settings: <><circle cx="12" cy="12" r="3" /><path d="m19.4 15 .1.1 1.4 1.1-1.4 2.4-1.7-.6a8 8 0 0 1-1.6.9l-.3 1.8h-2.8l-.3-1.8a8 8 0 0 1-1.6-.9l-1.7.6-1.4-2.4 1.4-1.1a7 7 0 0 1 0-1.9l-1.4-1.1 1.4-2.4 1.7.6a8 8 0 0 1 1.6-.9l.3-1.8h2.8l.3 1.8a8 8 0 0 1 1.6.9l1.7-.6 1.4 2.4-1.4 1.1a7 7 0 0 1 0 1.8Z" transform="translate(-2 -1) scale(.95)" /></>,
   };
   return <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>;
@@ -119,11 +117,11 @@ export function AppShell({ children, userEmail }: { children: ReactNode; userEma
             <Image className="brand-logo" src={tindabotLogo} alt="" priority />
             <span>Tinda<span className="brand-accent">Bot</span></span>
           </Link>
-          <div className="sidebar-store">
+          <a className="sidebar-store" href="/shop" target="_blank" rel="noopener noreferrer" aria-label="Open customer storefront in a new tab" onClick={() => setMenuOpen(false)}>
             <span className="shop-avatar" aria-hidden="true">T</span>
-            <span className="shop-details"><strong>Your shop</strong><small>Seller workspace</small></span>
-            <svg className="store-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5" /></svg>
-          </div>
+            <span className="shop-details"><strong>Your shop</strong><small>Open storefront in new tab</small></span>
+            <svg className="store-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9" /><path d="M18 13v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h5" /></svg>
+          </a>
         </div>
         <nav className="main-nav" id="primary-navigation" aria-label="Main navigation">
           <span className="nav-label">WORKSPACE</span>
