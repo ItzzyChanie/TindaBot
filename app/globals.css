@@ -5171,6 +5171,7 @@ h2 {
 }
 .dashboard-content-grid .sales-trend-panel {
   align-self: stretch;
+  min-height: 560px;
   padding: 18px 22px 14px;
 }
 .dashboard-content-grid {
@@ -5228,7 +5229,7 @@ h2 {
   margin-top: 4px;
 }
 .dashboard-content-grid .sales-day-track {
-  height: 152px;
+  height: 190px;
 }
 .dashboard-content-grid .sales-total strong {
   font-size: 20px;
