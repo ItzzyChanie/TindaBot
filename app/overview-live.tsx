@@ -209,6 +209,7 @@ export function OverviewLive({
         ))}
       </section>
       <section className="overview-grid dashboard-content-grid">
+        <div className="dashboard-column dashboard-sales-column">
         <article
           className="panel sales-trend-panel"
           aria-label="Paid sales performance"
@@ -268,6 +269,8 @@ export function OverviewLive({
             <div className="comparison-row previous"><div className="comparison-label"><strong>Previous equivalent</strong><span>{performance.previous_order_count} orders</span></div><div className="comparison-track"><span style={{ width: `${(performance.previous_sales / maxComparedSales) * 100}%` }} /></div><strong className="comparison-value">{money(performance.previous_sales)}</strong></div>
           </div>
         </article>
+        </div>
+        <div className="dashboard-column dashboard-inbox-column">
         <section className="dashboard-shortcuts" aria-label="Shop shortcuts">
           <Link className="shortcut-card" href="/catalog">
             <span className="shortcut-icon catalog-shortcut" aria-hidden="true">
@@ -341,6 +344,7 @@ export function OverviewLive({
             </p>
           )}
         </article>
+        </div>
       </section>
     </div>
   );
