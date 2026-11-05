@@ -903,9 +903,7 @@ h1 {
 .comparison-row.previous .comparison-track span { background: color-mix(in srgb, #5574c7 72%, white); }
 .comparison-value { text-align: right; font-size: 12px; white-space: nowrap; }
 .sales-loading { margin: 0; font-size: 11px; }
-.sales-range-select,
-.sales-comparison,
-.top-products {
+.sales-range-select {
   color: var(--muted);
   font-size: 11px;
 }
@@ -918,8 +916,6 @@ h1 {
   background: var(--surface);
   color: var(--text);
 }
-.top-products { display: grid; gap: 5px; margin-top: 12px; }
-.top-products strong { color: var(--text); }
 .sales-empty-note {
   margin: 0;
   font-size: 11px;
@@ -5170,7 +5166,7 @@ h2 {
 }
 .dashboard-content-grid {
   grid-template-columns: repeat(12, minmax(0, 1fr));
-  align-items: start;
+  align-items: stretch;
 }
 .dashboard-column {
   display: flex;
@@ -5185,16 +5181,17 @@ h2 {
 }
 .dashboard-sales-column {
   grid-column: 1 / span 7;
+  justify-content: space-between;
 }
 .dashboard-inbox-column {
+  display: grid;
   grid-column: 8 / span 5;
+  grid-template-rows: minmax(min-content, 1fr) auto;
 }
 .dashboard-inbox-column > .activity-panel {
-  order: 1;
-  align-self: start;
+  align-self: stretch;
 }
 .dashboard-inbox-column > .dashboard-shortcuts {
-  order: 2;
   align-items: stretch;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 7px;
@@ -5292,7 +5289,11 @@ h2 {
   .dashboard-sales-column,
   .dashboard-inbox-column {
     grid-column: 1;
+    align-self: auto;
   }
+  .dashboard-sales-column { justify-content: flex-start; }
+  .dashboard-inbox-column { display: flex; }
+  .dashboard-inbox-column > .activity-panel { align-self: start; }
   .dashboard-inbox-column > .dashboard-shortcuts {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }

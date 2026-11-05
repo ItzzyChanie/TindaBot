@@ -259,7 +259,6 @@ export function OverviewLive({
               </div>
             ))}
           </div>
-          <div className="top-products"><strong>Top products</strong>{performance.top_products?.length ? performance.top_products.map((product) => <span key={product.name}>{product.name} · {product.quantity} sold · {money(product.revenue)}</span>) : <span className="muted">No collected sales in this period.</span>}</div>
         </article>
         <article className="panel sales-comparison-panel" aria-label="Compare selected sales period with previous equivalent period">
           <div className="panel-heading"><div><p className="eyebrow">PERIOD COMPARISON</p><h2>Selected range vs previous equivalent</h2></div><span className={`comparison-delta ${performance.sales >= performance.previous_sales ? "positive" : "negative"}`}>{performance.sales >= performance.previous_sales ? "↑" : "↓"} {money(Math.abs(performance.sales - performance.previous_sales))}</span></div>
