@@ -942,9 +942,58 @@ describe("grounded incoming conversation brain", () => {
   it("answers store location and business-hours questions from settings", async () => {
     const settings = { ...baseInput.settings, bot_options: { address: "Mock address, Cebu", business_hours: "Mon-Sat, 9AM-6PM" } };
     const address = await runIncomingBrain({ ...baseInput, message: "May physical store ba?", settings });
+    const directAddress = await runIncomingBrain({ ...baseInput, message: "What is your address?", settings });
     const hours = await runIncomingBrain({ ...baseInput, message: "What are your business hours?", settings });
     expect(address.reply).toContain("Mock address, Cebu");
+    expect(directAddress.reply).toContain("Mock address, Cebu");
     expect(hours.reply).toContain("Mon-Sat, 9AM-6PM");
+  });
+
+  it("answers seller page questions only with the configured Facebook page", async () => {
+    const configured = await runIncomingBrain({
+      ...baseInput,
+      message: "Ano Facebook page niyo?",
+      settings: { ...baseInput.settings, bot_options: { facebook_page_name: "TindaBot Shop", facebook_page_url: "https://facebook.com/mock-shop" } },
+    });
+    expect(configured.reply).toContain("TindaBot Shop");
+    expect(configured.reply).toContain("https://facebook.com/mock-shop");
+    expect(configured.needsSeller).toBe(false);
+
+    const instagram = await runIncomingBrain({
+      ...baseInput,
+      message: "What is your Instagram page?",
+      settings: { ...baseInput.settings, bot_options: { facebook_page_url: "https://facebook.com/mock-shop" } },
+    });
+    expect(instagram.reply).toContain("Instagram profile");
+    expect(instagram.reply).not.toContain("https://facebook.com/mock-shop");
+    expect(instagram.needsSeller).toBe(true);
+
+    const missing = await runIncomingBrain({ ...baseInput, message: "Send me your FB page link, please." });
+    expect(missing.reply).toContain("Facebook page link");
+    expect(missing.needsSeller).toBe(true);
+    expect(missing.missedRequest).toBe(true);
+  });
+
+  it("answers quality questions from listed facts without claiming to verify quality", async () => {
+    const listedProduct = { ...product, material: "Cotton", fabric_details: "Lightweight, non-stretch" };
+    const answer = await runIncomingBrain({
+      ...baseInput,
+      message: "Matibay po ba ito?",
+      replyContextText: "Seller: Isla blouse po ito.",
+      products: [listedProduct],
+    });
+    expect(answer.reply).toContain("Material: Cotton");
+    expect(answer.reply).toContain("Lightweight, non-stretch");
+    expect(answer.reply).toContain("Hindi ko po mave-verify");
+    expect(answer.needsSeller).toBe(false);
+  });
+
+  it("escalates quality questions when no catalog facts are available", async () => {
+    const unlisted = { ...product, description: "", material: "", fabric_details: "" };
+    const result = await runIncomingBrain({ ...baseInput, message: "Is this good quality?", products: [unlisted] });
+    expect(result.needsSeller).toBe(true);
+    expect(result.missedRequest).toBe(true);
+    expect(result.reply).toContain("quality details");
   });
 
   it("answers legitimacy questions with the seller-entered store address without claiming independent verification", async () => {

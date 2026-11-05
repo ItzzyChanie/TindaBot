@@ -599,6 +599,19 @@ export function runIncomingBrain(
     };
     const dataReply = (facts: Record<string, unknown>, value: string, englishPrompt: string, taglishPrompt: string, pending = detailPending) =>
       respond(facts, `${value} ${prefersEnglish(input.message) ? englishPrompt : taglishPrompt}`, pending);
+    if (product && /quality|matibay|tibay|durable|long lasting|pangmatagalan/.test(message)) {
+      const qualityFacts = [
+        ...(product.material?.trim() ? ["Material: " + product.material.trim()] : []),
+        ...(product.fabric_details?.trim() ? ["Fabric details: " + product.fabric_details.trim()] : []),
+        ...(product.description?.trim() ? ["Catalog description: " + product.description.trim().slice(0, 400)] : []),
+      ];
+      if (qualityFacts.length) {
+        const reply = prefersEnglish(input.message)
+          ? `The seller's catalog lists these details for ${product.name}: ${qualityFacts.join("; ")}. I can't independently verify product quality, so please confirm any concerns with the seller.`
+          : `Sa catalog po ng ${product.name}, nakalista ang: ${qualityFacts.join("; ")}. Hindi ko po mave-verify nang independent ang quality, kaya paki-confirm po sa seller kung may concern kayo.`;
+        return dataReply({ product: product.name, catalog_quality_facts: qualityFacts, quality_independently_verified: false }, reply, "Would you like to ask the seller anything else about this item?", "May iba pa po ba kayong gustong itanong sa seller tungkol sa item?");
+      }
+    }
     if (product && /restock/.test(message) && product.restock_note?.trim())
       return dataReply({ product: product.name, restock_note: product.restock_note }, product.restock_note.trim(), "Would you like help with anything else about this item?", "May iba pa po ba kayong gustong malaman tungkol sa item?");
     if (product && /color|kulay/.test(message) && (product.colors?.length ?? 0) > 0)
@@ -646,6 +659,7 @@ export function runIncomingBrain(
     }
     const reason = /restock/.test(message) ? "restock timing"
       : /color/.test(message) ? "available colors"
+      : /quality|matibay|tibay|durable|long lasting|pangmatagalan/.test(message) ? "product quality details"
       : /material|fabric|see.?through|stretch|thick|makapal|manipis/.test(message) ? "fabric and product details"
       : /size|fit|height|weight|true to size/.test(message) ? "size recommendations"
       : /photo|picture|video|model/.test(message) ? "actual photos or model details"
@@ -702,10 +716,34 @@ export function runIncomingBrain(
     return respond({ bulk_orders: true }, "Tumatanggap po kami ng bulk orders! " + details + " Ilang piraso po ang kukunin ninyo?");
   }
   if (understanding.intent === "shop_info") {
-    const address = input.settings.bot_options?.address?.trim();
+    const options = input.settings.bot_options;
+    const address = options?.address?.trim();
+    const pageName = options?.facebook_page_name?.trim();
+    const configuredPageUrl = options?.facebook_page_url?.trim();
+    const pageUrl = configuredPageUrl && /^https:\/\//i.test(configuredPageUrl) ? configuredPageUrl : null;
+    const asksForPage = /\b(facebook|fb|page|profile)\b/i.test(input.message);
+    const asksInstagramPage = /\b(instagram|ig)\b/i.test(input.message);
     const isTrustQuestion = /\b(legit|legitimate|scam|scammer)\b/.test(
       input.message.toLowerCase(),
     );
+    if (asksForPage) {
+      if (asksInstagramPage) return escalate(prefersEnglish(input.message)
+        ? "I don't have a seller-listed Instagram profile saved, so I'll ask the seller to share it."
+        : "Wala pong Instagram profile na naka-save, kaya hihingiin ko po ito sa seller.");
+      if (pageUrl) return respond(
+        { facebook_page_name: pageName || null, facebook_page_url: pageUrl },
+        (prefersEnglish(input.message) ? "The seller-listed Facebook page is " : "Facebook page po ng shop: ") +
+          (pageName ? pageName + " — " : "") + pageUrl + (isTrustQuestion
+            ? (prefersEnglish(input.message)
+              ? ". I can't independently verify whether the shop is legitimate; please confirm any concerns directly with the seller."
+              : ". Hindi ko po mave-verify nang independent ang legitimacy ng shop; paki-confirm po sa seller kung may concern kayo.")
+            : "."),
+      );
+      const savedName = pageName ? (prefersEnglish(input.message) ? ` The seller settings list the page name as ${pageName}.` : ` Ang page name na inilagay ng seller ay ${pageName}.`) : "";
+      return escalate((prefersEnglish(input.message)
+        ? "I don't have a Facebook page link saved, so I'll ask the seller to share it."
+        : "Wala pong Facebook page link na naka-save, kaya hihingiin ko po ito sa seller.") + savedName);
+    }
     if (!address) return escalate(isTrustQuestion
       ? (prefersEnglish(input.message)
         ? "The seller has not added a physical store address yet, so I can’t confirm the shop location or independently verify its legitimacy. I’ll ask the seller to clarify."
