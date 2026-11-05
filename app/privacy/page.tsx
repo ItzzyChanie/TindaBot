@@ -13,7 +13,7 @@ export default function PrivacyPage() {
 
       <h2>What we collect</h2>
       <ul>
-        <li>Messages, timestamps, and your chat channel (web chat, Telegram, Messenger, or Instagram).</li>
+        <li>Messages, timestamps, images and files you choose to send, and your chat channel (web chat, Telegram, Messenger, or Instagram).</li>
         <li>Your channel user ID and, when the channel provides it, your display name or username.</li>
         <li>If you place an order, the contact and delivery details you choose to provide. Telegram payment-proof uploads may also leave file reference details in the seller inbox.</li>
         <li>For web chat, a random session token is stored in your browser; the database stores its hash. Rate limiting also uses a hashed network identifier.</li>
@@ -23,7 +23,7 @@ export default function PrivacyPage() {
       <p>We use this information to reply to your questions, show the conversation to the seller, follow up on orders, and protect the demo from spam. Messages sent through Messenger, Instagram, or Telegram also pass through that service.</p>
 
       <h2>How long it is kept</h2>
-      <p>Chat conversations and related customer details are retained for up to 90 days after the last activity, then automatically deleted. Ask the seller to delete your data at any time using the instructions on our <Link href="/data-deletion">data deletion page</Link>.</p>
+      <p>Chat conversations, attachments, and related customer details are retained for up to 90 days after the last activity, then automatically deleted. Ask the seller to delete your data at any time using the instructions on our <Link href="/data-deletion">data deletion page</Link>.</p>
 
       <h2>Keep sensitive information out of chat</h2>
       <p>Please do not send passwords, card numbers, banking credentials, or other secrets. The bot does not take or process payments.</p>

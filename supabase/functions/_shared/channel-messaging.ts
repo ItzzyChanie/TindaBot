@@ -2,6 +2,7 @@ export type MessageChannel = "telegram" | "messenger" | "instagram";
 export type ChannelSendOptions = {
   replyMarkup?: Record<string, unknown>;
   imageUrls?: string[];
+  attachments?: { url: string; name: string; mimeType: string; size: number }[];
 };
 
 function envValue(name: string): string {
@@ -46,7 +47,7 @@ export async function sendToChannel(
     "content-type": "application/json",
     ...(channel === "telegram" ? {} : { authorization: `Bearer ${token}` }),
   };
-  const send = async (sendUrl: string, messageBody: Record<string, unknown>, requestKind: "text" | "image") => {
+  const send = async (sendUrl: string, messageBody: Record<string, unknown>, requestKind: "text" | "image" | "file") => {
     let response: Response;
     try {
       response = await fetch(sendUrl, { method: "POST", headers, body: JSON.stringify(messageBody) });
@@ -80,7 +81,7 @@ export async function sendToChannel(
       throw new Error(`${channel} message delivery failed`);
     }
   };
-  await send(url, body, "text");
+  if (text.trim()) await send(url, body, "text");
 
   const imageUrls = (options.imageUrls ?? []).filter((imageUrl) => /^https:\/\//i.test(imageUrl)).slice(0, 5);
   for (const imageUrl of imageUrls) {
@@ -93,6 +94,66 @@ export async function sendToChannel(
         message: { attachment: { type: "image", payload: { url: imageUrl } } },
       }, "image");
     }
+  }
+
+  for (const attachment of (options.attachments ?? []).slice(0, 1)) {
+    if (!/^https:\/\//i.test(attachment.url)) throw new Error("invalid attachment URL");
+    if (channel === "telegram") {
+      let response: Response;
+      try {
+        const download = await fetch(attachment.url);
+        if (!download.ok) throw new Error("attachment download failed");
+        const bytes = await download.arrayBuffer();
+        if (bytes.byteLength !== attachment.size) throw new Error("attachment size changed");
+        const form = new FormData();
+        form.set("chat_id", recipientId);
+        const photo = attachment.mimeType === "image/jpeg" || attachment.mimeType === "image/png";
+        const usePhoto = photo && attachment.size <= 10 * 1024 * 1024;
+        form.set(usePhoto ? "photo" : "document", new File([bytes], attachment.name, { type: attachment.mimeType }));
+        response = await fetch(`https://api.telegram.org/bot${token}/${usePhoto ? "sendPhoto" : "sendDocument"}`, {
+          method: "POST",
+          body: form,
+        });
+      } catch {
+        throw new Error("telegram attachment delivery failed");
+      }
+      let telegramResult: { ok?: boolean } = {};
+      try {
+        telegramResult = await response.clone().json();
+      } catch {
+        // Telegram normally returns JSON, but keep the HTTP status authoritative.
+      }
+      if (!response.ok || telegramResult.ok === false) {
+        if (response.status === 401 || response.status === 403) throw new Error("token_rejected");
+        throw new Error("telegram attachment delivery failed");
+      }
+      console.info("Channel send result", {
+        channel,
+        requestKind: attachment.mimeType.startsWith("image/") ? "image" : "file",
+        httpStatus: response.status,
+        success: true,
+      });
+      continue;
+    }
+
+    const isImage = attachment.mimeType.startsWith("image/");
+    const isInstagramPdf = channel === "instagram" && attachment.mimeType === "application/pdf";
+    if (channel === "instagram" && !isImage && !isInstagramPdf) {
+      await send(url, {
+        recipient: { id: recipientId },
+        message: { text: `${attachment.name}: ${attachment.url}` },
+      }, "file");
+      continue;
+    }
+    await send(url, {
+      recipient: { id: recipientId },
+      message: {
+        attachment: {
+          type: isImage ? "image" : "file",
+          payload: { url: attachment.url, is_reusable: false },
+        },
+      },
+    }, isImage ? "image" : "file");
   }
 }
 

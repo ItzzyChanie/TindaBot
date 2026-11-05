@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { handleIncoming, saveAssistantReply } from "../_shared/handleIncoming.ts";
+import { ATTACHMENT_BUCKET, type MessageAttachment } from "../_shared/message-attachments.ts";
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -109,7 +110,7 @@ Deno.serve(async (request: Request) => {
   }
 
   let query = supabase.from("messages")
-    .select("id, sender, body, image_urls, created_at")
+    .select("id, sender, body, image_urls, attachments, created_at")
     .eq("conversation_id", conversationId)
     .in("sender", ["customer", "ai", "seller"])
     .order("created_at", { ascending: true })
@@ -121,8 +122,26 @@ Deno.serve(async (request: Request) => {
     return json({ error: "Could not load chat messages. Please try again." }, 500, cors);
   }
 
+  const messageRows = messages ?? [];
+  const attachmentRows = messageRows.flatMap((message) => (message.attachments ?? []) as MessageAttachment[]);
+  const { data: signedRows, error: signingError } = attachmentRows.length
+    ? await supabase.storage.from(ATTACHMENT_BUCKET).createSignedUrls(
+      attachmentRows.map((attachment) => attachment.path),
+      60 * 60 * 24 * 90,
+    )
+    : { data: [], error: null };
+  if (signingError) console.error("[widget-message] attachment signing failed", signingError.message);
+  const signedByPath = new Map((signedRows ?? []).map((item) => [item.path, item.signedUrl]));
+  const messagesWithSignedAttachments = messageRows.map((message) => ({
+    ...message,
+    attachments: ((message.attachments ?? []) as MessageAttachment[]).map((attachment) => ({
+      ...attachment,
+      signedUrl: signedByPath.get(attachment.path) ?? null,
+    })),
+  }));
+
   return json({
-    messages: messages ?? [],
+    messages: messagesWithSignedAttachments,
     cursor: messages?.at(-1)?.created_at ?? cursor,
   }, 200, cors);
 });

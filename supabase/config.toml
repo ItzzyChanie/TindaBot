@@ -40,6 +40,10 @@ enabled = false
 verify_jwt = true
 import_map = "./functions/import_map.json"
 
+[functions.purge-expired-attachments]
+verify_jwt = false
+import_map = "./functions/import_map.json"
+
 [functions.telegram-webhook]
 import_map = "./functions/import_map.json"
 

@@ -1,5 +1,6 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { isWithinCustomerWindow, sendToChannel, type MessageChannel } from "../_shared/channel-messaging.ts";
+import { ATTACHMENT_BUCKET, validateAttachments, type MessageAttachment } from "../_shared/message-attachments.ts";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
 const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
@@ -18,6 +19,21 @@ function corsHeaders(request: Request) {
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     Vary: "Origin",
   };
+}
+
+async function createChannelAttachments(
+  supabase: SupabaseClient,
+  attachments: MessageAttachment[],
+) {
+  const result = [];
+  for (const attachment of attachments) {
+    const { data, error } = await supabase.storage
+      .from(ATTACHMENT_BUCKET)
+      .createSignedUrl(attachment.path, 60 * 60 * 24 * 90);
+    if (error || !data?.signedUrl) throw new Error("attachment could not be accessed");
+    result.push({ ...attachment, url: data.signedUrl });
+  }
+  return result;
 }
 
 Deno.serve(async (request: Request) => {
@@ -53,7 +69,7 @@ Deno.serve(async (request: Request) => {
       { error: "Unauthorized" },
       { status: 401, headers: cors ?? {} },
     );
-  let body: { conversationId?: unknown; text?: unknown; sendDraft?: unknown; retryMessageId?: unknown };
+  let body: { conversationId?: unknown; text?: unknown; sendDraft?: unknown; retryMessageId?: unknown; attachments?: unknown };
   try {
     body = await request.json();
   } catch {
@@ -67,7 +83,10 @@ Deno.serve(async (request: Request) => {
   const text = typeof body.text === "string" ? body.text.trim() : "";
   const sendDraft = body.sendDraft === true;
   const retryMessageId = typeof body.retryMessageId === "string" ? body.retryMessageId : null;
-  if (!conversationId || (!retryMessageId && !text) || text.length > 4000) {
+  const attachments = body.attachments === undefined
+    ? []
+    : validateAttachments(body.attachments, conversationId);
+  if (!conversationId || attachments === null || (!retryMessageId && !text && !attachments.length) || text.length > 4000) {
     return Response.json(
       {
         error:
@@ -107,11 +126,23 @@ Deno.serve(async (request: Request) => {
       { status: 400, headers: cors ?? {} },
     );
   }
+  const selectedAttachment = attachments[0];
+  if (selectedAttachment && (customer.channel === "messenger" || customer.channel === "instagram")) {
+    const maxBytes = selectedAttachment.mimeType.startsWith("image/")
+      ? 8 * 1024 * 1024
+      : 25_000_000;
+    if (selectedAttachment.size > maxBytes) {
+      return Response.json(
+        { error: selectedAttachment.mimeType.startsWith("image/") ? "Meta image attachments must be 8 MB or smaller" : "Meta file attachments must be 25 MB or smaller" },
+        { status: 413, headers: cors ?? {} },
+      );
+    }
+  }
   if (retryMessageId) {
     if (customer.channel === "web")
       return Response.json({ error: "Web chat replies do not need channel retry" }, { status: 409, headers: cors ?? {} });
     const { data: failedMessage, error: failedMessageError } = await supabase.from("messages")
-      .select("id, body, image_urls, sender, delivery_status")
+      .select("id, body, image_urls, attachments, sender, delivery_status")
       .eq("id", retryMessageId)
       .eq("conversation_id", conversation.id)
       .maybeSingle();
@@ -127,6 +158,7 @@ Deno.serve(async (request: Request) => {
     try {
       await sendToChannel(customer.channel as MessageChannel, customer.external_id, failedMessage.body, {
         imageUrls: Array.isArray(failedMessage.image_urls) ? failedMessage.image_urls : [],
+        attachments: await createChannelAttachments(supabase, Array.isArray(failedMessage.attachments) ? failedMessage.attachments as MessageAttachment[] : []),
       });
       const { error: deliveredError } = await supabase.from("messages")
         .update({ delivery_status: "sent", failure_reason: null }).eq("id", failedMessage.id);
@@ -142,6 +174,7 @@ Deno.serve(async (request: Request) => {
     conversation_id: conversation.id,
     sender: sendDraft ? "ai" : "seller",
     body: text,
+    attachments,
     delivery_status: customer.channel === "web" ? "sent" : "pending",
   }).select("id").single();
   if (messageError)
@@ -182,7 +215,8 @@ Deno.serve(async (request: Request) => {
         { status: 409, headers: cors ?? {} },
       );
     }
-    await sendToChannel(channel, customer.external_id, text);
+    const channelAttachments = await createChannelAttachments(supabase, attachments);
+    await sendToChannel(channel, customer.external_id, text, { attachments: channelAttachments });
     const { error: deliveredError } = await supabase.from("messages")
       .update({ delivery_status: "sent", failure_reason: null }).eq("id", savedMessage.id);
     if (deliveredError) throw deliveredError;

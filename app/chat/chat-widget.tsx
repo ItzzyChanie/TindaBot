@@ -11,6 +11,7 @@ type WidgetMessage = {
   sender: "customer" | "ai" | "seller";
   body: string;
   image_urls?: string[];
+  attachments?: { path: string; name: string; mimeType: string; size: number; signedUrl?: string | null }[];
   created_at: string;
   pending?: boolean;
 };
@@ -228,6 +229,12 @@ export function ChatWidget({ productId: initialProductId, sessionId: initialSess
               // eslint-disable-next-line @next/next/no-img-element -- Seller-uploaded size charts are served from Supabase Storage.
               <img className="widget-message-image" src={url} alt="Shop size chart" key={url} loading="lazy" />
             ))}
+            {message.attachments?.map((file) => file.signedUrl && /^https:\/\//i.test(file.signedUrl)
+              ? file.mimeType.startsWith("image/")
+                // eslint-disable-next-line @next/next/no-img-element -- Private attachments use short-lived signed URLs.
+                ? <img className="widget-message-image" src={file.signedUrl} alt={file.name} key={file.path} loading="lazy" />
+                : <a className="widget-message-attachment" href={file.signedUrl} target="_blank" rel="noreferrer" key={file.path}>{file.name} · {(file.size / 1024 / 1024).toFixed(2)} MB</a>
+              : null)}
             <time>{message.pending ? "Sending…" : new Intl.DateTimeFormat("en-PH", { hour: "numeric", minute: "2-digit" }).format(new Date(message.created_at))}</time>
           </article>
         ))}

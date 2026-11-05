@@ -11,6 +11,7 @@ import {
 } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { fetchChannelStatus, type ChannelStatus } from "@/lib/channel-status";
+import { ATTACHMENT_BUCKET, MAX_ATTACHMENT_BYTES, isAllowedAttachmentType, type MessageAttachment } from "@/supabase/functions/_shared/message-attachments";
 
 type Customer = { id: string; channel: string; external_id: string; name: string | null };
 type MissedRequest = { id: string; request_text: string; created_at: string };
@@ -33,6 +34,7 @@ type Message = {
   sender: "customer" | "ai" | "seller" | "system";
   body: string;
   image_urls?: string[];
+  attachments?: MessageAttachment[];
   delivery_status?: "pending" | "sent" | "failed";
   failure_reason?: string | null;
   created_at: string;
@@ -54,6 +56,24 @@ type CustomerOrder = {
 
 const CONVERSATIONS_PER_PAGE = 30;
 const MESSAGES_PER_PAGE = 100;
+
+async function hydrateAttachments(rows: Message[]): Promise<Message[]> {
+  const supabase = createSupabaseBrowserClient();
+  const paths = rows.flatMap((message) => message.attachments ?? []).map((attachment) => attachment.path);
+  if (!paths.length) return rows;
+  const { data } = await supabase.storage.from(ATTACHMENT_BUCKET).createSignedUrls(paths, 60 * 60 * 24 * 90);
+  const signedByPath = new Map<string, string>(
+    ((data ?? []) as { path: string; signedUrl: string | null }[])
+      .flatMap((item) => item.signedUrl ? [[item.path, item.signedUrl] as [string, string]] : []),
+  );
+  return rows.map((message) => ({
+    ...message,
+    attachments: (message.attachments ?? []).map((attachment) => ({
+      ...attachment,
+      signedUrl: signedByPath.get(attachment.path),
+    })),
+  }));
+}
 
 function customerDisplayName(customer: Customer | null | undefined) {
   if (customer?.name?.trim()) return customer.name.trim();
@@ -133,6 +153,8 @@ export function InboxWorkspace() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedSnapshot, setSelectedSnapshot] = useState<Conversation | null>(null);
   const [draft, setDraft] = useState("");
+  const [attachment, setAttachment] = useState<File | null>(null);
+  const attachmentInputRef = useRef<HTMLInputElement | null>(null);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
@@ -205,12 +227,12 @@ export function InboxWorkspace() {
     if (!conversationId) return;
     const { data, error: queryError } = await createSupabaseBrowserClient()
       .from("messages")
-      .select("id, conversation_id, sender, body, image_urls, created_at, delivery_status, failure_reason")
+      .select("id, conversation_id, sender, body, image_urls, attachments, created_at, delivery_status, failure_reason")
       .eq("conversation_id", conversationId)
       .order("created_at", { ascending: false })
       .limit(MESSAGES_PER_PAGE);
     if (queryError || !data || selectedConversationRef.current !== conversationId) return;
-    const latestMessages = (data as Message[]).reverse();
+    const latestMessages = await hydrateAttachments((data as Message[]).reverse());
     setMessages((current) => {
       const older = current.filter((message) => !latestMessages.some((next) =>
         next.id === message.id || (message.pending && next.sender === message.sender && next.body === message.body),
@@ -331,10 +353,12 @@ export function InboxWorkspace() {
           if (!messageId || !conversationId) return;
           if (conversationId !== selectedConversationRef.current || typeof record.body !== "string") return;
           const message = record as unknown as Message;
-          setMessages((current) => [
-            ...current.filter((item) => item.id !== message.id && !(item.pending && item.sender === message.sender && item.body === message.body)), message,
-          ].sort((a, b) => a.created_at.localeCompare(b.created_at)));
-          setPreviews((current) => new Map(current).set(conversationId, message));
+          void hydrateAttachments([message]).then(([hydrated]) => {
+            setMessages((current) => [
+              ...current.filter((item) => item.id !== message.id && !(item.pending && item.sender === message.sender && item.body === message.body)), hydrated,
+            ].sort((a, b) => a.created_at.localeCompare(b.created_at)));
+            setPreviews((current) => new Map(current).set(conversationId, hydrated));
+          });
         },
       )
       .on(
@@ -395,7 +419,7 @@ export function InboxWorkspace() {
       const supabase = createSupabaseBrowserClient();
       const [messageResult, orderResult, missedResult] = await Promise.all([
         supabase.from("messages")
-          .select("id, conversation_id, sender, body, image_urls, created_at, delivery_status, failure_reason")
+          .select("id, conversation_id, sender, body, image_urls, attachments, created_at, delivery_status, failure_reason")
           .eq("conversation_id", selectedId)
           .order("created_at", { ascending: false })
           .limit(MESSAGES_PER_PAGE),
@@ -415,7 +439,7 @@ export function InboxWorkspace() {
         setError(messageResult.error?.message ?? orderResult.error?.message ?? missedResult.error?.message ?? "Could not load this conversation.");
         return;
       }
-      const loadedMessages = ((messageResult.data ?? []) as Message[]).reverse();
+      const loadedMessages = await hydrateAttachments(((messageResult.data ?? []) as Message[]).reverse());
       setMessages(loadedMessages);
       setHasOlderMessages(loadedMessages.length === MESSAGES_PER_PAGE);
       setOrders((orderResult.data ?? []) as unknown as CustomerOrder[]);
@@ -432,14 +456,14 @@ export function InboxWorkspace() {
     setLoadingOlder(true);
     const { data, error: olderError } = await createSupabaseBrowserClient()
       .from("messages")
-      .select("id, conversation_id, sender, body, image_urls, created_at, delivery_status, failure_reason")
+      .select("id, conversation_id, sender, body, image_urls, attachments, created_at, delivery_status, failure_reason")
       .eq("conversation_id", selectedId)
       .lt("created_at", oldest.created_at)
       .order("created_at", { ascending: false })
       .limit(MESSAGES_PER_PAGE);
     if (olderError) setError(olderError.message);
     else {
-      const older = ((data ?? []) as Message[]).reverse();
+      const older = await hydrateAttachments(((data ?? []) as Message[]).reverse());
       if (older.length && threadMessagesRef.current) {
         preserveScrollHeightRef.current = threadMessagesRef.current.scrollHeight;
         followLatestRef.current = false;
@@ -523,13 +547,17 @@ export function InboxWorkspace() {
       !selected ||
       isSimulatedChannel(selected.customers?.channel) ||
       replyDisabled ||
-      !draft.trim() ||
+      (!draft.trim() && !attachment) ||
       sending
     )
       return;
     const text = draft.trim();
     if (text.length > 4000) {
       setError("Hanggang 4,000 characters lang po bawat reply.");
+      return;
+    }
+    if (attachment && (attachment.size > MAX_ATTACHMENT_BYTES || !isAllowedAttachmentType(attachment.type))) {
+      setError("Pumili po ng supported image o document na hanggang 25 MB.");
       return;
     }
 
@@ -544,18 +572,52 @@ export function InboxWorkspace() {
       created_at: new Date().toISOString(),
       pending: true,
     }]);
+    let uploadedAttachment: MessageAttachment | undefined;
     try {
       const supabase = createSupabaseBrowserClient();
+      if (attachment) {
+        const path = `conversations/${selected.id}/${crypto.randomUUID()}`;
+        const { error: uploadError } = await supabase.storage
+          .from(ATTACHMENT_BUCKET)
+          .upload(path, attachment, { contentType: attachment.type, upsert: false });
+        if (uploadError) throw uploadError;
+        uploadedAttachment = {
+          path,
+          name: attachment.name,
+          mimeType: attachment.type,
+          size: attachment.size,
+        };
+      }
       const { error: replyError } = await supabase.functions.invoke(
         "seller-reply",
         {
-          body: { conversationId: selected.id, text },
+          body: {
+            conversationId: selected.id,
+            text,
+            attachments: uploadedAttachment ? [uploadedAttachment] : [],
+          },
         },
       );
       if (replyError) throw replyError;
       setDraft("");
+      setAttachment(null);
+      await refreshSelectedMessages();
     } catch (cause) {
       setMessages((current) => current.filter((message) => message.id !== pendingId));
+      await refreshSelectedMessages();
+      if (uploadedAttachment) {
+        const { data: saved } = await createSupabaseBrowserClient().from("messages")
+          .select("id")
+          .eq("conversation_id", selected.id)
+          .contains("attachments", [{ path: uploadedAttachment.path }])
+          .limit(1);
+        if (saved?.length) {
+          setDraft("");
+          setAttachment(null);
+        } else {
+          await createSupabaseBrowserClient().storage.from(ATTACHMENT_BUCKET).remove([uploadedAttachment.path]);
+        }
+      }
       setError(
         cause instanceof Error
           ? cause.message
@@ -940,6 +1002,12 @@ export function InboxWorkspace() {
                         // eslint-disable-next-line @next/next/no-img-element -- Seller-uploaded chart images are served from Supabase Storage.
                         <img className="inbox-message-image" src={url} alt="Size chart" key={url} loading="lazy" />
                       ))}
+                      {message.attachments?.map((file) => file.signedUrl && /^https:\/\//i.test(file.signedUrl)
+                        ? file.mimeType.startsWith("image/")
+                          // eslint-disable-next-line @next/next/no-img-element -- Private attachments use short-lived signed URLs.
+                          ? <img className="inbox-message-image" src={file.signedUrl} alt={file.name} key={file.path} loading="lazy" />
+                          : <a className="inbox-message-attachment" href={file.signedUrl} target="_blank" rel="noreferrer" key={file.path}>{file.name} · {(file.size / 1024 / 1024).toFixed(2)} MB</a>
+                        : null)}
                       <time dateTime={message.created_at}>{message.pending ? "Sending…" : formatTime(message.created_at)}</time>
                     </div>
                   </article>
@@ -998,14 +1066,40 @@ export function InboxWorkspace() {
                   placeholder="Write a reply…"
                   rows={2}
                 />
+                <input
+                  ref={attachmentInputRef}
+                  className="attachment-file-input"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif,application/pdf,text/plain,text/csv,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                  onChange={(event) => {
+                    const file = event.currentTarget.files?.[0] ?? null;
+                    event.currentTarget.value = "";
+                    if (!file) return;
+                    if (file.size > MAX_ATTACHMENT_BYTES) {
+                      setError("Max 25 MB lang po bawat file.");
+                      return;
+                    }
+                    if (!isAllowedAttachmentType(file.type)) {
+                      setError("Supported po ang JPG, PNG, WebP, GIF, PDF, TXT, CSV, DOC, DOCX, XLS, at XLSX.");
+                      return;
+                    }
+                    setError("");
+                    setAttachment(file);
+                  }}
+                  disabled={replyDisabled || sending}
+                />
+                <div className="reply-attachment-row">
+                  <button className="text-button" type="button" onClick={() => attachmentInputRef.current?.click()} disabled={replyDisabled || sending}>＋ Image or file</button>
+                  {attachment && <span className="reply-attachment-name">{attachment.name} · {(attachment.size / 1024 / 1024).toFixed(2)} MB <button className="text-button" type="button" onClick={() => setAttachment(null)} disabled={sending}>Remove</button></span>}
+                </div>
                 <div className="reply-actions">
                   <span>{draft.length}/4000</span>
                   <button
                     className="button button-primary"
                     type="submit"
-                    disabled={replyDisabled || sending || !draft.trim()}
+                    disabled={replyDisabled || sending || (!draft.trim() && !attachment)}
                   >
-                    {sending ? "Sending…" : "Send reply"}
+                    {sending ? "Uploading and sending…" : "Send reply"}
                   </button>
                 </div>
               </form>
