@@ -12,6 +12,9 @@ type WidgetMessage = {
   body: string;
   image_urls?: string[];
   attachments?: { path: string; name: string; mimeType: string; size: number; signedUrl?: string | null }[];
+  reply_to_text?: string | null;
+  edited_at?: string | null;
+  unsent_at?: string | null;
   created_at: string;
   pending?: boolean;
 };
@@ -224,18 +227,19 @@ export function ChatWidget({ productId: initialProductId, sessionId: initialSess
         {loading ? <p className="widget-state">Inihahanda ang chat…</p> : messages.length === 0 ? <p className="widget-state">Kumusta po! Pumili ng quick question o mag-type ng tanong.</p> : messages.map((message) => (
           <article className={`widget-message ${message.sender}`} key={message.id}>
             <span>{message.sender === "customer" ? "You" : message.sender === "seller" ? "Seller" : "Assistant"}</span>
-            <p>{renderMessageBody(message.body)}</p>
-            {message.image_urls?.filter((url) => /^https:\/\//i.test(url)).map((url) => (
+            {message.reply_to_text && <blockquote className="widget-message-reply">{message.reply_to_text}</blockquote>}
+            <p>{message.unsent_at ? "This message was unsent." : renderMessageBody(message.body)}</p>
+            {!message.unsent_at && message.image_urls?.filter((url) => /^https:\/\//i.test(url)).map((url) => (
               // eslint-disable-next-line @next/next/no-img-element -- Seller-uploaded size charts are served from Supabase Storage.
               <img className="widget-message-image" src={url} alt="Shop size chart" key={url} loading="lazy" />
             ))}
-            {message.attachments?.map((file) => file.signedUrl && /^https:\/\//i.test(file.signedUrl)
+            {!message.unsent_at && message.attachments?.map((file) => file.signedUrl && /^https:\/\//i.test(file.signedUrl)
               ? file.mimeType.startsWith("image/")
                 // eslint-disable-next-line @next/next/no-img-element -- Private attachments use short-lived signed URLs.
                 ? <img className="widget-message-image" src={file.signedUrl} alt={file.name} key={file.path} loading="lazy" />
                 : <a className="widget-message-attachment" href={file.signedUrl} target="_blank" rel="noreferrer" key={file.path}>{file.name} · {(file.size / 1024 / 1024).toFixed(2)} MB</a>
               : null)}
-            <time>{message.pending ? "Sending…" : new Intl.DateTimeFormat("en-PH", { hour: "numeric", minute: "2-digit" }).format(new Date(message.created_at))}</time>
+            <time>{message.pending ? "Sending…" : `${new Intl.DateTimeFormat("en-PH", { hour: "numeric", minute: "2-digit" }).format(new Date(message.created_at))}${message.edited_at ? " · edited" : ""}`}</time>
           </article>
         ))}
         {sending && <p className="widget-typing" role="status">Sending your message…</p>}

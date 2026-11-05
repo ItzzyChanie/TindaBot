@@ -35,6 +35,12 @@ type Message = {
   body: string;
   image_urls?: string[];
   attachments?: MessageAttachment[];
+  channel_message_ids?: string[];
+  external_message_id?: string | null;
+  reply_to_message_id?: string | null;
+  reply_to_text?: string | null;
+  edited_at?: string | null;
+  unsent_at?: string | null;
   delivery_status?: "pending" | "sent" | "failed";
   failure_reason?: string | null;
   created_at: string;
@@ -154,6 +160,9 @@ export function InboxWorkspace() {
   const [selectedSnapshot, setSelectedSnapshot] = useState<Conversation | null>(null);
   const [draft, setDraft] = useState("");
   const [attachment, setAttachment] = useState<File | null>(null);
+  const [replyTarget, setReplyTarget] = useState<Message | null>(null);
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [openMessageMenuId, setOpenMessageMenuId] = useState<string | null>(null);
   const attachmentInputRef = useRef<HTMLInputElement | null>(null);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
@@ -227,7 +236,7 @@ export function InboxWorkspace() {
     if (!conversationId) return;
     const { data, error: queryError } = await createSupabaseBrowserClient()
       .from("messages")
-      .select("id, conversation_id, sender, body, image_urls, attachments, created_at, delivery_status, failure_reason")
+      .select("id, conversation_id, sender, body, image_urls, attachments, channel_message_ids, external_message_id, reply_to_message_id, reply_to_text, edited_at, unsent_at, created_at, delivery_status, failure_reason")
       .eq("conversation_id", conversationId)
       .order("created_at", { ascending: false })
       .limit(MESSAGES_PER_PAGE);
@@ -408,6 +417,9 @@ export function InboxWorkspace() {
 
   useEffect(() => {
     setMessages([]);
+    setReplyTarget(null);
+    setEditingMessageId(null);
+    setOpenMessageMenuId(null);
     setOrders([]);
     setMissedRequests([]);
     setHasOlderMessages(false);
@@ -419,7 +431,7 @@ export function InboxWorkspace() {
       const supabase = createSupabaseBrowserClient();
       const [messageResult, orderResult, missedResult] = await Promise.all([
         supabase.from("messages")
-          .select("id, conversation_id, sender, body, image_urls, attachments, created_at, delivery_status, failure_reason")
+          .select("id, conversation_id, sender, body, image_urls, attachments, channel_message_ids, external_message_id, reply_to_message_id, reply_to_text, edited_at, unsent_at, created_at, delivery_status, failure_reason")
           .eq("conversation_id", selectedId)
           .order("created_at", { ascending: false })
           .limit(MESSAGES_PER_PAGE),
@@ -456,7 +468,7 @@ export function InboxWorkspace() {
     setLoadingOlder(true);
     const { data, error: olderError } = await createSupabaseBrowserClient()
       .from("messages")
-      .select("id, conversation_id, sender, body, image_urls, attachments, created_at, delivery_status, failure_reason")
+      .select("id, conversation_id, sender, body, image_urls, attachments, channel_message_ids, external_message_id, reply_to_message_id, reply_to_text, edited_at, unsent_at, created_at, delivery_status, failure_reason")
       .eq("conversation_id", selectedId)
       .lt("created_at", oldest.created_at)
       .order("created_at", { ascending: false })
@@ -556,6 +568,24 @@ export function InboxWorkspace() {
       setError("Hanggang 4,000 characters lang po bawat reply.");
       return;
     }
+    if (editingMessageId) {
+      setSending(true);
+      setError("");
+      try {
+        const { error: editError } = await createSupabaseBrowserClient().functions.invoke("seller-reply", {
+          body: { conversationId: selected.id, action: "edit", messageId: editingMessageId, text },
+        });
+        if (editError) throw editError;
+        setEditingMessageId(null);
+        setDraft("");
+        await refreshSelectedMessages();
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : "Could not edit this message.");
+      } finally {
+        setSending(false);
+      }
+      return;
+    }
     if (attachment && (attachment.size > MAX_ATTACHMENT_BYTES || !isAllowedAttachmentType(attachment.type))) {
       setError("Pumili po ng supported image o document na hanggang 25 MB.");
       return;
@@ -595,12 +625,14 @@ export function InboxWorkspace() {
             conversationId: selected.id,
             text,
             attachments: uploadedAttachment ? [uploadedAttachment] : [],
+            replyToMessageId: replyTarget?.id ?? null,
           },
         },
       );
       if (replyError) throw replyError;
       setDraft("");
       setAttachment(null);
+      setReplyTarget(null);
       await refreshSelectedMessages();
     } catch (cause) {
       setMessages((current) => current.filter((message) => message.id !== pendingId));
@@ -626,6 +658,37 @@ export function InboxWorkspace() {
     } finally {
       setSending(false);
     }
+  }
+
+  function startReply(message: Message) {
+    setOpenMessageMenuId(null);
+    setEditingMessageId(null);
+    setDraft("");
+    setAttachment(null);
+    setReplyTarget(message);
+    window.requestAnimationFrame(() => document.getElementById("seller-reply")?.focus());
+  }
+
+  function startEdit(message: Message) {
+    setOpenMessageMenuId(null);
+    setReplyTarget(null);
+    setAttachment(null);
+    setEditingMessageId(message.id);
+    setDraft(message.body);
+    window.requestAnimationFrame(() => document.getElementById("seller-reply")?.focus());
+  }
+
+  async function unsendMessage(message: Message) {
+    if (!selected || sending) return;
+    setSending(true);
+    setOpenMessageMenuId(null);
+    setError("");
+    const { error: unsendError } = await createSupabaseBrowserClient().functions.invoke("seller-reply", {
+      body: { conversationId: selected.id, action: "unsend", messageId: message.id },
+    });
+    if (unsendError) setError(unsendError.message || "Could not unsend this message.");
+    else await refreshSelectedMessages();
+    setSending(false);
   }
 
   async function sendDraft() {
@@ -992,17 +1055,46 @@ export function InboxWorkspace() {
                               ? "You"
                               : "System"}
                       </span>
-                      <p>{message.body}</p>
+                      <div className="message-row-actions">
+                        <button className="message-icon-button" type="button" onClick={() => startReply(message)} aria-label="Reply to message" title="Reply">
+                          <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M9 10 4 15l5 5"/><path d="M20 4v7a4 4 0 0 1-4 4H4"/></svg>
+                        </button>
+                        {message.sender === "seller" && message.delivery_status === "sent" && !message.unsent_at && (
+                          <div className="message-menu-wrap">
+                            <button className="message-icon-button" type="button" onClick={() => setOpenMessageMenuId((current) => current === message.id ? null : message.id)} aria-label="More message actions" title="More">
+                              <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg>
+                            </button>
+                            {openMessageMenuId === message.id && (
+                              <div className="message-menu" role="menu">
+                                {(() => {
+                                  const channel = customer?.channel;
+                                  const textOnly = !message.attachments?.length && !message.image_urls?.length;
+                                  const canChange = channel === "web" || channel === "telegram";
+                                  const telegramExpired = channel === "telegram" && Date.now() - Date.parse(message.created_at) > 48 * 60 * 60 * 1000;
+                                  return <>
+                                    <button type="button" role="menuitem" disabled={!canChange || !textOnly || sending || (channel === "telegram" && !message.channel_message_ids?.length)} title={!canChange ? "Meta does not support editing sent messages through this API" : !textOnly ? "Text-only messages can be edited" : channel === "telegram" && !message.channel_message_ids?.length ? "Telegram message ID is unavailable for this older reply" : undefined} onClick={() => startEdit(message)}>Edit</button>
+                                    <button type="button" role="menuitem" disabled={!canChange || !textOnly || sending || telegramExpired || (channel === "telegram" && !message.channel_message_ids?.length)} title={!canChange ? "Meta does not support unsending sent messages through this API" : !textOnly ? "Text-only messages can be unsent" : telegramExpired ? "Telegram allows deletion within 48 hours" : channel === "telegram" && !message.channel_message_ids?.length ? "Telegram message ID is unavailable for this older reply" : undefined} onClick={() => void unsendMessage(message)}>Unsend for everyone</button>
+                                    {!canChange && <small>Meta messages can’t be edited or unsent through TindaBot.</small>}
+                                  </>;
+                                })()}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      {message.reply_to_text && <blockquote className="inbox-message-reply">{message.reply_to_text}</blockquote>}
+                      <p>{message.unsent_at ? "This message was unsent for everyone." : message.body}</p>
+                      {message.edited_at && !message.unsent_at && <small className="message-edited-label">Edited</small>}
                       {message.delivery_status === "pending" && <small className="message-delivery-status">Sending to channel…</small>}
                       {message.delivery_status === "failed" && <div className="message-delivery-status failed">
                         <small>Not delivered: {message.failure_reason === "outside_window" ? "24-hour reply window closed" : message.failure_reason === "token_rejected" ? "channel token rejected; check Settings" : "channel could not deliver"}</small>
                         <button className="text-button" onClick={() => void retryDelivery(message)} disabled={retryingMessageId === message.id}>{retryingMessageId === message.id ? "Retrying…" : "Retry"}</button>
                       </div>}
-                      {message.image_urls?.filter((url) => /^https:\/\//i.test(url)).map((url) => (
+                      {!message.unsent_at && message.image_urls?.filter((url) => /^https:\/\//i.test(url)).map((url) => (
                         // eslint-disable-next-line @next/next/no-img-element -- Seller-uploaded chart images are served from Supabase Storage.
                         <img className="inbox-message-image" src={url} alt="Size chart" key={url} loading="lazy" />
                       ))}
-                      {message.attachments?.map((file) => file.signedUrl && /^https:\/\//i.test(file.signedUrl)
+                      {!message.unsent_at && message.attachments?.map((file) => file.signedUrl && /^https:\/\//i.test(file.signedUrl)
                         ? file.mimeType.startsWith("image/")
                           // eslint-disable-next-line @next/next/no-img-element -- Private attachments use short-lived signed URLs.
                           ? <img className="inbox-message-image" src={file.signedUrl} alt={file.name} key={file.path} loading="lazy" />
@@ -1098,7 +1190,7 @@ export function InboxWorkspace() {
                     onChange={(event) => setDraft(event.target.value)}
                     maxLength={4000}
                     disabled={replyDisabled}
-                    placeholder="Write a reply…"
+                    placeholder={editingMessageId ? "Edit your message…" : "Write a reply…"}
                     rows={2}
                   />
                   <button
@@ -1106,9 +1198,13 @@ export function InboxWorkspace() {
                     type="submit"
                     disabled={replyDisabled || sending || (!draft.trim() && !attachment)}
                   >
-                    {sending ? "Sending…" : "Send"}
+                    {sending ? "Sending…" : editingMessageId ? "Save" : "Send"}
                   </button>
                 </div>
+                {(replyTarget || editingMessageId) && <div className="reply-context-bar">
+                  <span><strong>{editingMessageId ? "Editing message" : "Replying to"}</strong>{!editingMessageId && ` ${replyTarget?.sender === "customer" ? customerDisplayName(customer) : replyTarget?.sender === "ai" ? "TindaBot" : "You"}: ${replyTarget?.unsent_at ? "Message was unsent" : replyTarget?.body || "Attachment"}`}</span>
+                  <button type="button" onClick={() => { setReplyTarget(null); setEditingMessageId(null); setDraft(""); }} aria-label="Cancel reply or edit" title="Cancel">×</button>
+                </div>}
                 <div className="reply-attachment-row">
                   {attachment && <span className="reply-attachment-name"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></svg>{attachment.name} · {(attachment.size / 1024 / 1024).toFixed(2)} MB <button className="reply-remove-attachment" type="button" onClick={() => setAttachment(null)} disabled={sending} aria-label="Remove attachment" title="Remove attachment">×</button></span>}
                 </div>

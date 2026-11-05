@@ -18,6 +18,7 @@ type ProductRow = Omit<BrainProduct, "price" | "discount_value" | "variants" | "
 
 export type IncomingContext = {
   externalMessageId?: string;
+  channelMessageId?: string;
   name?: string | null;
   productId?: string | null;
   paymentProof?: {
@@ -197,6 +198,7 @@ export async function handleIncoming(
     sender: "customer",
     body: text,
     external_message_id: context.externalMessageId ?? null,
+    channel_message_ids: context.channelMessageId ? [context.channelMessageId] : [],
   });
   if (messageError?.code === "23505" && context.externalMessageId) {
     return { conversationId, reply: null, draft: null, duplicate: true };
@@ -556,4 +558,11 @@ export async function saveAssistantReply(
     .update({ last_message_at: new Date().toISOString() }).eq("id", conversationId);
   if (updateError) throw updateError;
   return message.id as string;
+}
+
+export async function saveChannelMessageIds(messageId: string, channelMessageIds: string[]) {
+  const { error } = await supabase.from("messages")
+    .update({ channel_message_ids: channelMessageIds })
+    .eq("id", messageId);
+  if (error) throw error;
 }

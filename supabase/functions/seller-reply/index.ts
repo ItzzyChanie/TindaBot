@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { isWithinCustomerWindow, sendToChannel, type MessageChannel } from "../_shared/channel-messaging.ts";
+import { deleteTelegramMessage, editTelegramTextMessage, isWithinCustomerWindow, sendToChannel, type MessageChannel } from "../_shared/channel-messaging.ts";
 import { ATTACHMENT_BUCKET, validateAttachments, type MessageAttachment } from "../_shared/message-attachments.ts";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
@@ -69,7 +69,16 @@ Deno.serve(async (request: Request) => {
       { error: "Unauthorized" },
       { status: 401, headers: cors ?? {} },
     );
-  let body: { conversationId?: unknown; text?: unknown; sendDraft?: unknown; retryMessageId?: unknown; attachments?: unknown };
+  let body: {
+    conversationId?: unknown;
+    text?: unknown;
+    sendDraft?: unknown;
+    retryMessageId?: unknown;
+    attachments?: unknown;
+    action?: unknown;
+    messageId?: unknown;
+    replyToMessageId?: unknown;
+  };
   try {
     body = await request.json();
   } catch {
@@ -83,10 +92,13 @@ Deno.serve(async (request: Request) => {
   const text = typeof body.text === "string" ? body.text.trim() : "";
   const sendDraft = body.sendDraft === true;
   const retryMessageId = typeof body.retryMessageId === "string" ? body.retryMessageId : null;
+  const action = body.action === "edit" || body.action === "unsend" ? body.action : null;
+  const actionMessageId = typeof body.messageId === "string" ? body.messageId : null;
+  const replyToMessageId = typeof body.replyToMessageId === "string" ? body.replyToMessageId : null;
   const attachments = body.attachments === undefined
     ? []
     : validateAttachments(body.attachments, conversationId);
-  if (!conversationId || attachments === null || (!retryMessageId && !text && !attachments.length) || text.length > 4000) {
+  if (!conversationId || attachments === null || (!action && !retryMessageId && !text && !attachments.length) || (action && !actionMessageId) || text.length > 4000) {
     return Response.json(
       {
         error:
@@ -138,6 +150,43 @@ Deno.serve(async (request: Request) => {
       );
     }
   }
+  if (action) {
+    if (action === "edit" && !text) return Response.json({ error: "Edited messages cannot be empty" }, { status: 400, headers: cors ?? {} });
+    const { data: target, error: targetError } = await supabase.from("messages")
+      .select("id, sender, body, channel_message_ids, attachments, image_urls, delivery_status, unsent_at, created_at")
+      .eq("id", actionMessageId)
+      .eq("conversation_id", conversation.id)
+      .maybeSingle();
+    if (targetError || !target || target.sender !== "seller" || target.delivery_status !== "sent" || target.unsent_at) {
+      return Response.json({ error: "This message can no longer be changed" }, { status: 409, headers: cors ?? {} });
+    }
+    if ((target.attachments?.length ?? 0) > 0 || (target.image_urls?.length ?? 0) > 0) {
+      return Response.json({ error: "Edit and unsend are available for text-only replies" }, { status: 409, headers: cors ?? {} });
+    }
+    if (customer.channel === "messenger" || customer.channel === "instagram") {
+      return Response.json({ error: "Meta does not allow this message to be edited or unsent through TindaBot" }, { status: 409, headers: cors ?? {} });
+    }
+    if (customer.channel === "telegram" && Date.now() - Date.parse(target.created_at) > 48 * 60 * 60 * 1000) {
+      return Response.json({ error: "Telegram only allows deleting messages sent within the last 48 hours" }, { status: 409, headers: cors ?? {} });
+    }
+    try {
+      const providerIds = Array.isArray(target.channel_message_ids) ? target.channel_message_ids as string[] : [];
+      if (customer.channel === "telegram") {
+        if (!providerIds.length) return Response.json({ error: "Telegram message ID is unavailable for this older reply" }, { status: 409, headers: cors ?? {} });
+        if (action === "edit") await editTelegramTextMessage(customer.external_id, providerIds[0], text);
+        else for (const providerId of providerIds) await deleteTelegramMessage(customer.external_id, providerId);
+      }
+      const { error: updateError } = await supabase.from("messages").update(
+        action === "edit"
+          ? { body: text, edited_at: new Date().toISOString() }
+          : { body: "", unsent_at: new Date().toISOString(), channel_message_ids: [] },
+      ).eq("id", target.id);
+      if (updateError) throw updateError;
+      return Response.json({ ok: true }, { headers: cors ?? {} });
+    } catch {
+      return Response.json({ error: action === "edit" ? "Message could not be edited in its channel" : "Message could not be unsent in its channel" }, { status: 502, headers: cors ?? {} });
+    }
+  }
   if (retryMessageId) {
     if (customer.channel === "web")
       return Response.json({ error: "Web chat replies do not need channel retry" }, { status: 409, headers: cors ?? {} });
@@ -156,12 +205,12 @@ Deno.serve(async (request: Request) => {
       return Response.json({ error: "The 24-hour reply window has closed. Ask the customer to message again." }, { status: 409, headers: cors ?? {} });
     }
     try {
-      await sendToChannel(customer.channel as MessageChannel, customer.external_id, failedMessage.body, {
+      const channelMessageIds = await sendToChannel(customer.channel as MessageChannel, customer.external_id, failedMessage.body, {
         imageUrls: Array.isArray(failedMessage.image_urls) ? failedMessage.image_urls : [],
         attachments: await createChannelAttachments(supabase, Array.isArray(failedMessage.attachments) ? failedMessage.attachments as MessageAttachment[] : []),
       });
       const { error: deliveredError } = await supabase.from("messages")
-        .update({ delivery_status: "sent", failure_reason: null }).eq("id", failedMessage.id);
+        .update({ delivery_status: "sent", failure_reason: null, channel_message_ids: channelMessageIds }).eq("id", failedMessage.id);
       if (deliveredError) throw deliveredError;
       return Response.json({ ok: true }, { headers: cors ?? {} });
     } catch (error) {
@@ -170,11 +219,29 @@ Deno.serve(async (request: Request) => {
       return Response.json({ error: failureReason }, { status: 502, headers: cors ?? {} });
     }
   }
+  let replyToText: string | null = null;
+  let replyToProviderId: string | null = null;
+  if (replyToMessageId) {
+    const { data: target, error: targetError } = await supabase.from("messages")
+      .select("id, body, sender, channel_message_ids, external_message_id, unsent_at")
+      .eq("id", replyToMessageId)
+      .eq("conversation_id", conversation.id)
+      .maybeSingle();
+    if (targetError || !target) return Response.json({ error: "Reply target not found" }, { status: 404, headers: cors ?? {} });
+    replyToText = target.unsent_at ? "Message was unsent" : target.body.slice(0, 180);
+    const ids = Array.isArray(target.channel_message_ids) ? target.channel_message_ids as string[] : [];
+    replyToProviderId = ids[0] ?? target.external_message_id ?? null;
+  }
+  const customerText = customer.channel === "messenger" || customer.channel === "instagram" || (customer.channel === "telegram" && replyToText && !replyToProviderId)
+    ? replyToText ? `↪ ${replyToText}\n\n${text}` : text
+    : text;
   const { data: savedMessage, error: messageError } = await supabase.from("messages").insert({
     conversation_id: conversation.id,
     sender: sendDraft ? "ai" : "seller",
     body: text,
     attachments,
+    reply_to_message_id: replyToMessageId,
+    reply_to_text: replyToText,
     delivery_status: customer.channel === "web" ? "sent" : "pending",
   }).select("id").single();
   if (messageError)
@@ -216,9 +283,12 @@ Deno.serve(async (request: Request) => {
       );
     }
     const channelAttachments = await createChannelAttachments(supabase, attachments);
-    await sendToChannel(channel, customer.external_id, text, { attachments: channelAttachments });
+    const channelMessageIds = await sendToChannel(channel, customer.external_id, customerText, {
+      attachments: channelAttachments,
+      replyToMessageId: channel === "telegram" ? replyToProviderId : null,
+    });
     const { error: deliveredError } = await supabase.from("messages")
-      .update({ delivery_status: "sent", failure_reason: null }).eq("id", savedMessage.id);
+      .update({ delivery_status: "sent", failure_reason: null, channel_message_ids: channelMessageIds }).eq("id", savedMessage.id);
     if (deliveredError) throw deliveredError;
   } catch (error) {
     const failureReason = error instanceof Error && error.message === "token_rejected" ? "token_rejected" : "delivery_failed";

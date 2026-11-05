@@ -3,6 +3,7 @@ export type ChannelSendOptions = {
   replyMarkup?: Record<string, unknown>;
   imageUrls?: string[];
   attachments?: { url: string; name: string; mimeType: string; size: number }[];
+  replyToMessageId?: string | null;
 };
 
 function envValue(name: string): string {
@@ -15,7 +16,7 @@ export async function sendToChannel(
   recipientId: string,
   text: string,
   options: ChannelSendOptions = {},
-): Promise<void> {
+): Promise<string[]> {
   let url: string;
   let body: Record<string, unknown>;
   let token: string;
@@ -23,7 +24,14 @@ export async function sendToChannel(
   if (channel === "telegram") {
     token = envValue("TELEGRAM_BOT_TOKEN");
     url = `https://api.telegram.org/bot${token}/sendMessage`;
-    body = { chat_id: recipientId, text, ...(options.replyMarkup ? { reply_markup: options.replyMarkup } : {}) };
+    body = {
+      chat_id: recipientId,
+      text,
+      ...(options.replyMarkup ? { reply_markup: options.replyMarkup } : {}),
+      ...(options.replyToMessageId && /^\d+$/.test(options.replyToMessageId)
+        ? { reply_parameters: { message_id: Number(options.replyToMessageId), allow_sending_without_reply: true } }
+        : {}),
+    };
   } else if (channel === "messenger") {
     token = envValue("MESSENGER_PAGE_TOKEN");
     url = "https://graph.facebook.com/v26.0/me/messages";
@@ -47,6 +55,7 @@ export async function sendToChannel(
     "content-type": "application/json",
     ...(channel === "telegram" ? {} : { authorization: `Bearer ${token}` }),
   };
+  const channelMessageIds: string[] = [];
   const send = async (sendUrl: string, messageBody: Record<string, unknown>, requestKind: "text" | "image" | "file") => {
     let response: Response;
     try {
@@ -80,6 +89,15 @@ export async function sendToChannel(
       if (response.status === 401 || response.status === 403) throw new Error("token_rejected");
       throw new Error(`${channel} message delivery failed`);
     }
+    const result = responseData.result && typeof responseData.result === "object"
+      ? responseData.result as Record<string, unknown>
+      : {};
+    const messageId = typeof responseData.message_id === "string" || typeof responseData.message_id === "number"
+      ? String(responseData.message_id)
+      : typeof result.message_id === "string" || typeof result.message_id === "number"
+        ? String(result.message_id)
+        : null;
+    if (messageId) channelMessageIds.push(messageId);
   };
   if (text.trim()) await send(url, body, "text");
 
@@ -127,6 +145,8 @@ export async function sendToChannel(
         if (response.status === 401 || response.status === 403) throw new Error("token_rejected");
         throw new Error("telegram attachment delivery failed");
       }
+      const result = telegramResult as { result?: { message_id?: number | string } };
+      if (result.result?.message_id !== undefined) channelMessageIds.push(String(result.result.message_id));
       console.info("Channel send result", {
         channel,
         requestKind: attachment.mimeType.startsWith("image/") ? "image" : "file",
@@ -155,6 +175,38 @@ export async function sendToChannel(
       },
     }, isImage ? "image" : "file");
   }
+  return channelMessageIds;
+}
+
+export async function editTelegramTextMessage(
+  recipientId: string,
+  messageId: string,
+  text: string,
+): Promise<void> {
+  const token = envValue("TELEGRAM_BOT_TOKEN");
+  if (!token || !/^\d+$/.test(messageId)) throw new Error("telegram message cannot be edited");
+  const response = await fetch(`https://api.telegram.org/bot${token}/editMessageText`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ chat_id: recipientId, message_id: Number(messageId), text }),
+  });
+  const result = await response.json().catch(() => ({})) as { ok?: boolean };
+  if (!response.ok || result.ok === false) throw new Error("telegram message edit failed");
+}
+
+export async function deleteTelegramMessage(
+  recipientId: string,
+  messageId: string,
+): Promise<void> {
+  const token = envValue("TELEGRAM_BOT_TOKEN");
+  if (!token || !/^\d+$/.test(messageId)) throw new Error("telegram message cannot be deleted");
+  const response = await fetch(`https://api.telegram.org/bot${token}/deleteMessage`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ chat_id: recipientId, message_id: Number(messageId) }),
+  });
+  const result = await response.json().catch(() => ({})) as { ok?: boolean };
+  if (!response.ok || result.ok === false) throw new Error("telegram message deletion failed");
 }
 
 export function isWithinCustomerWindow(lastCustomerMessageAt: string | null, channel: string): boolean {

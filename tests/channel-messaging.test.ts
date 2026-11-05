@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { sendToChannel } from "../supabase/functions/_shared/channel-messaging";
+import { deleteTelegramMessage, editTelegramTextMessage, sendToChannel } from "../supabase/functions/_shared/channel-messaging";
 
 describe("channel image delivery", () => {
   afterEach(() => vi.unstubAllGlobals());
@@ -127,5 +127,34 @@ describe("channel image delivery", () => {
     const form = fetchMock.mock.calls[1][1]?.body as FormData;
     expect(form.get("chat_id")).toBe("12345");
     expect(form.get("document")).toBeInstanceOf(Blob);
+  });
+
+  it("returns Telegram message IDs and uses the provider reply reference", async () => {
+    vi.stubGlobal("Deno", { env: { get: (name: string) => name === "TELEGRAM_BOT_TOKEN" ? "test-token" : undefined } });
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ ok: true, result: { message_id: 901 } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const ids = await sendToChannel("telegram", "12345", "Reply text", { replyToMessageId: "812" });
+
+    expect(ids).toEqual(["901"]);
+    expect(JSON.parse(fetchMock.mock.calls[0][1]?.body as string)).toMatchObject({
+      reply_parameters: { message_id: 812, allow_sending_without_reply: true },
+    });
+  });
+
+  it("calls Telegram edit and delete methods with the stored message ID", async () => {
+    vi.stubGlobal("Deno", { env: { get: (name: string) => name === "TELEGRAM_BOT_TOKEN" ? "test-token" : undefined } });
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ ok: true }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await editTelegramTextMessage("12345", "812", "Updated reply");
+    await deleteTelegramMessage("12345", "812");
+
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+      "https://api.telegram.org/bottest-token/editMessageText",
+      "https://api.telegram.org/bottest-token/deleteMessage",
+    ]);
+    expect(JSON.parse(fetchMock.mock.calls[0][1]?.body as string)).toMatchObject({ chat_id: "12345", message_id: 812, text: "Updated reply" });
+    expect(JSON.parse(fetchMock.mock.calls[1][1]?.body as string)).toMatchObject({ chat_id: "12345", message_id: 812 });
   });
 });

@@ -2,6 +2,7 @@ import {
   claimTelegramUpdate,
   finishTelegramUpdate,
   handleIncoming,
+  saveChannelMessageIds,
   saveAssistantReply,
 } from "../_shared/handleIncoming.ts";
 import faq from "../_shared/faq.json" with { type: "json" };
@@ -27,12 +28,13 @@ type TelegramMessage = {
     mime_type?: string;
   };
   chat?: { id?: number };
+  message_id?: number;
   from?: { first_name?: string; last_name?: string; username?: string };
 };
 
 type TelegramUpdate = { update_id?: number; message?: TelegramMessage };
 
-async function sendTelegramMessage(chatId: number, text: string) {
+async function sendTelegramMessage(chatId: number, text: string): Promise<string | null> {
   if (!telegramToken) throw new Error("Telegram bot is not configured");
   const response = await fetch(
     `https://api.telegram.org/bot${telegramToken}/sendMessage`,
@@ -47,9 +49,11 @@ async function sendTelegramMessage(chatId: number, text: string) {
     },
   );
   if (!response.ok) throw new Error("Telegram sendMessage failed");
+  const result = await response.json() as { result?: { message_id?: number } };
+  return result.result?.message_id === undefined ? null : String(result.result.message_id);
 }
 
-async function sendTelegramPhoto(chatId: number, photo: string, caption = "") {
+async function sendTelegramPhoto(chatId: number, photo: string, caption = ""): Promise<string | null> {
   if (!telegramToken) throw new Error("Telegram bot is not configured");
   const response = await fetch(
     `https://api.telegram.org/bot${telegramToken}/sendPhoto`,
@@ -65,6 +69,8 @@ async function sendTelegramPhoto(chatId: number, photo: string, caption = "") {
     },
   );
   if (!response.ok) throw new Error("Telegram sendPhoto failed");
+  const result = await response.json() as { result?: { message_id?: number } };
+  return result.result?.message_id === undefined ? null : String(result.result.message_id);
 }
 
 async function processTelegramUpdate(
@@ -116,6 +122,7 @@ async function processTelegramUpdate(
     const startPayload = text.match(/^\/start(?:@[a-z0-9_]+)?\s+product_([0-9a-f-]{36})\s*$/i);
     const incoming = await handleIncoming("telegram", String(chatId), text, {
       name,
+      channelMessageId: message.message_id === undefined ? undefined : String(message.message_id),
       productId: startPayload?.[1] ?? null,
       paymentProof: hasProof
         ? {
@@ -132,19 +139,23 @@ async function processTelegramUpdate(
       const images = incoming.imageUrls?.length
         ? incoming.imageUrls.slice(0, 5)
         : incoming.imageUrl ? [incoming.imageUrl] : [];
-      await saveAssistantReply(incoming.conversationId, incoming.reply, images);
+      const savedReplyId = await saveAssistantReply(incoming.conversationId, incoming.reply, images);
+      const channelMessageIds: string[] = [];
       if (images.length) {
         const caption = incoming.reply.replace(/https:\/\/\S+/g, "").trim();
         for (let index = 0; index < images.length; index += 1) {
           try {
-            await sendTelegramPhoto(chatId, images[index], index === 0 ? caption : "");
+            const sentId = await sendTelegramPhoto(chatId, images[index], index === 0 ? caption : "");
+            if (sentId) channelMessageIds.push(sentId);
           } catch {
-            await sendTelegramMessage(chatId, index === 0 ? incoming.reply : images[index]);
+            const sentId = await sendTelegramMessage(chatId, index === 0 ? incoming.reply : images[index]);
+            if (sentId) channelMessageIds.push(sentId);
           }
         }
       } else {
-        await sendToChannel("telegram", String(chatId), incoming.reply, { replyMarkup });
+        channelMessageIds.push(...await sendToChannel("telegram", String(chatId), incoming.reply, { replyMarkup }));
       }
+      await saveChannelMessageIds(savedReplyId, channelMessageIds);
     }
     succeeded = true;
   } catch (error) {

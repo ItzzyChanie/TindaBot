@@ -131,9 +131,9 @@ async function processEvents(events: MetaInboundMessage[]): Promise<void> {
         continue;
       }
 
-      await sendToChannel(event.channel, senderId, incoming.reply, { imageUrls });
+      const channelMessageIds = await sendToChannel(event.channel, senderId, incoming.reply, { imageUrls });
       const { error: deliveredError } = await supabase.from("messages")
-        .update({ delivery_status: "sent", failure_reason: null }).eq("id", replyId);
+        .update({ delivery_status: "sent", failure_reason: null, channel_message_ids: channelMessageIds }).eq("id", replyId);
       if (deliveredError) throw deliveredError;
       logMetaEvent(event, true, null);
     } catch (error) {

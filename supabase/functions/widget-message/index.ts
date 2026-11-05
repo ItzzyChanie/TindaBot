@@ -110,7 +110,7 @@ Deno.serve(async (request: Request) => {
   }
 
   let query = supabase.from("messages")
-    .select("id, sender, body, image_urls, attachments, created_at")
+    .select("id, sender, body, image_urls, attachments, reply_to_text, edited_at, unsent_at, created_at")
     .eq("conversation_id", conversationId)
     .in("sender", ["customer", "ai", "seller"])
     .order("created_at", { ascending: true })
