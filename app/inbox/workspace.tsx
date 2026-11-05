@@ -172,7 +172,7 @@ export function InboxWorkspace() {
   const [liveError, setLiveError] = useState("");
   const [channelStatus, setChannelStatus] = useState<ChannelStatus | null>(null);
   const [channelStatusError, setChannelStatusError] = useState(false);
-  const [now, setNow] = useState(() => Date.now());
+  const [now, setNow] = useState(0);
   const [showHidden, setShowHidden] = useState(false);
   const [needsSellerOnly, setNeedsSellerOnly] = useState(false);
   const [mobileDetailsOpen, setMobileDetailsOpen] = useState(false);
@@ -318,6 +318,7 @@ export function InboxWorkspace() {
 
   useEffect(() => {
     void fetchChannelStatus().then(setChannelStatus).catch(() => setChannelStatusError(true));
+    setNow(Date.now());
     const timer = window.setInterval(() => setNow(Date.now()), 60_000);
     return () => window.clearInterval(timer);
   }, []);
@@ -1095,7 +1096,7 @@ export function InboxWorkspace() {
                                   const channel = customer?.channel;
                                   const textOnly = !message.attachments?.length && !message.image_urls?.length;
                                   const canChange = channel === "web" || channel === "telegram";
-                                  const telegramExpired = channel === "telegram" && Date.now() - Date.parse(message.created_at) > 48 * 60 * 60 * 1000;
+                                  const telegramExpired = channel === "telegram" && now > 0 && now - Date.parse(message.created_at) > 48 * 60 * 60 * 1000;
                                   return <>
                                     <button type="button" role="menuitem" disabled={!canChange || !textOnly || sending || (channel === "telegram" && !message.channel_message_ids?.length)} title={!canChange ? "Meta does not support editing sent messages through this API" : !textOnly ? "Text-only messages can be edited" : channel === "telegram" && !message.channel_message_ids?.length ? "Telegram message ID is unavailable for this older reply" : undefined} onClick={() => startEdit(message)}>Edit</button>
                                     <button type="button" role="menuitem" disabled={!canChange || !textOnly || sending || telegramExpired || (channel === "telegram" && !message.channel_message_ids?.length)} title={!canChange ? "Meta does not support unsending sent messages through this API" : !textOnly ? "Text-only messages can be unsent" : telegramExpired ? "Telegram allows deletion within 48 hours" : channel === "telegram" && !message.channel_message_ids?.length ? "Telegram message ID is unavailable for this older reply" : undefined} onClick={() => void unsendMessage(message)}>Unsend for everyone</button>

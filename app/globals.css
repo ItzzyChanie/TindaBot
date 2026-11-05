@@ -2795,7 +2795,7 @@ h2 {
     min-height: 42px;
     padding: 8px;
   }
-  .mobile-action-button svg {
+  .thread-header-actions .mobile-action-button svg {
     display: block;
     width: 24px;
     height: 24px;
