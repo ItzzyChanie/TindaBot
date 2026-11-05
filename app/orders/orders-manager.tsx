@@ -27,6 +27,14 @@ type Order = {
   order_items: OrderItem[];
 };
 type Filter = "all" | Order["status"];
+type DateFilter = "all" | "7" | "30";
+const PAGE_SIZE = 20;
+function dateSince(days: DateFilter) {
+  const parts = new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Manila", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
+  const part = (type: string) => Number(parts.find((item) => item.type === type)?.value);
+  const day = new Date(Date.UTC(part("year"), part("month") - 1, part("day") - (Number(days) - 1)));
+  return `${day.toISOString().slice(0, 10)}T00:00:00+08:00`;
+}
 
 const statusLabels: Record<Order["status"], string> = {
   awaiting_payment: "Awaiting payment",
@@ -38,16 +46,16 @@ function money(value: number) {
   return "₱" + Number(value).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-function orderQuery() {
-  return createSupabaseBrowserClient()
-    .from("orders")
-    .select("id, customer_id, total, shipping, status, created_at, payment_proof, customer_full_name, customer_address, customer_mobile, customer_email, customer_notes, customers(name, channel, external_id), order_items(qty, unit_price, offer_label, color, variants(size, products(name)))")
-    .order("created_at", { ascending: false });
-}
+const ORDER_SELECT = "id, customer_id, total, shipping, status, created_at, payment_proof, customer_full_name, customer_address, customer_mobile, customer_email, customer_notes, customers(name, channel, external_id), order_items(qty, unit_price, offer_label, color, variants(size, products(name)))";
 
 export function OrdersManager() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [filter, setFilter] = useState<Filter>("all");
+  const [dateFilter, setDateFilter] = useState<DateFilter>("all");
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
+  const [exporting, setExporting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<number | null>(null);
   const [error, setError] = useState("");
@@ -55,14 +63,29 @@ export function OrdersManager() {
 
   const loadOrders = useCallback(async (showLoading = false) => {
     if (showLoading) setLoading(true);
-    const { data, error: loadError } = await orderQuery();
+    const supabase = createSupabaseBrowserClient();
+    let customerIds: string[] | null = null;
+    const term = search.trim().replace(/[%,()]/g, "");
+    if (term && !/^\d+$/.test(term)) {
+      const { data: customers, error: customerError } = await supabase.from("customers").select("id").or(`name.ilike.%${term}%,external_id.ilike.%${term}%`).limit(500);
+      if (customerError) { setError(customerError.message); if (showLoading) setLoading(false); return; }
+      customerIds = (customers ?? []).map((customer: { id: string }) => customer.id);
+    }
+    let query = supabase.from("orders").select(ORDER_SELECT, { count: "exact" }).order("created_at", { ascending: false });
+    if (filter !== "all") query = query.eq("status", filter);
+    if (dateFilter !== "all") {
+      query = query.gte("created_at", dateSince(dateFilter));
+    }
+    if (term) query = /^\d+$/.test(term) ? query.eq("id", Number(term)) : customerIds?.length ? query.in("customer_id", customerIds) : query.eq("id", -1);
+    const { data, error: loadError, count } = await query.range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+    setTotalCount(count ?? 0);
     if (loadError) setError(loadError.message);
     else {
       setOrders((data ?? []) as unknown as Order[]);
       setError("");
     }
     if (showLoading) setLoading(false);
-  }, []);
+  }, [filter, dateFilter, search, page]);
 
   useEffect(() => {
     void loadOrders(true);
@@ -92,7 +115,44 @@ export function OrdersManager() {
     setSavingId(null);
   }
 
-  const visible = filter === "all" ? orders : orders.filter((order) => order.status === filter);
+  const visible = orders;
+
+  async function exportCsv() {
+    setExporting(true);
+    try {
+      const supabase = createSupabaseBrowserClient();
+      const term = search.trim().replace(/[%,()]/g, "");
+      let customerIds: string[] | null = null;
+      if (term && !/^\d+$/.test(term)) {
+        const { data } = await supabase.from("customers").select("id").or(`name.ilike.%${term}%,external_id.ilike.%${term}%`).limit(500);
+        customerIds = (data ?? []).map((customer: { id: string }) => customer.id);
+      }
+      const fetchPage = async (offset: number) => {
+        let query = supabase.from("orders").select(ORDER_SELECT).order("created_at", { ascending: false });
+        if (filter !== "all") query = query.eq("status", filter);
+        if (dateFilter !== "all") query = query.gte("created_at", dateSince(dateFilter));
+        if (term) query = /^\d+$/.test(term) ? query.eq("id", Number(term)) : customerIds?.length ? query.in("customer_id", customerIds) : query.eq("id", -1);
+        return query.range(offset, offset + PAGE_SIZE - 1);
+      };
+      const result: Order[] = [];
+      for (let offset = 0; offset < totalCount; offset += PAGE_SIZE) {
+        const { data, error: exportError } = await fetchPage(offset);
+        if (exportError) throw exportError;
+        result.push(...((data ?? []) as unknown as Order[]));
+      }
+      const fields = ["Order #", "Created at", "Status", "Customer", "Channel", "Items", "Shipping", "Total", "Facebook name", "Permanent address", "Mobile", "Email"];
+      const quote = (value: unknown) => {
+        const raw = String(value ?? "");
+        const safe = /^[\s]*[=+@-]/.test(raw) ? `'${raw}` : raw;
+        return `"${safe.replaceAll('"', '""')}"`;
+      };
+      const rows = result.map((order) => [order.id, new Date(order.created_at).toLocaleString("en-PH", { timeZone: "Asia/Manila" }), order.status, order.customers?.name ?? order.customers?.external_id ?? order.customer_id, order.customers?.channel, order.order_items.map((item) => `${item.qty}x ${item.variants?.products?.name ?? "Product"} (${item.variants?.size ?? "Size"})`).join("; "), order.shipping, order.total, order.customer_full_name, order.customer_address, order.customer_mobile, order.customer_email].map(quote).join(","));
+      const blob = new Blob([[fields.map(quote).join(","), ...rows].join("\r\n")], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a"); link.href = url; link.download = "tindabot-orders.csv"; link.click(); URL.revokeObjectURL(url);
+    } catch (exportError) { setError(exportError instanceof Error ? exportError.message : "Could not export orders."); }
+    setExporting(false);
+  }
 
   return (
     <div className="page-content orders-page">
@@ -104,7 +164,7 @@ export function OrdersManager() {
         </div>
         <label className="order-filter orders-filter">
           <span className="sr-only">Filter orders by status</span>
-          <select value={filter} onChange={(event) => setFilter(event.target.value as Filter)}>
+          <select value={filter} onChange={(event) => { setFilter(event.target.value as Filter); setPage(0); }}>
             <option value="all">All orders</option>
             <option value="awaiting_payment">Awaiting payment</option>
             <option value="paid">Paid</option>
@@ -113,19 +173,18 @@ export function OrdersManager() {
         </label>
       </section>
       {error && <p className="inbox-alert error-state" role="alert">{error}</p>}
-      {!loading && <section className="orders-summary" aria-label="Order totals">
-        {(["all", "awaiting_payment", "paid", "shipped"] as const).map((status) => {
-          const count = status === "all" ? orders.length : orders.filter((order) => order.status === status).length;
-          const label = status === "all" ? "All orders" : statusLabels[status];
-          return <button key={status} type="button" className={`order-summary-card${filter === status ? " active" : ""}`} onClick={() => setFilter(status)}><span>{label}</span><strong>{count}</strong></button>;
-        })}
-      </section>}
+      <section className="orders-tools" aria-label="Filter and export order history">
+        <label className="order-search"><span className="sr-only">Search by order number or customer</span><input value={search} onChange={(event) => { setSearch(event.target.value); setPage(0); }} placeholder="Search order # or customer" /></label>
+        <label className="order-filter"><span className="sr-only">Filter date</span><select value={dateFilter} onChange={(event) => { setDateFilter(event.target.value as DateFilter); setPage(0); }}><option value="all">Any date</option><option value="7">Last 7 days</option><option value="30">Last 30 days</option></select></label>
+        <button className="button button-secondary" type="button" onClick={() => void exportCsv()} disabled={exporting || totalCount === 0}>{exporting ? "Preparing CSV…" : `Export CSV (${totalCount})`}</button>
+        <span className="muted">{totalCount} matching orders</span>
+      </section>
       {loading ? (
         <p className="muted">Loading orders…</p>
       ) : visible.length === 0 ? (
         <div className="panel empty-orders">No orders in this view yet.</div>
       ) : (
-        <div className="orders-list">
+        <><div className="orders-list">
           {visible.map((order) => (
             <article className="panel order-card" key={order.id}>
               <header className="order-card-header">
@@ -180,7 +239,7 @@ export function OrdersManager() {
               </div>
             </article>
           ))}
-        </div>
+        </div><nav className="orders-pagination" aria-label="Order history pages"><button className="button button-secondary" disabled={page === 0} onClick={() => setPage((value) => Math.max(0, value - 1))}>Previous</button><span>Page {page + 1} of {Math.max(1, Math.ceil(totalCount / PAGE_SIZE))}</span><button className="button button-secondary" disabled={(page + 1) * PAGE_SIZE >= totalCount} onClick={() => setPage((value) => value + 1)}>Next</button></nav></>
       )}
     </div>
   );

@@ -12,6 +12,7 @@ type Activity = {
   time: string;
 };
 type SalesDay = { label: string; dateKey: string; total: number };
+type Performance = { sales: number; order_count: number; average_order: number; previous_sales: number; previous_order_count: number; trend: SalesDay[]; top_products: { name: string; quantity: number; revenue: number }[] };
 
 function greeting(hour: number) {
   if (hour < 12) return "Good morning";
@@ -49,9 +50,8 @@ export function OverviewLive({
   name,
   openCount,
   needsSeller,
-  orderCount,
-  sales,
   salesTrend,
+  initialPerformance,
   inStock,
   productCount,
   activities,
@@ -60,16 +60,18 @@ export function OverviewLive({
   name: string;
   openCount: number;
   needsSeller: number;
-  orderCount: number;
-  sales: number;
   inStock: number;
   salesTrend: SalesDay[];
+  initialPerformance: Performance;
   productCount: number;
   activities: Activity[];
   children: ReactNode;
 }) {
   const router = useRouter();
   const [now, setNow] = useState(() => new Date());
+  const [range, setRange] = useState<"week" | "month" | "all">("week");
+  const [performance, setPerformance] = useState(initialPerformance);
+  const [performanceLoading, setPerformanceLoading] = useState(false);
   const refreshTimer = useRef<number | undefined>(undefined);
   useEffect(() => {
     const clock = window.setInterval(() => setNow(new Date()), 60_000);
@@ -117,6 +119,21 @@ export function OverviewLive({
       channel?.unsubscribe();
     };
   }, [router]);
+  useEffect(() => {
+    if (range === "week") { setPerformance(initialPerformance); return; }
+    const parts = new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Manila", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
+    const part = (type: string) => Number(parts.find((item) => item.type === type)?.value);
+    const end = [part("year"), String(part("month")).padStart(2, "0"), String(part("day")).padStart(2, "0")].join("-");
+    const start = range === "month" ? new Date(Date.UTC(part("year"), part("month") - 1, part("day") - 29)).toISOString().slice(0, 10) : "2000-01-01";
+    let active = true;
+    setPerformanceLoading(true);
+    void import("@/lib/supabase/client").then(({ createSupabaseBrowserClient }) => createSupabaseBrowserClient().rpc("get_sales_performance", { p_start: start, p_end: end })).then(({ data, error }) => {
+      if (!active) return;
+      if (!error && data) setPerformance(data as Performance);
+      setPerformanceLoading(false);
+    });
+    return () => { active = false; };
+  }, [range, initialPerformance]);
   const salutation = greeting(manilaHour(now));
   const date = new Intl.DateTimeFormat("en-PH", {
     timeZone: "Asia/Manila",
@@ -124,7 +141,8 @@ export function OverviewLive({
     month: "long",
     day: "numeric",
   }).format(now);
-  const maxSales = Math.max(0, ...salesTrend.map((day) => day.total));
+  const activeTrend = performance.trend ?? salesTrend;
+  const maxSales = Math.max(0, ...activeTrend.map((day) => day.total));
   const stats = [
     {
       label: "Open conversations",
@@ -139,9 +157,9 @@ export function OverviewLive({
       href: "/inbox",
     },
     {
-      label: "Paid orders · 7 days",
-      value: String(orderCount),
-      note: `${money(sales)} collected`,
+      label: `Paid orders · ${range === "week" ? "7 days" : range === "month" ? "30 days" : "all time"}`,
+      value: String(performance.order_count),
+      note: `${money(performance.sales)} collected`,
       href: "/orders",
     },
     {
@@ -183,18 +201,25 @@ export function OverviewLive({
       <section className="overview-grid dashboard-content-grid">
         <article
           className="panel sales-trend-panel"
-          aria-label="Paid sales over the last seven days"
+          aria-label="Paid sales performance"
         >
           <div className="panel-heading">
             <div>
-              <p className="eyebrow">LAST 7 DAYS</p>
+              <p className="eyebrow">SALES PERFORMANCE</p>
               <h2>Sales performance</h2>
+              <p className="muted">{money(performance.sales)} collected · {performance.order_count} orders · average {money(performance.average_order)}</p>
             </div>
             <span className="sales-total">
               <small>Total collected</small>
-              <strong>{money(sales)}</strong>
+              <strong>{money(performance.sales)}</strong>
             </span>
           </div>
+          <label className="sales-range-select">Period
+            <select value={range} onChange={(event) => setRange(event.target.value as typeof range)}>
+              <option value="week">Last 7 days</option><option value="month">Last 30 days</option><option value="all">All time</option>
+            </select>
+          </label>
+          <p className="sales-comparison">{money(Math.abs(performance.sales - performance.previous_sales))} {performance.sales >= performance.previous_sales ? "more" : "less"} than previous period ({money(performance.previous_sales)} · {performance.previous_order_count} orders){performanceLoading ? " · Updating…" : ""}</p>
           {maxSales === 0 && (
             <p className="muted sales-empty-note">
               Paid sales will appear here after an order is marked paid or
@@ -206,7 +231,7 @@ export function OverviewLive({
             role="group"
             aria-label="Daily paid sales in Philippine pesos"
           >
-            {salesTrend.map((day) => (
+            {activeTrend.map((day) => (
               <div
                 className="sales-day"
                 key={day.dateKey}
@@ -228,6 +253,7 @@ export function OverviewLive({
               </div>
             ))}
           </div>
+          <div className="top-products"><strong>Top products</strong>{performance.top_products?.length ? performance.top_products.map((product) => <span key={product.name}>{product.name} · {product.quantity} sold · {money(product.revenue)}</span>) : <span className="muted">No collected sales in this period.</span>}</div>
         </article>
         <section className="dashboard-shortcuts" aria-label="Shop shortcuts">
           <Link className="shortcut-card" href="/catalog">

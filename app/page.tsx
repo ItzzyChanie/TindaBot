@@ -16,14 +16,19 @@ export default async function OverviewPage() {
     Date.UTC(part("year"), part("month") - 1, part("day") - 6) -
       8 * 60 * 60 * 1000,
   ).toISOString();
+  const manilaToday = `${part("year")}-${String(part("month")).padStart(2, "0")}-${String(part("day")).padStart(2, "0")}`;
+  const weekStart = new Date(Date.UTC(part("year"), part("month") - 1, part("day") - 6)).toISOString().slice(0, 10);
   const [
     { data: { user } },
     { data: metricsData, error: metricsError },
+    { data: salesData, error: salesError },
   ] = await Promise.all([
     supabase.auth.getUser(),
     supabase.rpc("get_overview_metrics", { p_since: sevenDayStart }),
+    supabase.rpc("get_sales_performance", { p_start: weekStart, p_end: manilaToday }),
   ]);
   if (metricsError) throw metricsError;
+  if (salesError) throw salesError;
   const metrics = metricsData as {
     open_count: number;
     needs_seller: number;
@@ -40,14 +45,14 @@ export default async function OverviewPage() {
       user?.user_metadata?.name ??
       accountName.charAt(0).toUpperCase() + accountName.slice(1),
   );
+  const salesPerformance = salesData as { sales: number; order_count: number; average_order: number; previous_sales: number; previous_order_count: number; trend: { label: string; dateKey: string; total: number }[]; top_products: { name: string; quantity: number; revenue: number }[] };
   return (
     <OverviewLive
       name={name}
       openCount={Number(metrics.open_count)}
       needsSeller={Number(metrics.needs_seller)}
-      orderCount={Number(metrics.order_count)}
-      sales={Number(metrics.sales)}
-      salesTrend={metrics.sales_trend}
+      salesTrend={salesPerformance.trend}
+      initialPerformance={salesPerformance}
       inStock={Number(metrics.in_stock)}
       productCount={Number(metrics.product_count)}
       activities={metrics.activities}

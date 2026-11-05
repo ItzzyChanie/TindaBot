@@ -838,6 +838,24 @@ h1 {
 .sales-trend-panel .panel-heading > .muted {
   font-size: 12px;
 }
+.sales-range-select,
+.sales-comparison,
+.top-products {
+  color: var(--muted);
+  font-size: 11px;
+}
+.sales-range-select select {
+  min-height: 34px;
+  margin-left: 8px;
+  padding: 0 9px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--text);
+}
+.sales-comparison { margin: 6px 0 0; }
+.top-products { display: grid; gap: 5px; margin-top: 12px; }
+.top-products strong { color: var(--text); }
 .sales-empty-note {
   margin: 0;
   font-size: 11px;
@@ -2395,6 +2413,32 @@ h2 {
   border-color: rgb(230 241 233 / 35%);
   background: #234936;
   color: #f3f7f3;
+}
+.orders-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 15px;
+}
+.order-search input {
+  min-height: 40px;
+  width: min(340px, 75vw);
+  padding: 0 11px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+}
+.orders-tools > .muted { margin-left: auto; font-size: 11px; }
+.orders-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin: 16px 0 28px;
+  color: var(--muted);
+  font-size: 12px;
 }
 .orders-summary {
   display: grid;
