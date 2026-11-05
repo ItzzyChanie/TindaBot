@@ -1745,6 +1745,10 @@ h2 {
   padding: 20px 15px;
   background: color-mix(in srgb, var(--page), var(--surface) 58%);
 }
+.mobile-details-toggle,
+.mobile-details-close {
+  display: none;
+}
 .details-heading {
   display: flex;
   align-items: center;
@@ -2415,6 +2419,7 @@ h2 {
     display: none;
   }
   .inbox-page {
+    position: relative;
     height: calc(100vh - 102px);
     min-height: 0;
     margin: 20px;
@@ -2422,6 +2427,34 @@ h2 {
     grid-template-columns: minmax(240px, 290px) minmax(300px, 1fr);
   }
   .inbox-details-panel {
+    display: none;
+  }
+  .mobile-details-toggle {
+    display: inline-flex;
+    width: 34px;
+    min-width: 34px;
+    min-height: 34px;
+    flex: 0 0 34px;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    font-size: 21px !important;
+    line-height: 1;
+  }
+  .inbox-page.show-mobile-details .inbox-details-panel {
+    position: absolute;
+    inset: 0 0 0 auto;
+    z-index: 6;
+    display: block;
+    width: min(360px, calc(100% - 18px));
+    border-left: 1px solid var(--line);
+    background: var(--surface);
+    box-shadow: -18px 0 44px rgb(0 0 0 / 18%);
+  }
+  .mobile-details-close {
+    display: inline-flex;
+  }
+  .details-more {
     display: none;
   }
 }
@@ -2475,6 +2508,10 @@ h2 {
   .thread-header-actions .text-button {
     padding: 6px;
     font-size: 8px;
+  }
+  .inbox-page.show-mobile-details .inbox-details-panel {
+    width: min(350px, calc(100% - 16px));
+    padding: 17px 15px;
   }
 }
 .catalog-grid {
@@ -4289,6 +4326,21 @@ h2 {
   }
   .storefront-feature-card {
     min-height: 0;
+  }
+}
+@media (max-width: 420px) {
+  .insight-stats {
+    grid-template-columns: 1fr;
+  }
+  .insight-stats .stat-card {
+    min-height: 0;
+  }
+  .insights-missed-panel {
+    min-width: 0;
+    padding: 15px !important;
+  }
+  .missed-table-wrap {
+    -webkit-overflow-scrolling: touch;
   }
 }
 @media (max-width: 1050px) {

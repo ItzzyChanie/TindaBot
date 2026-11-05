@@ -144,6 +144,7 @@ export function InboxWorkspace() {
   const [now, setNow] = useState(() => Date.now());
   const [showHidden, setShowHidden] = useState(false);
   const [needsSellerOnly, setNeedsSellerOnly] = useState(false);
+  const [mobileDetailsOpen, setMobileDetailsOpen] = useState(false);
   const [savingName, setSavingName] = useState(false);
   const [retryingMessageId, setRetryingMessageId] = useState<string | null>(null);
   const [nameDraft, setNameDraft] = useState("");
@@ -288,6 +289,15 @@ export function InboxWorkspace() {
     const timer = window.setInterval(() => setNow(Date.now()), 60_000);
     return () => window.clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    if (!mobileDetailsOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMobileDetailsOpen(false);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [mobileDetailsOpen]);
 
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();
@@ -673,6 +683,7 @@ export function InboxWorkspace() {
       setError(updateError.message);
       return;
     }
+    setMobileDetailsOpen(false);
     setSelectedId(null);
     await refreshConversationList();
   }
@@ -694,6 +705,7 @@ export function InboxWorkspace() {
       );
       return;
     }
+    setMobileDetailsOpen(false);
     setSelectedId(null);
     await refreshConversationList();
   }
@@ -714,7 +726,7 @@ export function InboxWorkspace() {
     : [];
 
   return (
-    <div className={`inbox-page${selectedId ? " has-selection" : ""}`}>
+    <div className={`inbox-page${selectedId ? " has-selection" : ""}${mobileDetailsOpen ? " show-mobile-details" : ""}`}>
       <aside className="inbox-list-panel">
         <div className="inbox-list-heading">
           <div className="inbox-page-title">
@@ -781,6 +793,7 @@ export function InboxWorkspace() {
                   key={conversation.id}
                   className={`conversation-card${selectedId === conversation.id ? " selected" : ""}${conversation.status === "needs_seller" && !conversation.seller_read_at ? " unread" : ""}`}
                   onClick={() => {
+                    setMobileDetailsOpen(false);
                     setSelectedSnapshot(conversation);
                     setSelectedId(conversation.id);
                   }}
@@ -830,7 +843,7 @@ export function InboxWorkspace() {
             <header className="thread-header">
               <button
                 className="back-to-inbox"
-                onClick={() => setSelectedId(null)}
+                onClick={() => { setMobileDetailsOpen(false); setSelectedId(null); }}
                 aria-label="Back to conversation list"
               >
                 ←
@@ -867,6 +880,16 @@ export function InboxWorkspace() {
                   onClick={() => void deleteConversation()}
                 >
                   Delete
+                </button>
+                <button
+                  className="text-button mobile-details-toggle"
+                  type="button"
+                  aria-label="Show customer details"
+                  aria-expanded={mobileDetailsOpen}
+                  title="Show customer details"
+                  onClick={() => setMobileDetailsOpen(true)}
+                >
+                  ⋯
                 </button>
               </div>
             </header>
@@ -1006,6 +1029,9 @@ export function InboxWorkspace() {
           <>
             <div className="details-heading">
               <p className="eyebrow">CUSTOMER PROFILE</p>
+              <button className="mobile-details-close text-button" type="button" onClick={() => setMobileDetailsOpen(false)}>
+                Close
+              </button>
               <span className="details-more" aria-hidden="true">
                 •••
               </span>
