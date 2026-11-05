@@ -75,7 +75,10 @@ export async function sendToChannel(
         metaErrorType: typeof apiError.type === "string" ? apiError.type : null,
       } : {}),
     });
-    if (!response.ok) throw new Error(`${channel} message delivery failed`);
+    if (!response.ok || responseData.ok === false) {
+      if (response.status === 401 || response.status === 403) throw new Error("token_rejected");
+      throw new Error(`${channel} message delivery failed`);
+    }
   };
   await send(url, body, "text");
 

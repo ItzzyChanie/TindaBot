@@ -11,7 +11,8 @@ import {
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { fetchChannelStatus, type ChannelStatus } from "@/lib/channel-status";
 
-type Customer = { channel: string; external_id: string; name: string | null };
+type Customer = { id: string; channel: string; external_id: string; name: string | null };
+type MissedRequest = { id: string; request_text: string; created_at: string };
 type Conversation = {
   id: string;
   customer_id: string;
@@ -54,7 +55,11 @@ const CONVERSATIONS_PER_PAGE = 30;
 const MESSAGES_PER_PAGE = 100;
 
 function customerDisplayName(customer: Customer | null | undefined) {
-  return customer?.name || (customer?.channel === "instagram" ? "Instagram customer" : customer?.external_id || "Customer");
+  if (customer?.name?.trim()) return customer.name.trim();
+  if (customer?.channel === "instagram" || customer?.channel === "instagram_simulated") return "Instagram customer";
+  if (customer?.channel === "messenger" || customer?.channel === "messenger_simulated") return "Messenger customer";
+  if (customer?.channel === "telegram") return "Telegram customer";
+  return "Web chat visitor";
 }
 
 function formatTime(value: string) {
@@ -91,6 +96,7 @@ export function InboxWorkspace() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [orders, setOrders] = useState<CustomerOrder[]>([]);
+  const [missedRequests, setMissedRequests] = useState<MissedRequest[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedSnapshot, setSelectedSnapshot] = useState<Conversation | null>(null);
   const [draft, setDraft] = useState("");
@@ -104,6 +110,10 @@ export function InboxWorkspace() {
   const [channelStatusError, setChannelStatusError] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const [showHidden, setShowHidden] = useState(false);
+  const [needsSellerOnly, setNeedsSellerOnly] = useState(false);
+  const [savingName, setSavingName] = useState(false);
+  const [retryingMessageId, setRetryingMessageId] = useState<string | null>(null);
+  const [nameDraft, setNameDraft] = useState("");
   const [conversationPage, setConversationPage] = useState(0);
   const [conversationCount, setConversationCount] = useState(0);
   const [previews, setPreviews] = useState<Map<string, Message>>(new Map());
@@ -116,14 +126,14 @@ export function InboxWorkspace() {
     const { data, error: queryError, count } = await createSupabaseBrowserClient()
       .from("conversations")
       .select(
-        "id, customer_id, status, ai_mode, pending, last_message_at, last_customer_message_at, seller_read_at, is_hidden, created_at, customers(channel, external_id, name)",
+        "id, customer_id, status, ai_mode, pending, last_message_at, last_customer_message_at, seller_read_at, is_hidden, created_at, customers(id, channel, external_id, name)",
         { count: "exact" },
       )
       .eq("is_hidden", showHidden)
       .order("last_message_at", { ascending: false })
       .range(conversationPage * CONVERSATIONS_PER_PAGE, (conversationPage + 1) * CONVERSATIONS_PER_PAGE - 1);
     if (queryError) {
-      setLiveError("Live updates paused. Refresh to reconnect po.");
+      setLiveError("Reconnecting... showing updates every 10 seconds.");
       return;
     }
     const rows = (data ?? []) as unknown as Conversation[];
@@ -153,6 +163,25 @@ export function InboxWorkspace() {
     if (!queryError) setOrders((data ?? []) as unknown as CustomerOrder[]);
   }, []);
 
+  const refreshSelectedMessages = useCallback(async () => {
+    const conversationId = selectedConversationRef.current;
+    if (!conversationId) return;
+    const { data, error: queryError } = await createSupabaseBrowserClient()
+      .from("messages")
+      .select("id, conversation_id, sender, body, image_urls, created_at, delivery_status, failure_reason")
+      .eq("conversation_id", conversationId)
+      .order("created_at", { ascending: false })
+      .limit(MESSAGES_PER_PAGE);
+    if (queryError || !data || selectedConversationRef.current !== conversationId) return;
+    const latestMessages = (data as Message[]).reverse();
+    setMessages((current) => {
+      const older = current.filter((message) => !latestMessages.some((next) =>
+        next.id === message.id || (message.pending && next.sender === message.sender && next.body === message.body),
+      ));
+      return [...older, ...latestMessages].sort((a, b) => a.created_at.localeCompare(b.created_at));
+    });
+  }, []);
+
   const loadInbox = useCallback(
     async (showLoading = false) => {
       if (showLoading) setLoading(true);
@@ -161,7 +190,7 @@ export function InboxWorkspace() {
         const { data, error: conversationError, count } = await supabase
           .from("conversations")
           .select(
-            "id, customer_id, status, ai_mode, pending, last_message_at, last_customer_message_at, seller_read_at, is_hidden, created_at, customers(channel, external_id, name)",
+            "id, customer_id, status, ai_mode, pending, last_message_at, last_customer_message_at, seller_read_at, is_hidden, created_at, customers(id, channel, external_id, name)",
             { count: "exact" },
           )
           .eq("is_hidden", showHidden)
@@ -201,6 +230,22 @@ export function InboxWorkspace() {
   useEffect(() => {
     void loadInbox(true);
   }, [loadInbox]);
+
+  useEffect(() => {
+    const refreshVisibleInbox = () => {
+      if (document.visibilityState !== "visible") return;
+      void loadInbox(false);
+      void refreshSelectedMessages();
+    };
+    const timer = window.setInterval(refreshVisibleInbox, 10_000);
+    window.addEventListener("focus", refreshVisibleInbox);
+    document.addEventListener("visibilitychange", refreshVisibleInbox);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", refreshVisibleInbox);
+      document.removeEventListener("visibilitychange", refreshVisibleInbox);
+    };
+  }, [loadInbox, refreshSelectedMessages]);
 
   useEffect(() => {
     void fetchChannelStatus().then(setChannelStatus).catch(() => setChannelStatusError(true));
@@ -253,7 +298,7 @@ export function InboxWorkspace() {
       )
       .subscribe((status: string) => {
         if (status === "CHANNEL_ERROR" || status === "TIMED_OUT")
-          setLiveError("Live updates paused. Refresh to reconnect po.");
+          setLiveError("Reconnecting... showing updates every 10 seconds.");
         if (status === "SUBSCRIBED") {
           setLiveError("");
         }
@@ -275,13 +320,15 @@ export function InboxWorkspace() {
   useEffect(() => {
     setMessages([]);
     setOrders([]);
+    setMissedRequests([]);
     setHasOlderMessages(false);
     if (!selectedId || !selectedCustomerId) return;
     let active = true;
     setLoadingOlder(false);
+    setNameDraft(selected?.customers?.name ?? "");
     void (async () => {
       const supabase = createSupabaseBrowserClient();
-      const [messageResult, orderResult] = await Promise.all([
+      const [messageResult, orderResult, missedResult] = await Promise.all([
         supabase.from("messages")
           .select("id, conversation_id, sender, body, image_urls, created_at, delivery_status, failure_reason")
           .eq("conversation_id", selectedId)
@@ -292,21 +339,27 @@ export function InboxWorkspace() {
           .eq("customer_id", selectedCustomerId)
           .order("created_at", { ascending: false })
           .limit(20),
+        supabase.from("missed_requests")
+          .select("id, request_text, created_at")
+          .eq("conversation_id", selectedId)
+          .order("created_at", { ascending: false })
+          .limit(10),
       ]);
       if (!active) return;
-      if (messageResult.error || orderResult.error) {
-        setError(messageResult.error?.message ?? orderResult.error?.message ?? "Could not load this conversation.");
+      if (messageResult.error || orderResult.error || missedResult.error) {
+        setError(messageResult.error?.message ?? orderResult.error?.message ?? missedResult.error?.message ?? "Could not load this conversation.");
         return;
       }
       const loadedMessages = ((messageResult.data ?? []) as Message[]).reverse();
       setMessages(loadedMessages);
       setHasOlderMessages(loadedMessages.length === MESSAGES_PER_PAGE);
       setOrders((orderResult.data ?? []) as unknown as CustomerOrder[]);
+      setMissedRequests((missedResult.data ?? []) as MissedRequest[]);
       const latest = loadedMessages.at(-1);
       if (latest) setPreviews((current) => new Map(current).set(selectedId, latest));
     })();
     return () => { active = false; };
-  }, [selectedId, selectedCustomerId]);
+  }, [selectedId, selectedCustomerId, selected?.customers?.name]);
 
   async function loadOlderMessages() {
     const oldest = messages[0];
@@ -357,15 +410,16 @@ export function InboxWorkspace() {
   const lastMessages = previews;
   const visibleConversations = useMemo(() => {
     const normalized = search.trim().toLocaleLowerCase();
-    if (!normalized) return conversations;
     return conversations.filter((conversation) => {
+      if (needsSellerOnly && conversation.status !== "needs_seller") return false;
+      if (!normalized) return true;
       const latest = lastMessages.get(conversation.id)?.body ?? "";
       const customer = conversation.customers;
       return `${customer?.name ?? ""} ${customer?.external_id ?? ""} ${latest}`
         .toLocaleLowerCase()
         .includes(normalized);
     });
-  }, [conversations, lastMessages, search]);
+  }, [conversations, lastMessages, needsSellerOnly, search]);
 
   async function changeMode(mode: Conversation["ai_mode"]) {
     if (!selected) return;
@@ -477,6 +531,18 @@ export function InboxWorkspace() {
     }
   }
 
+  async function retryDelivery(message: Message) {
+    if (!selected || retryingMessageId) return;
+    setRetryingMessageId(message.id);
+    setError("");
+    const { error: retryError } = await createSupabaseBrowserClient().functions.invoke("seller-reply", {
+      body: { conversationId: selected.id, retryMessageId: message.id },
+    });
+    if (retryError) setError("Hindi naipadala ulit ang reply. Pakitingnan ang reason sa message at ayusin ang channel setup kung kailangan.");
+    else await refreshSelectedMessages();
+    setRetryingMessageId(null);
+  }
+
   async function discardDraft() {
     if (!selected?.pending.ai_draft) return;
     const pending = { ...selected.pending };
@@ -513,6 +579,29 @@ export function InboxWorkspace() {
           : item,
       ),
     );
+  }
+
+  async function saveCustomerName(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!customer || savingName) return;
+    setSavingName(true);
+    setError("");
+    const name = nameDraft.trim().slice(0, 80) || null;
+    const { error: updateError } = await createSupabaseBrowserClient()
+      .from("customers")
+      .update({ name })
+      .eq("id", customer.id);
+    if (updateError) {
+      setError("Could not save customer name. Please try again.");
+      setSavingName(false);
+      return;
+    }
+    const updateName = (conversation: Conversation) => conversation.customer_id === customer.id
+      ? { ...conversation, customers: conversation.customers ? { ...conversation.customers, name } : null }
+      : conversation;
+    setConversations((current) => current.map(updateName));
+    setSelectedSnapshot((current) => current ? updateName(current) : null);
+    setSavingName(false);
   }
 
   async function setHidden(hidden: boolean) {
@@ -579,10 +668,14 @@ export function InboxWorkspace() {
             <small>threads</small>
           </span>
         </div>
+        {liveError && <p className="inbox-alert" role="status">{liveError}</p>}
         <div className="inbox-toolbar">
           <span className="inbox-filter-label">
-            {showHidden ? "Hidden conversations" : "All conversations"}
+            {showHidden ? "Hidden conversations" : needsSellerOnly ? "Needs seller" : "All conversations"}
           </span>
+          {!showHidden && <button className="inbox-filter-button" onClick={() => setNeedsSellerOnly((value) => !value)}>
+            {needsSellerOnly ? "Show all" : "Needs seller only"}
+          </button>}
           <button
             className="inbox-filter-button"
             onClick={() => {
@@ -701,7 +794,7 @@ export function InboxWorkspace() {
                     className="text-button"
                     onClick={() => void markResolved()}
                   >
-                    Mark resolved
+                    Mark handled
                   </button>
                 )}
                 <button
@@ -718,11 +811,6 @@ export function InboxWorkspace() {
                 </button>
               </div>
             </header>
-            {liveError && (
-              <p className="inbox-alert" role="status">
-                {liveError}
-              </p>
-            )}
             {error && (
               <p className="inbox-alert error-state" role="alert">
                 {error}
@@ -754,7 +842,10 @@ export function InboxWorkspace() {
                       </span>
                       <p>{message.body}</p>
                       {message.delivery_status === "pending" && <small className="message-delivery-status">Sending to channel…</small>}
-                      {message.delivery_status === "failed" && <small className="message-delivery-status failed">Not delivered{message.failure_reason === "outside_window" ? ": reply window closed" : ": check Edge Function logs"}</small>}
+                      {message.delivery_status === "failed" && <div className="message-delivery-status failed">
+                        <small>Not delivered: {message.failure_reason === "outside_window" ? "24-hour reply window closed" : message.failure_reason === "token_rejected" ? "channel token rejected; check Settings" : "channel could not deliver"}</small>
+                        <button className="text-button" onClick={() => void retryDelivery(message)} disabled={retryingMessageId === message.id}>{retryingMessageId === message.id ? "Retrying…" : "Retry"}</button>
+                      </div>}
                       {message.image_urls?.filter((url) => /^https:\/\//i.test(url)).map((url) => (
                         // eslint-disable-next-line @next/next/no-img-element -- Seller-uploaded chart images are served from Supabase Storage.
                         <img className="inbox-message-image" src={url} alt="Size chart" key={url} loading="lazy" />
@@ -862,7 +953,19 @@ export function InboxWorkspace() {
               <span className="channel-badge">
                 {channelLabel(customer.channel)}
               </span>
+              <form className="customer-rename-form" onSubmit={(event) => void saveCustomerName(event)}>
+                <label htmlFor="customer-display-name">Display name</label>
+                <input id="customer-display-name" value={nameDraft} maxLength={80} onChange={(event) => setNameDraft(event.target.value)} placeholder="Add a customer name" />
+                <button className="text-button" type="submit" disabled={savingName}>{savingName ? "Saving…" : "Save name"}</button>
+              </form>
             </div>
+            {missedRequests.length > 0 && (
+              <section className="customer-orders seller-followup-card">
+                <p className="eyebrow">SELLER FOLLOW-UP</p>
+                {missedRequests.map((request) => <p key={request.id}>{request.request_text}</p>)}
+                {selected.status === "needs_seller" && <button className="text-button" onClick={() => void markResolved()}>Mark handled</button>}
+              </section>
+            )}
             <dl className="customer-details">
               <div>
                 <dt>Customer ID</dt>

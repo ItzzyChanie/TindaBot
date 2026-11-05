@@ -28,4 +28,6 @@ Public chat and storefront pages link to the [privacy notice](/privacy) and [dat
 
 ## Chat privacy and retention
 
-The chat widget and the assistant's first reply disclose that the assistant is automated and that chat messages are retained for 90 days. Do not send payment credentials or other sensitive information in chat. For this MVP, the 90-day retention period is the operating rule; expired chat records must be deleted by the shop operator from Supabase. Automated deletion is not configured yet.
+The chat widget and the assistant's first reply disclose that the assistant is automated and that chat messages are retained for 90 days. Do not send payment credentials or other sensitive information in chat. The `purge_expired_chat_data` database job removes conversations and related orders after 90 days without activity. The migration enables `pg_cron` and schedules the cleanup daily; confirm the `tindabot-purge-expired-chat-data` job is active in Supabase Cron after applying migrations.
+
+Meta profile lookups are optional and disabled by default. Set `LOOKUP_META_PROFILES=true` in Supabase Edge Function secrets to request a display name when a customer has no saved name. Sellers can set a local display name in the inbox profile.

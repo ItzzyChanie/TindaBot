@@ -23,7 +23,7 @@ export default function PrivacyPage() {
       <p>We use this information to reply to your questions, show the conversation to the seller, follow up on orders, and protect the demo from spam. Messages sent through Messenger, Instagram, or Telegram also pass through that service.</p>
 
       <h2>How long it is kept</h2>
-      <p>The demo&apos;s retention target is 90 days for chat and related customer details. The current demo does not automatically delete expired records; the shop operator must remove them. Ask the seller to delete your data at any time using the instructions on our <Link href="/data-deletion">data deletion page</Link>.</p>
+      <p>Chat conversations and related customer details are retained for up to 90 days after the last activity, then automatically deleted. Ask the seller to delete your data at any time using the instructions on our <Link href="/data-deletion">data deletion page</Link>.</p>
 
       <h2>Keep sensitive information out of chat</h2>
       <p>Please do not send passwords, card numbers, banking credentials, or other secrets. The bot does not take or process payments.</p>

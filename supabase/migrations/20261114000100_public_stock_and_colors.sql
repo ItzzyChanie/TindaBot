@@ -23,9 +23,7 @@ LEFT JOIN LATERAL (
         WHEN v.stock <= 0 THEN 'sold_out'
         WHEN v.stock <= 2 THEN 'low_stock'
         ELSE 'in_stock'
-      END,
-      'stock', v.stock,
-      'reserved_stock', v.reserved_stock
+      END
     ) ORDER BY v.size
   ) AS sizes
   FROM public.variants AS v
@@ -49,6 +47,6 @@ LEFT JOIN LATERAL (
 WHERE p.active = true;
 
 COMMENT ON VIEW public.public_catalog IS
-  'Safe public storefront data for active products, including public availability counts, reserved quantities, seller-entered colors, offers, and catalog details.';
+  'Safe public storefront data for active products. Variant stock is represented only as sold_out, low_stock, or in_stock.';
 
 GRANT SELECT ON TABLE public.public_catalog TO anon, authenticated;

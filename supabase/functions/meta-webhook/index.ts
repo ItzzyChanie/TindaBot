@@ -42,6 +42,7 @@ async function getCustomerName(channel: "messenger" | "instagram", senderId: str
   const genericName = !savedName || savedName.toLowerCase() === "instagram customer" ||
     savedName.toLowerCase() === "instagram user" || savedName === senderId;
   if (!error && !genericName) return savedName;
+  if (Deno.env.get("LOOKUP_META_PROFILES") !== "true") return undefined;
 
   const token = channel === "messenger"
     ? Deno.env.get("MESSENGER_PAGE_TOKEN")
@@ -137,7 +138,8 @@ async function processEvents(events: MetaInboundMessage[]): Promise<void> {
       logMetaEvent(event, true, null);
     } catch (error) {
       if (replyId) {
-        await supabase.from("messages").update({ delivery_status: "failed", failure_reason: "delivery_failed" })
+        const failureReason = error instanceof Error && error.message === "token_rejected" ? "token_rejected" : "delivery_failed";
+        await supabase.from("messages").update({ delivery_status: "failed", failure_reason: failureReason })
           .eq("id", replyId);
       }
       processingFailure = error instanceof Error ? error.name : "unknown_error";

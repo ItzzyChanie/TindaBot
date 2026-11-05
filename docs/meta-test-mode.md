@@ -30,6 +30,8 @@ For Unified Login, Instagram and Messenger webhook signatures use the Meta app s
 
 The code uses Graph API v26.0. Messenger sends use `POST https://graph.facebook.com/v26.0/me/messages`; Instagram Login sends use `POST https://graph.instagram.com/v26.0/{INSTAGRAM_ACCOUNT_ID}/messages`. The webhook is `https://<project-ref>.supabase.co/functions/v1/meta-webhook`.
 
+Profile-name lookup is disabled unless the Edge Function secret `LOOKUP_META_PROFILES=true` is set. When disabled, the inbox uses a channel label until the seller enters a display name in the customer profile.
+
 ## Deploy
 
 From PowerShell in the repository root:

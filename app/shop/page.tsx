@@ -10,8 +10,6 @@ import { ChatWidget } from "@/app/chat/chat-widget";
 type PublicSize = {
   size: string;
   availability: "in_stock" | "low_stock" | "sold_out";
-  stock: number;
-  reserved_stock: number;
 };
 type PublicProduct = {
   id: string;
@@ -302,12 +300,9 @@ export default function ShopPage() {
                             {item.availability === "sold_out"
                               ? "Sold out"
                               : item.availability === "low_stock"
-                                ? `Low stock · ${item.stock} left`
-                                : `${item.stock} available`}
+                                ? "Low stock"
+                                : "In stock"}
                           </small>
-                          {item.reserved_stock > 0 && (
-                            <small className="shop-reserved">Reserved qty: {item.reserved_stock}</small>
-                          )}
                         </span>
                       ))}
                     </div>

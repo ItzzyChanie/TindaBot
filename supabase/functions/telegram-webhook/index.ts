@@ -102,6 +102,10 @@ async function processTelegramUpdate(
       return;
     }
     if (text.length > 4000) {
+      await sendTelegramMessage(
+        chatId,
+        "Pasensya na po, hanggang 4,000 characters lang ang kaya kong basahin. Puwede po bang paikliin ang message o magtanong sa seller?",
+      );
       succeeded = true;
       return;
     }

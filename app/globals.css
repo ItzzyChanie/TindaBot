@@ -2321,6 +2321,33 @@ h2 {
   overflow-wrap: anywhere;
   font-size: 14px;
 }
+.customer-rename-form {
+  display: grid;
+  width: 100%;
+  gap: 7px;
+  text-align: left;
+}
+.customer-rename-form label {
+  color: var(--muted);
+  font-size: 10px;
+}
+.customer-rename-form input {
+  width: 100%;
+  min-height: 36px;
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--text);
+}
+.seller-followup-card p:not(.eyebrow) {
+  margin: 0;
+  padding: 9px;
+  border-radius: 7px;
+  background: var(--surface);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
 .customer-details {
   display: grid;
   gap: 16px;

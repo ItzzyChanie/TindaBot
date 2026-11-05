@@ -12,6 +12,14 @@ const catalog = await fetch(`${url}/rest/v1/public_catalog?select=id,name,price,
 if (!catalog.ok) throw new Error(`Anon view request failed with HTTP ${catalog.status}. Apply the Day 9 migration first.`);
 const rows: unknown = await catalog.json();
 if (!Array.isArray(rows)) throw new Error("The public catalog response was not a row list.");
+for (const row of rows) {
+  const sizes = (row as { sizes?: unknown }).sizes;
+  if (!Array.isArray(sizes)) continue;
+  for (const size of sizes) {
+    if (size && typeof size === "object" && ("stock" in size || "reserved_stock" in size))
+      throw new Error("Security check failed: public_catalog exposes an exact stock count.");
+  }
+}
 console.log(`Anon key can read public_catalog: HTTP ${catalog.status}; ${rows.length} sample row(s), ${Math.round(performance.now() - startedAt)} ms.`);
 
 for (const table of ["products", "variants", "promos"]) {

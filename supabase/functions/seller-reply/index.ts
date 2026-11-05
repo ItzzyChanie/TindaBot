@@ -53,7 +53,7 @@ Deno.serve(async (request: Request) => {
       { error: "Unauthorized" },
       { status: 401, headers: cors ?? {} },
     );
-  let body: { conversationId?: unknown; text?: unknown; sendDraft?: unknown };
+  let body: { conversationId?: unknown; text?: unknown; sendDraft?: unknown; retryMessageId?: unknown };
   try {
     body = await request.json();
   } catch {
@@ -66,7 +66,8 @@ Deno.serve(async (request: Request) => {
     typeof body.conversationId === "string" ? body.conversationId : "";
   const text = typeof body.text === "string" ? body.text.trim() : "";
   const sendDraft = body.sendDraft === true;
-  if (!conversationId || !text || text.length > 4000) {
+  const retryMessageId = typeof body.retryMessageId === "string" ? body.retryMessageId : null;
+  if (!conversationId || (!retryMessageId && !text) || text.length > 4000) {
     return Response.json(
       {
         error:
@@ -105,6 +106,37 @@ Deno.serve(async (request: Request) => {
       { error: "This conversation channel cannot receive seller replies" },
       { status: 400, headers: cors ?? {} },
     );
+  }
+  if (retryMessageId) {
+    if (customer.channel === "web")
+      return Response.json({ error: "Web chat replies do not need channel retry" }, { status: 409, headers: cors ?? {} });
+    const { data: failedMessage, error: failedMessageError } = await supabase.from("messages")
+      .select("id, body, image_urls, sender, delivery_status")
+      .eq("id", retryMessageId)
+      .eq("conversation_id", conversation.id)
+      .maybeSingle();
+    if (failedMessageError || !failedMessage || failedMessage.delivery_status !== "failed" || !["seller", "ai"].includes(failedMessage.sender))
+      return Response.json({ error: "This failed message cannot be retried" }, { status: 409, headers: cors ?? {} });
+    const { data: activity, error: activityError } = await supabase.from("conversations")
+      .select("last_customer_message_at").eq("id", conversation.id).single();
+    if (activityError) return Response.json({ error: "Could not check the reply window" }, { status: 500, headers: cors ?? {} });
+    if (!isWithinCustomerWindow(activity.last_customer_message_at, customer.channel)) {
+      await supabase.from("messages").update({ failure_reason: "outside_window" }).eq("id", failedMessage.id);
+      return Response.json({ error: "The 24-hour reply window has closed. Ask the customer to message again." }, { status: 409, headers: cors ?? {} });
+    }
+    try {
+      await sendToChannel(customer.channel as MessageChannel, customer.external_id, failedMessage.body, {
+        imageUrls: Array.isArray(failedMessage.image_urls) ? failedMessage.image_urls : [],
+      });
+      const { error: deliveredError } = await supabase.from("messages")
+        .update({ delivery_status: "sent", failure_reason: null }).eq("id", failedMessage.id);
+      if (deliveredError) throw deliveredError;
+      return Response.json({ ok: true }, { headers: cors ?? {} });
+    } catch (error) {
+      const failureReason = error instanceof Error && error.message === "token_rejected" ? "token_rejected" : "delivery_failed";
+      await supabase.from("messages").update({ delivery_status: "failed", failure_reason: failureReason }).eq("id", failedMessage.id);
+      return Response.json({ error: failureReason }, { status: 502, headers: cors ?? {} });
+    }
   }
   const { data: savedMessage, error: messageError } = await supabase.from("messages").insert({
     conversation_id: conversation.id,
@@ -154,8 +186,9 @@ Deno.serve(async (request: Request) => {
     const { error: deliveredError } = await supabase.from("messages")
       .update({ delivery_status: "sent", failure_reason: null }).eq("id", savedMessage.id);
     if (deliveredError) throw deliveredError;
-  } catch {
-    await supabase.from("messages").update({ delivery_status: "failed", failure_reason: "delivery_failed" }).eq("id", savedMessage.id);
+  } catch (error) {
+    const failureReason = error instanceof Error && error.message === "token_rejected" ? "token_rejected" : "delivery_failed";
+    await supabase.from("messages").update({ delivery_status: "failed", failure_reason: failureReason }).eq("id", savedMessage.id);
     return Response.json(
       { error: "Reply saved, but the channel could not deliver it" },
       { status: 502, headers: cors ?? {} },
