@@ -14,7 +14,6 @@ import { fetchChannelStatus, type ChannelStatus } from "@/lib/channel-status";
 import { ATTACHMENT_BUCKET, MAX_ATTACHMENT_BYTES, isAllowedAttachmentType, type MessageAttachment } from "@/supabase/functions/_shared/message-attachments";
 
 type Customer = { id: string; channel: string; external_id: string; name: string | null };
-type MissedRequest = { id: string; request_text: string; created_at: string };
 type Conversation = {
   id: string;
   customer_id: string;
@@ -155,7 +154,6 @@ export function InboxWorkspace() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [orders, setOrders] = useState<CustomerOrder[]>([]);
-  const [missedRequests, setMissedRequests] = useState<MissedRequest[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedSnapshot, setSelectedSnapshot] = useState<Conversation | null>(null);
   const [draft, setDraft] = useState("");
@@ -424,7 +422,6 @@ export function InboxWorkspace() {
     setEditingMessageId(null);
     setOpenMessageMenuId(null);
     setOrders([]);
-    setMissedRequests([]);
     setHasOlderMessages(false);
     if (!selectedId || !selectedCustomerId) return;
     let active = true;
@@ -432,7 +429,7 @@ export function InboxWorkspace() {
     setNameDraft(selected?.customers?.name ?? "");
     void (async () => {
       const supabase = createSupabaseBrowserClient();
-      const [messageResult, orderResult, missedResult] = await Promise.all([
+      const [messageResult, orderResult] = await Promise.all([
         supabase.from("messages")
           .select("id, conversation_id, sender, body, image_urls, attachments, channel_message_ids, external_message_id, reply_to_message_id, reply_to_text, edited_at, unsent_at, created_at, delivery_status, failure_reason")
           .eq("conversation_id", selectedId)
@@ -443,22 +440,16 @@ export function InboxWorkspace() {
           .eq("customer_id", selectedCustomerId)
           .order("created_at", { ascending: false })
           .limit(20),
-        supabase.from("missed_requests")
-          .select("id, request_text, created_at")
-          .eq("conversation_id", selectedId)
-          .order("created_at", { ascending: false })
-          .limit(10),
       ]);
       if (!active) return;
-      if (messageResult.error || orderResult.error || missedResult.error) {
-        setError(messageResult.error?.message ?? orderResult.error?.message ?? missedResult.error?.message ?? "Could not load this conversation.");
+      if (messageResult.error || orderResult.error) {
+        setError(messageResult.error?.message ?? orderResult.error?.message ?? "Could not load this conversation.");
         return;
       }
       const loadedMessages = await hydrateAttachments(((messageResult.data ?? []) as Message[]).reverse());
       setMessages(loadedMessages);
       setHasOlderMessages(loadedMessages.length === MESSAGES_PER_PAGE);
       setOrders((orderResult.data ?? []) as unknown as CustomerOrder[]);
-      setMissedRequests((missedResult.data ?? []) as MissedRequest[]);
       const latest = loadedMessages.at(-1);
       if (latest) setPreviews((current) => new Map(current).set(selectedId, latest));
     })();
@@ -1291,13 +1282,6 @@ export function InboxWorkspace() {
                 <button className="text-button" type="submit" disabled={savingName}>{savingName ? "Saving…" : "Save name"}</button>
               </form>
             </div>
-            {missedRequests.length > 0 && (
-              <section className="customer-orders seller-followup-card">
-                <p className="eyebrow">SELLER FOLLOW-UP</p>
-                {missedRequests.map((request) => <p key={request.id}>{request.request_text}</p>)}
-                {selected.status === "needs_seller" && <button className="text-button" onClick={() => void markResolved()}>Mark handled</button>}
-              </section>
-            )}
             <section className="customer-orders">
               <p className="eyebrow">ORDERS</p>
               {customerOrders.length === 0 ? (
