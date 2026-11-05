@@ -1880,8 +1880,10 @@ h2 {
   padding: 20px 15px;
   background: color-mix(in srgb, var(--page), var(--surface) 58%);
 }
-.mobile-details-toggle,
-.mobile-details-close {
+.mobile-details-toggle {
+  display: none;
+}
+.inbox-details-panel .details-heading .mobile-details-close {
   display: none;
 }
 .details-heading {
@@ -2731,7 +2733,7 @@ h2 {
   }
 }
 @media (max-width: 700px) {
-  .mobile-details-close {
+  .inbox-details-panel .details-heading .mobile-details-close {
     display: inline-flex;
   }
   .inbox-page {
@@ -2782,7 +2784,30 @@ h2 {
   }
   .thread-header-actions .text-button {
     padding: 6px;
-    font-size: 8px;
+    font-size: 0;
+  }
+  .thread-header-actions .mobile-action-button {
+    width: 34px;
+    min-width: 34px;
+    min-height: 34px;
+    padding: 7px;
+  }
+  .mobile-action-button svg {
+    width: 17px;
+    height: 17px;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.8;
+  }
+  .mobile-action-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
   .inbox-page.show-mobile-details .inbox-details-panel {
     width: min(350px, calc(100% - 16px));
