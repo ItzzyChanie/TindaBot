@@ -3,6 +3,7 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -153,6 +154,9 @@ export function InboxWorkspace() {
   const [hasOlderMessages, setHasOlderMessages] = useState(false);
   const selectedConversationRef = useRef<string | null>(null);
   const selectedCustomerRef = useRef<string | null>(null);
+  const threadMessagesRef = useRef<HTMLDivElement | null>(null);
+  const followLatestRef = useRef(true);
+  const preserveScrollHeightRef = useRef<number | null>(null);
 
   const refreshConversationList = useCallback(async () => {
     const { data, error: queryError, count } = await createSupabaseBrowserClient()
@@ -349,6 +353,25 @@ export function InboxWorkspace() {
   selectedConversationRef.current = selectedId;
   selectedCustomerRef.current = selectedCustomerId;
 
+  useLayoutEffect(() => {
+    followLatestRef.current = true;
+    preserveScrollHeightRef.current = null;
+    const container = threadMessagesRef.current;
+    if (container) container.scrollTop = container.scrollHeight;
+  }, [selectedId]);
+
+  useLayoutEffect(() => {
+    const container = threadMessagesRef.current;
+    if (!container) return;
+    const previousHeight = preserveScrollHeightRef.current;
+    if (previousHeight !== null) {
+      container.scrollTop += container.scrollHeight - previousHeight;
+      preserveScrollHeightRef.current = null;
+      return;
+    }
+    if (followLatestRef.current) container.scrollTop = container.scrollHeight;
+  }, [messages]);
+
   useEffect(() => {
     setMessages([]);
     setOrders([]);
@@ -407,6 +430,10 @@ export function InboxWorkspace() {
     if (olderError) setError(olderError.message);
     else {
       const older = ((data ?? []) as Message[]).reverse();
+      if (older.length && threadMessagesRef.current) {
+        preserveScrollHeightRef.current = threadMessagesRef.current.scrollHeight;
+        followLatestRef.current = false;
+      }
       setMessages((current) => [...older, ...current]);
       setHasOlderMessages(older.length === MESSAGES_PER_PAGE);
     }
@@ -853,7 +880,15 @@ export function InboxWorkspace() {
                 {loadingOlder ? "Loading earlier messages…" : "Load earlier messages"}
               </button>
             )}
-            <div className="thread-messages" aria-live="polite">
+            <div
+              className="thread-messages"
+              aria-live="polite"
+              ref={threadMessagesRef}
+              onScroll={(event) => {
+                const container = event.currentTarget;
+                followLatestRef.current = container.scrollHeight - container.scrollTop - container.clientHeight < 80;
+              }}
+            >
               {threadMessages.length === 0 ? (
                 <p className="thread-empty">Wala pang messages po.</p>
               ) : (
