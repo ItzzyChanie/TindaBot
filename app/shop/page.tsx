@@ -2,10 +2,12 @@
 /* eslint-disable @next/next/no-img-element -- Catalog photos use public Supabase Storage URLs. */
 
 import Link from "next/link";
+import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getSupabasePublicEnv } from "@/lib/supabase/env";
 import { quote, type QuotePromo } from "@/supabase/functions/_shared/quote";
 import { ChatWidget } from "@/app/chat/chat-widget";
+import tindabotLogo from "@/app/logo/TindaBot-logo.png";
 
 type PublicSize = {
   size: string;
@@ -124,9 +126,7 @@ export default function ShopPage() {
     <main className="shop-page">
       <header className="shop-header">
         <Link href="/shop" className="brand">
-          <span className="brand-mark" aria-hidden="true">
-            t
-          </span>
+          <Image className="brand-logo" src={tindabotLogo} alt="" priority />
           <span>
             Tinda<span className="brand-accent">Bot</span>
           </span>

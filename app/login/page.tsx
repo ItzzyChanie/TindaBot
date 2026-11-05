@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useState, type FormEvent } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import tindabotLogo from "@/app/logo/TindaBot-logo.png";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -40,9 +42,7 @@ export default function LoginPage() {
     <main className="login-page">
       <section className="login-card">
         <Link href="/" className="brand">
-          <span className="brand-mark" aria-hidden="true">
-            t
-          </span>
+          <Image className="brand-logo" src={tindabotLogo} alt="" priority />
           <span>
             Tinda<span className="brand-accent">Bot</span>
           </span>

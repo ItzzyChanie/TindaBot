@@ -160,8 +160,9 @@ export default async function InsightsPage({
             <span className="missed-total">{missedCount}</span>
           </div>
           <p className="muted">
-            Questions the assistant couldn’t answer from catalog or shop
-            settings.
+            Questions the assistant couldn’t answer using your catalog or shop
+            settings. Review them to find missing information, improve future
+            answers, and decide when a seller should follow up.
           </p>
           {missed.length ? (
             <MissedRequestsTable requests={missed} page={followupPage} total={missedCount} />

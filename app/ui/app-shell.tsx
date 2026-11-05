@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState, type MouseEvent, type ReactNode } from "react";
+import tindabotLogo from "@/app/logo/TindaBot-logo.png";
 
 const links = [
   { href: "/", label: "Overview", icon: "overview" },
@@ -114,7 +116,7 @@ export function AppShell({ children, userEmail }: { children: ReactNode; userEma
       <aside className={`sidebar${menuOpen ? " open" : ""}`}>
         <div className="sidebar-brand-block">
           <Link href="/" className="brand">
-            <span className="brand-mark" aria-hidden="true">t</span>
+            <Image className="brand-logo" src={tindabotLogo} alt="" priority />
             <span>Tinda<span className="brand-accent">Bot</span></span>
           </Link>
           <div className="sidebar-store">
@@ -151,7 +153,7 @@ export function AppShell({ children, userEmail }: { children: ReactNode; userEma
           <div className="workspace-topbar-actions"><span className="connection-pill"><span className="online-dot" />Telegram connected</span><ThemeButton /></div>
         </header>
         <header className="mobile-header">
-          <Link href="/" className="brand"><span className="brand-mark" aria-hidden="true">t</span><span>Tinda<span className="brand-accent">Bot</span></span></Link>
+          <Link href="/" className="brand"><Image className="brand-logo" src={tindabotLogo} alt="" priority /><span>Tinda<span className="brand-accent">Bot</span></span></Link>
           <ThemeButton compact />
           <button className="mobile-menu" aria-label={menuOpen ? "Close menu" : "Open menu"} aria-expanded={menuOpen} aria-controls="primary-navigation" onClick={() => setMenuOpen((open) => !open)}>
             <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">{menuOpen ? <path d="m6 6 12 12M18 6 6 18" /> : <path d="M4 7h16M4 12h16M4 17h16" />}</svg>

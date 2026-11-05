@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { getSupabasePublicEnv } from "@/lib/supabase/env";
+import tindabotLogo from "@/app/logo/TindaBot-logo.png";
 
 type WidgetMessage = {
   id: string;
@@ -211,7 +213,7 @@ export function ChatWidget({ productId: initialProductId, sessionId: initialSess
   return (
     <section className="widget-card" aria-label="TindaBot web chat">
       <header className="widget-header">
-        <span className="brand-mark" aria-hidden="true">t</span>
+        <Image className="brand-logo" src={tindabotLogo} alt="" priority />
         <div><strong>TindaBot shop assistant</strong><span>Web chat</span></div>
         {onClose && <button className="widget-close" type="button" onClick={onClose} aria-label="Close chat">×</button>}
       </header>

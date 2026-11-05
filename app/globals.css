@@ -214,6 +214,15 @@ select:focus-visible {
   font-weight: 700;
   font-family: Georgia, serif;
 }
+.brand-logo {
+  display: block;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  border-radius: 9px;
+  background: #fff;
+  object-fit: cover;
+}
 .brand-accent {
   color: var(--green);
 }
@@ -1504,6 +1513,7 @@ h2 {
   display: grid;
   height: calc(100dvh - 110px);
   min-height: 0;
+  grid-template-rows: minmax(0, 1fr);
   grid-template-columns: minmax(270px, 320px) minmax(350px, 1fr) minmax(
       230px,
       270px
@@ -1519,6 +1529,7 @@ h2 {
 .inbox-thread-panel,
 .inbox-details-panel {
   min-width: 0;
+  min-height: 0;
   background: var(--surface);
 }
 .inbox-list-panel {
@@ -1722,6 +1733,8 @@ h2 {
   border-radius: 8px;
 }
 .inbox-details-panel {
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 20px 15px;
   background: color-mix(in srgb, var(--page), var(--surface) 58%);
 }
@@ -3233,6 +3246,11 @@ h2 {
 .shop-header .brand {
   padding: 0;
   color: #223328;
+}
+.shop-header .brand-logo {
+  width: 42px;
+  height: 42px;
+  flex-basis: 42px;
 }
 .shop-header .brand-mark {
   background: #2d6342;
@@ -4810,4 +4828,47 @@ h2 {
   .shop-legal-links {
     padding-top: 4px;
   }
+}
+
+/* Give plain action controls a consistent clickable appearance across pages. */
+.text-button {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 10px;
+  border: 1px solid color-mix(in srgb, var(--action) 20%, var(--line));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--action) 8%, var(--surface));
+  color: var(--green);
+  text-decoration: none;
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+.text-button:hover:not(:disabled),
+.text-button:focus-visible {
+  border-color: color-mix(in srgb, var(--action) 42%, var(--line));
+  background: color-mix(in srgb, var(--action) 15%, var(--surface));
+  color: var(--text);
+}
+.inbox-filter-button,
+.inbox-page .inbox-filter-button {
+  border-color: color-mix(in srgb, var(--action) 22%, var(--line));
+  background: color-mix(in srgb, var(--action) 8%, var(--surface));
+  color: var(--green);
+}
+.inbox-filter-button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--action) 15%, var(--surface));
+}
+button:not(.conversation-card):not(.text-button):not(.button-primary):not(.menu-backdrop):not(.order-summary-card):hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--action) 30%, var(--line));
+  background-color: color-mix(in srgb, var(--action) 9%, var(--surface));
+}
+button:disabled {
+  cursor: not-allowed;
+}
+.widget-header .brand-logo {
+  width: 28px;
+  height: 28px;
+  flex-basis: 28px;
+  border-radius: 7px;
 }
