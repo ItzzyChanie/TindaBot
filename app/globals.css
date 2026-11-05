@@ -5187,36 +5187,43 @@ h2 {
 }
 .dashboard-content-grid > .activity-panel {
   grid-column: 8 / span 5;
-  grid-row: 1 / span 2;
+  grid-row: 1;
+  align-self: start;
+  max-height: 460px;
+  overflow-y: auto;
 }
 .dashboard-content-grid > .dashboard-shortcuts {
-  align-self: stretch;
+  align-self: start;
   grid-column: 8 / span 5;
-  grid-row: 3;
+  grid-row: 2;
   order: 5;
   align-items: stretch;
-  grid-template-columns: 1fr;
-  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
 }
 .dashboard-content-grid > .activity-panel { order: 4; }
 .dashboard-content-grid > .dashboard-shortcuts .shortcut-card {
   height: 100%;
-  min-height: 68px;
-  gap: 9px;
-  padding: 14px 17px;
+  min-height: 88px;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 10px;
 }
 .dashboard-content-grid > .dashboard-shortcuts .shortcut-icon {
-  width: 38px;
-  height: 38px;
-  flex-basis: 38px;
+  width: 30px;
+  height: 30px;
+  flex-basis: 30px;
 }
 .dashboard-content-grid > .dashboard-shortcuts .shortcut-card strong {
-  font-size: 14px;
+  font-size: 11px;
 }
 .dashboard-content-grid > .dashboard-shortcuts .shortcut-card small {
-  font-size: 11px;
+  font-size: 9px;
   white-space: normal;
 }
+.dashboard-content-grid > .dashboard-shortcuts .shortcut-arrow { display: none; }
 .dashboard-content-grid .sales-bars {
   min-height: 198px;
   gap: 12px;
@@ -5292,6 +5299,10 @@ h2 {
     grid-column: 1;
     grid-row: auto;
   }
+  .dashboard-content-grid > .activity-panel { max-height: none; }
+  .dashboard-content-grid > .dashboard-shortcuts {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
   .dashboard-content-grid > .activity-panel,
   .dashboard-content-grid > .dashboard-shortcuts {
     grid-column: 1;
@@ -5303,6 +5314,15 @@ h2 {
   }
   .comparison-row { grid-template-columns: minmax(100px, 1fr) minmax(70px, 1.5fr); gap: 9px; }
   .comparison-value { grid-column: 2; }
+}
+@media (max-width: 700px) {
+  .dashboard-content-grid > .dashboard-shortcuts { grid-template-columns: 1fr; }
+  .dashboard-content-grid > .dashboard-shortcuts .shortcut-card {
+    flex-direction: row;
+    align-items: center;
+    min-height: 72px;
+  }
+  .dashboard-content-grid > .dashboard-shortcuts .shortcut-arrow { display: block; margin-left: auto; }
 }
 .insights-page .missed-table td,
 .insights-page .missed-table th,
