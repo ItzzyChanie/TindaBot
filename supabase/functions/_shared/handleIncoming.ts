@@ -171,7 +171,6 @@ export async function handleIncoming(
     .from("conversations")
     .select("id, status, ai_mode, pending, context_product_id")
     .eq("customer_id", customer.id)
-    .in("status", ["open", "needs_seller"])
     .order("last_message_at", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -234,10 +233,18 @@ export async function handleIncoming(
   if (messageError) throw messageError;
 
   const { error: updateError } = await supabase.from("conversations")
-    .update({ last_message_at: new Date().toISOString(), last_customer_message_at: new Date().toISOString(), seller_read_at: null, is_hidden: false }).eq("id", conversationId);
+    .update({
+      last_message_at: new Date().toISOString(),
+      last_customer_message_at: new Date().toISOString(),
+      seller_read_at: null,
+      is_hidden: false,
+      ...(existing?.status === "resolved" ? { status: "open" } : {}),
+    }).eq("id", conversationId);
   if (updateError) throw updateError;
 
-  let conversation = existing ?? { status: "open", ai_mode: "auto", pending: {} };
+  const conversation = existing
+    ? { ...existing, status: existing.status === "resolved" ? "open" : existing.status }
+    : { status: "open", ai_mode: "auto", pending: {} };
   const aiMode = conversation.ai_mode as "auto" | "suggest" | "human";
   if (context.paymentProof) {
     const reply = await savePaymentProof(conversationId, customer.id, context.paymentProof, text);
