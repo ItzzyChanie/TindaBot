@@ -19,8 +19,8 @@ export function MissedRequestsTable({
   return (
     <>
       <div className="missed-table-wrap">
-        <table className="missed-table">
-          <thead>
+        <table className="missed-table" aria-label="Seller follow-up requests">
+          <thead className="missed-table-head">
             <tr>
               <th>Request</th>
               <th>Received</th>
