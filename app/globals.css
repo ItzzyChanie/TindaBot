@@ -2726,14 +2726,14 @@ h2 {
     background: var(--surface);
     box-shadow: -18px 0 44px rgb(0 0 0 / 18%);
   }
-  .mobile-details-close {
-    display: inline-flex;
-  }
   .details-more {
     display: none;
   }
 }
 @media (max-width: 700px) {
+  .mobile-details-close {
+    display: inline-flex;
+  }
   .inbox-page {
     height: calc(100dvh - 62px);
     margin: 0;
