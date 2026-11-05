@@ -46,6 +46,8 @@ export type BrainPending = Record<string, unknown> & {
 export type BrainInput = {
   message: string;
   replyContextText?: string | null;
+  replyPromptText?: string | null;
+  replyPriorText?: string | null;
   channel?: string;
   sellerPresent?: boolean;
   contextProductId?: string | null;
@@ -161,6 +163,17 @@ function regionFor(location: string | null): string | null {
     )
   )
     return "Mindanao";
+  return null;
+}
+
+function replyPromptKind(message: string): "size" | "quantity" | "location" | null {
+  const text = normalizeMessage(message);
+  if (/\b(?:what|which|anong)\s+size\b/.test(text) &&
+    !/\b(?:available|stock|meron|mayroon)\b/.test(text)) return "size";
+  if (/\b(?:how many|ilang)\b/.test(text) &&
+    /\b(?:pieces?|pcs?|piraso|items?|quantity|qty)\b/.test(text)) return "quantity";
+  if (/\b(?:what|which|anong)\s+(?:delivery\s+)?(?:area|location)\b/.test(text) ||
+    /\b(?:saan|where)\b.{0,35}\b(?:deliver|delivery|ship|shipping|area|location)\b/.test(text)) return "location";
   return null;
 }
 
@@ -286,6 +299,35 @@ export function runIncomingBrain(
   const lastProduct = input.products.find((item) =>
     item.active && item.id === lastProductContext.product_id
   );
+  let deferredReplySize: string | null = null;
+  if (!clarification.kind && understanding.intent === "unknown" && input.replyPromptText) {
+    const promptKind = replyPromptKind(input.replyPromptText);
+    if (promptKind === "size") {
+      const size = matchCatalogSize(input.message, contextProduct?.variants.map((item) => item.size) ?? ["XXS", "XS", "S", "M", "L", "XL", "XXL", "XXXL", "One Size"]);
+      if (size) {
+        understanding = { ...understanding, intent: "availability", product_query: null, size, confidence: 0.95 };
+        if (!contextProduct) deferredReplySize = size;
+      }
+    } else if (promptKind === "quantity") {
+      const quantity = matchQuantityAnswer(input.message);
+      if (quantity !== null && quantity > 0 && quantity <= 100) {
+        understanding = {
+          ...understanding,
+          intent: "availability",
+          product_query: null,
+          quantity,
+          quantities_mentioned: [quantity],
+          size: contextProduct
+            ? matchCatalogSize(input.replyPriorText ?? "", contextProduct.variants.map((item) => item.size))
+            : null,
+          confidence: 0.95,
+        };
+      }
+    } else if (promptKind === "location") {
+      const location = matchCatalogLocation(input.message);
+      if (location) understanding = { ...understanding, intent: "shipping", product_query: null, location, confidence: 0.95 };
+    }
+  }
   const refersToSelectedProduct = /\b(this|that|it|these|those|ito|dito|nito|iyan|diyan|iyon|yun|dun|yung item|item na ito)\b/i
     .test(input.message.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase());
   if (
@@ -323,13 +365,21 @@ export function runIncomingBrain(
       understanding = {
         intent: clarification.intent as Understanding["intent"],
         product_query: selected.product.name,
-        size: typeof clarification.size === "string" ? clarification.size : null,
+        size: typeof clarification.size === "string"
+          ? clarification.size
+          : typeof clarification.size_answer === "string"
+            ? matchCatalogSize(clarification.size_answer, selected.product.variants.map((item) => item.size))
+            : null,
         quantity: typeof clarification.quantity === "number" ? clarification.quantity : null,
-        quantities_mentioned: [],
+        quantities_mentioned: typeof clarification.quantity === "number" ? [clarification.quantity] : [],
         location: typeof clarification.location === "string" ? clarification.location : null,
         confidence: 0.95,
       };
     }
+  }
+  if (clarification.kind === "location" && clarification.intent === "shipping" && understanding.intent === "unknown") {
+    const location = matchCatalogLocation(input.message);
+    if (location) understanding = { ...understanding, intent: "shipping", location, confidence: 0.95 };
   }
   if (clarificationProduct && typeof clarification.intent === "string" &&
     understanding.intent === "unknown") {
@@ -917,7 +967,7 @@ export function runIncomingBrain(
     return respond(
       { candidates: names },
       "Alin po rito ang tinutukoy ninyo: " + names.join(" o ") + "?",
-      { ...activePending, clarification: { kind: "product", candidates: resolution.candidates.map((item) => item.name), intent: understanding.intent, size: understanding.size, quantity: understanding.quantity, location: understanding.location } },
+      { ...activePending, clarification: { kind: "product", candidates: resolution.candidates.map((item) => item.name), intent: understanding.intent, size: understanding.size, size_answer: deferredReplySize, quantity: understanding.quantity, location: understanding.location } },
     );
   }
   if (resolution.status === "not_found") {
@@ -935,6 +985,9 @@ export function runIncomingBrain(
             kind: "product",
             candidates: input.products.filter((item) => item.active).map((item) => item.name),
             intent: understanding.intent,
+            size: understanding.size,
+            size_answer: deferredReplySize,
+            quantity: understanding.quantity,
             location: understanding.intent === "price" &&
                 input.message.toLocaleLowerCase().replace(/[^a-z0-9]+/g, " ").trim() === "magkano po ito"
               ? "Metro Manila"
@@ -957,7 +1010,13 @@ export function runIncomingBrain(
     return respond(
       { product: product.name, sizes: product.variants.map((item) => item.size), stock: product.variants.map((item) => item.stock) },
       product.name + " po, available sizes and stock: " + sizeStock.join(", ") + ".",
-      { ...activePending, last_product: { product_id: product.id } },
+      {
+        ...activePending,
+        last_product: { product_id: product.id },
+        ...(understanding.quantity !== null
+          ? { clarification: { kind: "size", product_id: product.id, intent: understanding.intent, quantity: understanding.quantity, location: understanding.location } }
+          : {}),
+      },
     );
   }
   if (chosenSize && !sizes.includes(chosenSize)) {
@@ -1117,7 +1176,7 @@ export function runIncomingBrain(
         product.name +
         " (" +
         variant.size +
-        "); may " +
+        ")" + (quantity > 1 ? " para sa " + quantity + " piraso" : "") + "; may " +
         variant.stock +
         " stock. " +
         amountSummary

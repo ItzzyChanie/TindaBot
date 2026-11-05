@@ -195,20 +195,30 @@ export async function handleIncoming(
     if (error) throw error;
   }
 
-  let replyTarget: { id: string; body: string; unsent_at: string | null } | null = null;
+  let replyTarget: { id: string; body: string; unsent_at: string | null; reply_to_message_id: string | null; reply_to_text: string | null } | null = null;
   if (context.replyToMessageId) {
     const { data, error } = await supabase.from("messages")
-      .select("id, body, unsent_at").eq("id", context.replyToMessageId)
+      .select("id, body, unsent_at, reply_to_message_id, reply_to_text").eq("id", context.replyToMessageId)
       .eq("conversation_id", conversationId).maybeSingle();
     if (error) throw error;
     replyTarget = data;
   } else if (context.replyToChannelMessageId) {
     const { data, error } = await supabase.from("messages")
-      .select("id, body, unsent_at").eq("conversation_id", conversationId)
+      .select("id, body, unsent_at, reply_to_message_id, reply_to_text").eq("conversation_id", conversationId)
       .contains("channel_message_ids", [context.replyToChannelMessageId]).maybeSingle();
     if (error) throw error;
     replyTarget = data;
   }
+  let replyParentText: string | null = null;
+  if (replyTarget?.reply_to_message_id) {
+    const { data: parent, error } = await supabase.from("messages")
+      .select("body").eq("id", replyTarget.reply_to_message_id)
+      .eq("conversation_id", conversationId).maybeSingle();
+    if (error) throw error;
+    replyParentText = parent?.body ?? null;
+  }
+  const replyContextText = [replyTarget?.body, replyParentText, replyTarget?.reply_to_text]
+    .filter((value): value is string => Boolean(value?.trim())).join("\n");
   const { error: messageError } = await supabase.from("messages").insert({
     conversation_id: conversationId,
     sender: "customer",
@@ -390,7 +400,9 @@ export async function handleIncoming(
 
   const brain = await runIncomingBrain({
     message: text,
-    replyContextText: replyTarget?.body ?? null,
+    replyPromptText: replyTarget?.body ?? null,
+    replyContextText: replyContextText || null,
+    replyPriorText: replyParentText,
     channel,
     sellerPresent: channel === "telegram" && latestOrderRow
       ? await sellerPresentForOrder(conversationId, Number(latestOrderRow.id), aiMode)

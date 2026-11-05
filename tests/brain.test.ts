@@ -467,6 +467,64 @@ describe("grounded incoming conversation brain", () => {
     expect(result.reply).toContain("M: sold out");
   });
 
+  it("uses a seller's size prompt to understand a short size reply without placing an order", async () => {
+    const result = await runIncomingBrain({
+      ...baseInput,
+      message: "M",
+      replyPromptText: "Anong size po ang gusto ninyo?",
+      replyContextText: "Seller: Anong size po ang gusto ninyo?\nCustomer: Isla blouse po.",
+      replyPriorText: "Isla blouse po.",
+    });
+    expect(result.action).toBe("reply");
+    expect(result.reply).toContain("Isla Linen Top");
+    expect(result.reply).toContain("M");
+    expect(result.action).not.toBe("confirm_order");
+  });
+
+  it("keeps a short size answer while asking which product when context is missing", async () => {
+    const first = await runIncomingBrain({
+      ...baseInput,
+      message: "M",
+      replyPromptText: "What size would you like?",
+    });
+    expect(first.reply).toContain("Aling item");
+    expect(first.pending.clarification).toMatchObject({ kind: "product", size_answer: "M" });
+    const followup = await runIncomingBrain({
+      ...baseInput,
+      message: "Isla blouse po",
+      pending: first.pending,
+    });
+    expect(followup.reply).toContain("M");
+    expect(followup.reply).toContain("sold out");
+  });
+
+  it("uses the reply prompt to understand a quantity without confirming an order", async () => {
+    const result = await runIncomingBrain({
+      ...baseInput,
+      message: "2",
+      replyPromptText: "Ilang piraso po ang gusto ninyo?",
+      replyContextText: "Seller: Ilang piraso po ang gusto ninyo?\nCustomer: Isla blouse size S po.",
+      replyPriorText: "Isla blouse size S po.",
+    });
+    expect(result.action).toBe("reply");
+    expect(result.reply).toContain("Isla Linen Top");
+    expect(result.reply).toContain("2 piraso");
+    expect(result.reply).toContain("66.66");
+    expect(result.action).not.toBe("confirm_order");
+  });
+
+  it("accepts the area answer to a shipping clarification even without a product", async () => {
+    const ask = await runIncomingBrain({ ...baseInput, message: "How much is delivery?" });
+    expect(ask.pending.clarification).toMatchObject({ kind: "location", intent: "shipping" });
+    const answer = await runIncomingBrain({
+      ...baseInput,
+      message: "Cebu",
+      pending: ask.pending,
+    });
+    expect(answer.reply).toContain("Shipping to Visayas");
+    expect(answer.reply).toContain("75.00");
+  });
+
   it("answers the price FAQ with Metro Manila shipping for a selected catalog item", async () => {
     const tee: BrainProduct = {
       ...product, id: "tee", name: "Bayanihan Basic T-Shirt", aliases: ["t-shirt"], price: 450,
