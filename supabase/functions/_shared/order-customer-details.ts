@@ -7,64 +7,66 @@ export type OrderCustomerDetails = {
 };
 
 export const orderDetailFields = [
-  ["customer_full_name", "full name"],
-  ["customer_address", "complete address"],
+  ["customer_full_name", "Facebook name"],
+  ["customer_address", "Permanent Address"],
   ["customer_mobile", "mobile number"],
   ["customer_email", "email address"],
 ] as const;
 
-export function parseOrderDetails(text: string): OrderCustomerDetails {
+export function parseOrderDetails(text: string, existing: OrderCustomerDetails = {}): OrderCustomerDetails {
   const result: OrderCustomerDetails = {};
+  const unlabelled: string[] = [];
   const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
   for (const line of lines) {
-    const match = line.match(/^\s*(full\s*name|name|complete\s*address|address|mobile(?:\s*number)?|phone(?:\s*number)?|contact\s*number|email(?:\s*address)?|(?:optional\s+)?delivery\s*notes?|additional\s*notes?)\s*[:：-]\s*(.*?)\s*$/i);
-    if (!match) continue;
+    const match = line.match(/^\s*(facebook\s*name|fb\s*name|full\s*name|name|permanent\s*address|complete\s*address|address|mobile(?:\s*number)?|phone(?:\s*number)?|contact\s*number|email(?:\s*address)?|(?:optional\s+)?delivery\s*notes?|additional\s*notes?)\s*[:：-]\s*(.*?)\s*$/i);
+    if (!match) {
+      if (line.includes("@")) result.customer_email = line.slice(0, 254);
+      else if (/^[+\d\s().-]+$/.test(line) && /\d/.test(line)) result.customer_mobile = line.slice(0, 40);
+      else unlabelled.push(line);
+      continue;
+    }
     const value = match[2].slice(0, 500).trim();
     const label = match[1].toLowerCase().replace(/\s+/g, " ");
-    if (/^(full\s*name|name)$/.test(label)) result.customer_full_name = value.slice(0, 160);
-    else if (/^(complete\s*address|address)$/.test(label)) result.customer_address = value;
+    if (/^(facebook name|fb name|full name|name)$/.test(label)) result.customer_full_name = value.slice(0, 160);
+    else if (/^(permanent address|complete address|address)$/.test(label)) result.customer_address = value;
     else if (/^(mobile|mobile number|phone|phone number|contact number)$/.test(label)) result.customer_mobile = value.slice(0, 40);
     else if (/^email/.test(label)) result.customer_email = value.slice(0, 254);
     else result.customer_notes = value;
   }
-  if (Object.keys(result).length === 0 && lines.length >= 4) {
-    const emailIndex = lines.findIndex((line) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(line));
-    const mobileIndex = lines.findIndex((line) => /^[+\d\s().-]+$/.test(line) && validCustomerMobile(line));
-    if (emailIndex >= 0 && mobileIndex >= 0 && emailIndex !== mobileIndex) {
-      const otherLines = lines.filter((_, index) => index !== emailIndex && index !== mobileIndex);
-      if (otherLines.length >= 2) {
-        result.customer_full_name = otherLines[0].slice(0, 160);
-        result.customer_address = otherLines[1].slice(0, 500);
-        result.customer_mobile = lines[mobileIndex].slice(0, 40);
-        result.customer_email = lines[emailIndex].slice(0, 254);
-        if (otherLines[2]) result.customer_notes = otherLines.slice(2).join(" ").slice(0, 500);
-      }
-    }
+  if (!existing.customer_full_name && !result.customer_full_name && unlabelled.length) {
+    result.customer_full_name = unlabelled.shift()?.slice(0, 160);
+  }
+  if (!existing.customer_address && !result.customer_address && unlabelled.length) {
+    result.customer_address = unlabelled.shift()?.slice(0, 500);
+  }
+  if (unlabelled.length) {
+    result.customer_notes = [result.customer_notes, ...unlabelled].filter(Boolean).join(" ").slice(0, 500);
   }
   return result;
 }
 
 export function customerDetailsPrompt(orderId: number, missing: string[]): string {
-  if (missing.length === orderDetailFields.length) {
-    return "Listed na po ang order #" + orderId + ". Para ma-coordinate ni seller ang payment at delivery, pakisend po ang details sa format na ito:\nFull name:\nComplete address:\nMobile number:\nEmail address:\nOptional delivery notes:";
-  }
-  const field = orderDetailFields.find(([key]) => key === missing[0]);
-  return "Salamat po. Pakisend naman po ang " + (field?.[1] ?? "kulang na details") + " para sa order #" + orderId + ".";
+  return missingDetailsPrompt(missing, orderId);
+}
+
+export function missingDetailsPrompt(missing: string[], orderId?: number): string {
+  const fields = orderDetailFields.filter(([key]) => missing.includes(key));
+  const context = typeof orderId === "number" ? "para sa order #" + orderId : "para ma-reserve ang order";
+  return "Pakisend po ang kulang na details " + context + ". Isang detail bawat linya; ilagay ang value pagkatapos ng label:\n" +
+    fields.map(([, label]) => label + ":").join("\n");
 }
 
 export function reservationDetailsPrompt(includeArea: boolean): string {
-  return "Sige po, i-check ko ang availability habang kinukuha ang details. Wala pang stock na na-reserve. " +
-    (includeArea ? "Nakuha ko na po ang delivery area ninyo. " : "") +
-    "Para ma-reserve ang order, pakisend po ang details sa format na ito:\nFull name:\nComplete address:\nMobile number:\nEmail address:\nOptional delivery notes:";
+  return (includeArea ? "Nakuha ko na po ang delivery area ninyo. " : "") +
+    "Para ma-reserve ang order, pakisend po ang details nang line-by-line, isang detail bawat linya. Kopyahin ang format na ito at ilagay ang value pagkatapos ng label:\nFacebook name:\nPermanent Address:\nMobile number:\nEmail address:\nOptional delivery notes:";
 }
 
 export function validCustomerEmail(email: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  return /^[A-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?(?:\.[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?)+$/i.test(email);
 }
 
 export function validCustomerMobile(mobile: string): boolean {
-  const digits = mobile.replace(/\D/g, "");
-  return digits.length >= 7 && digits.length <= 15;
+  return /^09\d{9}$/.test(mobile);
 }
 
 export function missingCustomerDetails(details: OrderCustomerDetails): string[] {

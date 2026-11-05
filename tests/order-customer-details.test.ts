@@ -4,10 +4,11 @@ import { customerDetailsPrompt, isCancellationRequest, isOrderAcknowledgment, is
 describe("order customer details", () => {
   it("asks for reservation details without asking for the delivery area again", () => {
     const prompt = reservationDetailsPrompt(true);
-    expect(prompt).toContain("Full name:");
-    expect(prompt).toContain("Complete address:");
+    expect(prompt).toContain("Facebook name:");
+    expect(prompt).toContain("Permanent Address:");
     expect(prompt).toContain("Mobile number:");
     expect(prompt).toContain("Email address:");
+    expect(prompt).toContain("line-by-line");
     expect(prompt).toContain("Nakuha ko na po ang delivery area");
     expect(prompt).not.toContain("Anong area");
   });
@@ -47,6 +48,38 @@ describe("order customer details", () => {
     });
   });
 
+  it("keeps details from three unlabeled lines and fills a missing address later", () => {
+    const firstMessage = parseOrderDetails(["Sample Name", "0978455023", "sample@gmail.com"].join("\n"));
+    expect(firstMessage).toEqual({
+      customer_full_name: "Sample Name",
+      customer_mobile: "0978455023",
+      customer_email: "sample@gmail.com",
+    });
+    expect(missingCustomerDetails(firstMessage)).toEqual(["customer_address", "customer_mobile"]);
+
+    const address = parseOrderDetails("sample address street", firstMessage);
+    const combined = { ...firstMessage, ...address };
+    expect(combined).toMatchObject({ customer_full_name: "Sample Name", customer_address: "sample address street", customer_email: "sample@gmail.com" });
+    expect(missingCustomerDetails(combined)).toEqual(["customer_mobile"]);
+  });
+
+  it("stops asking once the one missing address has been supplied", () => {
+    const firstMessage = parseOrderDetails(["Sample Name", "09123456789", "sample@gmail.com"].join("\n"));
+    expect(missingCustomerDetails(firstMessage)).toEqual(["customer_address"]);
+
+    const address = parseOrderDetails("sample address street", firstMessage);
+    expect(missingCustomerDetails({ ...firstMessage, ...address })).toEqual([]);
+  });
+
+  it("parses a missing value in context without overwriting previously collected fields", () => {
+    const saved = {
+      customer_full_name: "Sample Name",
+      customer_mobile: "09123456789",
+      customer_email: "sample@gmail.com",
+    };
+    expect(parseOrderDetails("Permanent Address: 15 Sample Street", saved)).toEqual({ customer_address: "15 Sample Street" });
+  });
+
   it("keeps an order incomplete until every required detail is valid", () => {
     expect(missingCustomerDetails({
       customer_full_name: "Jefferson Palceso",
@@ -60,15 +93,25 @@ describe("order customer details", () => {
     })).toEqual(["customer_mobile", "customer_email"]);
   });
 
-  it("prompts one missing field at a time after a partial response", () => {
-    expect(customerDetailsPrompt(1042, ["customer_mobile", "customer_email"]))
-      .toContain("mobile number");
+  it("prompts only for every missing field, with separate labeled lines", () => {
+    const prompt = customerDetailsPrompt(1042, ["customer_mobile", "customer_email"]);
+    expect(prompt).toContain("order #1042");
+    expect(prompt).toContain("Isang detail bawat linya");
+    expect(prompt).toContain("mobile number:");
+    expect(prompt).toContain("email address:");
+    expect(prompt).not.toContain("Facebook name:");
+    expect(prompt).not.toContain("Permanent Address:");
   });
 
   it("validates email and recognizes polite closing replies", () => {
     expect(validCustomerEmail("buyer@example.com")).toBe(true);
     expect(validCustomerEmail("not-an-email")).toBe(false);
-    expect(validCustomerMobile("+639171234567")).toBe(true);
+    expect(validCustomerEmail("buyer@domain")).toBe(false);
+    expect(validCustomerEmail("@example.com")).toBe(false);
+    expect(validCustomerMobile("09171234567")).toBe(true);
+    expect(validCustomerMobile("0978455023")).toBe(false);
+    expect(validCustomerMobile("+639171234567")).toBe(false);
+    expect(validCustomerMobile("09 171234567")).toBe(false);
     expect(validCustomerMobile("call me later")).toBe(false);
     for (const message of ["okay", "ok po", "okay, thank you", "thank you po", "fine po", "salamat po"]) {
       expect(isOrderAcknowledgment(message)).toBe(true);

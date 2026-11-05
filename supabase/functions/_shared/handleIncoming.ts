@@ -1,7 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { labelAutoReply, runIncomingBrain, type BrainPending, type BrainProduct } from "./brain.ts";
 import { quote, type QuotePromo } from "./quote.ts";
-import { customerDetailsPrompt, isCancellationRequest, isOrderAcknowledgment, isPaymentRequest, isReservationRequest, missingCustomerDetails, orderDetailFields, parseOrderDetails, paymentSafetyMessage, reservationDetailsPrompt, sellerRepliedAfterOrder, type OrderCustomerDetails } from "./order-customer-details.ts";
+import { customerDetailsPrompt, isCancellationRequest, isOrderAcknowledgment, isPaymentRequest, isReservationRequest, missingCustomerDetails, missingDetailsPrompt, orderDetailFields, parseOrderDetails, paymentSafetyMessage, reservationDetailsPrompt, sellerRepliedAfterOrder, type OrderCustomerDetails, validCustomerEmail, validCustomerMobile } from "./order-customer-details.ts";
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -336,18 +336,20 @@ export async function handleIncoming(
   }
   if (typeof detailState.order_id === "number" && isOrderAcknowledgment(text)) {
     const savedDetails = object(detailState.values);
-    const missing = orderDetailFields.filter(([key]) => !String(savedDetails[key] ?? "").trim()).map(([key]) => key);
+    const missing = missingCustomerDetails(savedDetails as OrderCustomerDetails);
     const prompt = customerDetailsPrompt(detailState.order_id, missing);
     const reply = aiMode === "auto" ? labelAutoReply(prompt, aiMode) : null;
     return { conversationId, reply, draft: aiMode === "suggest" ? prompt : null };
   }
   if (hasProvisionalOrder && (isOrderAcknowledgment(text) || isReservationRequest(text))) {
-    const prompt = reservationDetailsPrompt(typeof provisionalOrder.region === "string");
+    const savedDetails = object(detailState.values) as OrderCustomerDetails;
+    const missing = missingCustomerDetails(savedDetails);
+    const prompt = missingDetailsPrompt(missing);
     return { conversationId, reply: aiMode === "auto" ? labelAutoReply(prompt, aiMode) : null, draft: aiMode === "suggest" ? prompt : null };
   }
   if (typeof detailState.order_id === "number" || hasProvisionalOrder) {
     const details = { ...object(detailState.values) } as OrderCustomerDetails;
-    const parsedInput = parseOrderDetails(text);
+    const parsedInput = parseOrderDetails(text, details);
     Object.assign(details, Object.fromEntries(
       Object.entries(parsedInput).filter(([, value]) => typeof value === "string" && value.trim()),
     ));
@@ -360,6 +362,8 @@ export async function handleIncoming(
         details[firstMissing[0]] = text.trim().slice(0, maxLength);
       }
     }
+    const invalidMobile = Boolean(details.customer_mobile && !validCustomerMobile(details.customer_mobile));
+    const invalidEmail = Boolean(details.customer_email && !validCustomerEmail(details.customer_email));
     const missing = missingCustomerDetails(details);
     if (missing.includes("customer_mobile") && details.customer_mobile) details.customer_mobile = "";
     if (missing.includes("customer_email") && details.customer_email) details.customer_email = "";
@@ -372,12 +376,9 @@ export async function handleIncoming(
       };
       const { error } = await supabase.from("conversations").update({ pending: nextPending }).eq("id", conversationId);
       if (error) throw error;
-      const missingKey = missing[0];
-      const prompt = missingKey === "customer_email"
-        ? "Pakisend po ang valid na email address" + (typeof detailState.order_id === "number" ? " para sa order #" + detailState.order_id : "") + "."
-        : hasProvisionalOrder
-          ? "Pakisend po ang " + (orderDetailFields.find(([key]) => key === missingKey)?.[1] ?? "kulang na details") + "."
-          : customerDetailsPrompt(detailState.order_id as number, missing);
+      const prompt = missingDetailsPrompt(missing, typeof detailState.order_id === "number" ? detailState.order_id : undefined) +
+        (invalidMobile ? " Mobile number po ay dapat 11 digits, nagsisimula sa 09, at digits lang." : "") +
+        (invalidEmail ? " Email po ay dapat valid ang format, tulad ng name@example.com." : "");
       const reply = aiMode === "auto" ? labelAutoReply(prompt, aiMode) : null;
       return { conversationId, reply, draft: aiMode === "suggest" ? prompt : null };
     }
@@ -458,7 +459,8 @@ export async function handleIncoming(
     const pageName = typeof options.facebook_page_name === "string" ? options.facebook_page_name.trim() : "";
     const pageUrl = typeof options.facebook_page_url === "string" && /^https:\/\//i.test(options.facebook_page_url) ? options.facebook_page_url.trim() : "";
     const completion = "Salamat po! Kumpleto na ang details ng order #" + orderId +
-      ". " + paymentSafetyMessage({
+      ". Ire-review po muna ni seller ang details ninyo para ma-verify ang buyer at matiyak ang tamang delivery information. " +
+      paymentSafetyMessage({
         channel,
         orderId,
         orderReserved: true,
