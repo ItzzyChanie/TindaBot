@@ -5191,22 +5191,24 @@ h2 {
 }
 .dashboard-content-grid > .dashboard-shortcuts {
   align-self: stretch;
-  grid-column: 1 / -1;
+  grid-column: 8 / span 5;
   grid-row: 3;
+  order: 5;
   align-items: stretch;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   gap: 10px;
 }
+.dashboard-content-grid > .activity-panel { order: 4; }
 .dashboard-content-grid > .dashboard-shortcuts .shortcut-card {
   height: 100%;
-  min-height: 94px;
+  min-height: 68px;
   gap: 9px;
   padding: 14px 17px;
 }
 .dashboard-content-grid > .dashboard-shortcuts .shortcut-icon {
-  width: 42px;
-  height: 42px;
-  flex-basis: 42px;
+  width: 38px;
+  height: 38px;
+  flex-basis: 38px;
 }
 .dashboard-content-grid > .dashboard-shortcuts .shortcut-card strong {
   font-size: 14px;
@@ -5285,6 +5287,11 @@ h2 {
   }
   .dashboard-content-grid > .sales-trend-panel,
   .dashboard-content-grid > .sales-comparison-panel,
+  .dashboard-content-grid > .activity-panel,
+  .dashboard-content-grid > .dashboard-shortcuts {
+    grid-column: 1;
+    grid-row: auto;
+  }
   .dashboard-content-grid > .activity-panel,
   .dashboard-content-grid > .dashboard-shortcuts {
     grid-column: 1;
