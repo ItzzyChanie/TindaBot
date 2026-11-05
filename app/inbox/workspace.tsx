@@ -1057,15 +1057,6 @@ export function InboxWorkspace() {
                 <label className="sr-only" htmlFor="seller-reply">
                   Write a reply
                 </label>
-                <textarea
-                  id="seller-reply"
-                  value={draft}
-                  onChange={(event) => setDraft(event.target.value)}
-                  maxLength={4000}
-                  disabled={replyDisabled}
-                  placeholder="Write a reply…"
-                  rows={2}
-                />
                 <input
                   ref={attachmentInputRef}
                   className="attachment-file-input"
@@ -1088,19 +1079,42 @@ export function InboxWorkspace() {
                   }}
                   disabled={replyDisabled || sending}
                 />
-                <div className="reply-attachment-row">
-                  <button className="text-button" type="button" onClick={() => attachmentInputRef.current?.click()} disabled={replyDisabled || sending}>＋ Image or file</button>
-                  {attachment && <span className="reply-attachment-name">{attachment.name} · {(attachment.size / 1024 / 1024).toFixed(2)} MB <button className="text-button" type="button" onClick={() => setAttachment(null)} disabled={sending}>Remove</button></span>}
-                </div>
-                <div className="reply-actions">
-                  <span>{draft.length}/4000</span>
+                <div className="reply-composer-row">
                   <button
-                    className="button button-primary"
+                    className="reply-attachment-button"
+                    type="button"
+                    onClick={() => attachmentInputRef.current?.click()}
+                    disabled={replyDisabled || sending}
+                    aria-label="Attach an image or file"
+                    title="Attach an image or file"
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="m21.4 11.1-8.5 8.5a5.7 5.7 0 0 1-8.1-8.1l9.2-9.2a3.8 3.8 0 0 1 5.4 5.4l-9.2 9.2a1.9 1.9 0 0 1-2.7-2.7l8.5-8.5" />
+                    </svg>
+                  </button>
+                  <textarea
+                    id="seller-reply"
+                    value={draft}
+                    onChange={(event) => setDraft(event.target.value)}
+                    maxLength={4000}
+                    disabled={replyDisabled}
+                    placeholder="Write a reply…"
+                    rows={2}
+                  />
+                  <button
+                    className="button button-primary reply-send-button"
                     type="submit"
                     disabled={replyDisabled || sending || (!draft.trim() && !attachment)}
                   >
-                    {sending ? "Uploading and sending…" : "Send reply"}
+                    {sending ? "Sending…" : "Send"}
                   </button>
+                </div>
+                <div className="reply-attachment-row">
+                  {attachment && <span className="reply-attachment-name"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></svg>{attachment.name} · {(attachment.size / 1024 / 1024).toFixed(2)} MB <button className="reply-remove-attachment" type="button" onClick={() => setAttachment(null)} disabled={sending} aria-label="Remove attachment" title="Remove attachment">×</button></span>}
+                </div>
+                <div className="reply-actions">
+                  <span>{draft.length}/4000</span>
+                  {sending && <span role="status">Uploading and sending…</span>}
                 </div>
               </form>
             )}

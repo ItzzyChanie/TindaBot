@@ -2042,7 +2042,8 @@ h2 {
 }
 .reply-form textarea {
   display: block;
-  width: 100%;
+  flex: 1 1 auto;
+  width: 0;
   min-height: 55px;
   padding: 10px;
   resize: vertical;
@@ -2054,25 +2055,80 @@ h2 {
   font-size: 12px;
   outline-color: var(--green);
 }
+.reply-composer-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+.reply-attachment-button {
+  display: grid;
+  flex: 0 0 38px;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  margin-bottom: 8px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--page);
+  color: var(--muted);
+  cursor: pointer;
+}
+.reply-attachment-button:hover:not(:disabled) {
+  border-color: var(--green);
+  color: var(--green);
+}
+.reply-attachment-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.reply-attachment-button svg {
+  width: 19px;
+  height: 19px;
+}
+.reply-send-button {
+  flex: 0 0 auto;
+  margin-bottom: 8px;
+}
 .attachment-file-input {
   display: none;
 }
 .reply-attachment-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+  min-height: 0;
   margin-top: 8px;
   font-size: 11px;
 }
 .reply-attachment-name {
-  overflow: hidden;
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  gap: 6px;
   color: var(--muted);
+  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.reply-attachment-name .text-button {
-  margin-left: 6px;
+.reply-attachment-name svg {
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+}
+.reply-remove-attachment {
+  display: grid;
+  flex: 0 0 22px;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+}
+.reply-remove-attachment:hover:not(:disabled) {
+  background: var(--line);
+  color: var(--text);
 }
 .inbox-message-attachment {
   display: block;
