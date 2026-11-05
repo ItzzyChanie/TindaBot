@@ -15,7 +15,7 @@ const catalog: CatalogProduct[] = [
 ];
 
 describe("catalog-grounded message rules", () => {
-  it.each(["reserve this", "pa-reserve po", "magpa reservation", "save one for me"])(
+  it.each(["reserve this", "pa-reserve po", "magpa reservation", "save one for me", "pwede magpa reserve?"])(
     "recognizes reservation wording: %s",
     (message) => {
       expect(understandFromRules(message, catalog).intent).toBe("order_confirm");

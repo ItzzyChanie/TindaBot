@@ -234,7 +234,7 @@ export function isThankYou(message: string): boolean {
 }
 
 const stopWords = new Set([
-  "magkano", "how", "much", "price", "presyo", "hm", "pm", "mp", "cost", "total", "ilan", "kapag", "when", "available",
+  "magkano", "how", "much", "price", "presyo", "hm", "pm", "mp", "cost", "total", "ilan", "kapag", "when", "available", "pwede", "pwedeng", "puwede", "puwedeng",
   "availability", "avail", "stock", "meron", "mayroon", "may", "ba", "have", "do", "you", "it",
   "the", "a", "an", "is", "are", "in", "from", "at", "of", "to", "for", "me", "please", "paki", "po",
   "ang", "yung", "ng", "sa", "pa", "ano", "anong", "deliver", "delivery", "ship", "shipping",

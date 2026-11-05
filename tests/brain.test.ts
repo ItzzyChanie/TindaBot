@@ -191,13 +191,17 @@ describe("grounded incoming conversation brain", () => {
   it("turns a short reserve request into a stock checked order confirmation", async () => {
     const result = await runIncomingBrain({
       ...baseInput,
-      message: "reserve po",
+      message: "pwede magpa reserve?",
       pending: { last_product: { product_id: product.id, size: "S", quantity: 1, location: "Cebu" } },
     });
 
     expect(result.pending.order).toMatchObject({ product_id: product.id, variant_id: "variant-s", region: "Visayas" });
     expect(result.reply).toContain("Available pa po ito");
     expect(result.reply).toContain("Sumagot po ng YES");
+
+    const yes = await runIncomingBrain({ ...baseInput, message: "yes", pending: result.pending });
+    expect(yes.action).toBe("confirm_order");
+    expect(yes.orderToConfirm).toMatchObject({ product_id: product.id, size: "S", region: "Visayas" });
   });
 
   it("re-quotes the last product and size when a customer asks for a new quantity", async () => {

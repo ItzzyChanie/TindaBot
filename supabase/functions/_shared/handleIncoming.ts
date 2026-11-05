@@ -1,7 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { labelAutoReply, runIncomingBrain, type BrainPending, type BrainProduct } from "./brain.ts";
 import { quote, type QuotePromo } from "./quote.ts";
-import { customerDetailsPrompt, isCancellationRequest, isOrderAcknowledgment, isPaymentRequest, missingCustomerDetails, orderDetailFields, parseOrderDetails, paymentSafetyMessage, reservationDetailsPrompt, sellerRepliedAfterOrder, type OrderCustomerDetails } from "./order-customer-details.ts";
+import { customerDetailsPrompt, isCancellationRequest, isOrderAcknowledgment, isPaymentRequest, isReservationRequest, missingCustomerDetails, orderDetailFields, parseOrderDetails, paymentSafetyMessage, reservationDetailsPrompt, sellerRepliedAfterOrder, type OrderCustomerDetails } from "./order-customer-details.ts";
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -341,7 +341,7 @@ export async function handleIncoming(
     const reply = aiMode === "auto" ? labelAutoReply(prompt, aiMode) : null;
     return { conversationId, reply, draft: aiMode === "suggest" ? prompt : null };
   }
-  if (hasProvisionalOrder && isOrderAcknowledgment(text)) {
+  if (hasProvisionalOrder && (isOrderAcknowledgment(text) || isReservationRequest(text))) {
     const prompt = reservationDetailsPrompt(typeof provisionalOrder.region === "string");
     return { conversationId, reply: aiMode === "auto" ? labelAutoReply(prompt, aiMode) : null, draft: aiMode === "suggest" ? prompt : null };
   }

@@ -85,6 +85,11 @@ export function isOrderAcknowledgment(text: string): boolean {
   return /^(ok|okay|okey|fine|sure|thanks|thank you|salamat|sige|noted|got it|alright|all right)( po)?( thank you| thanks| salamat| po)?$/.test(normalized);
 }
 
+export function isReservationRequest(text: string): boolean {
+  const normalized = text.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+  return /^(?:(?:pwede|puwede|can|could)\s+(?:(?:i|we|ko)\s+)?)?(?:(?:magpa|pa|ipa|i)\s+)?(?:reserve|reservation)(?:\s+(?:po|please|ito|iyan|nito|this|it))?$/.test(normalized);
+}
+
 export function isCancellationRequest(text: string): boolean {
   const normalized = text.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
   return /\b(cancel|cancelled|canceled|cancellation|ipa cancel|ipa kansel|kanselahin|kansel|kancel|don t want to continue|do not want to continue|change my mind|stop.*order|ayoko na.*ituloy|hindi na.*ituloy|wag na.*ituloy)\b/.test(normalized);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { customerDetailsPrompt, isCancellationRequest, isOrderAcknowledgment, isPaymentRequest, missingCustomerDetails, parseOrderDetails, paymentSafetyMessage, reservationDetailsPrompt, sellerRepliedAfterOrder, validCustomerEmail, validCustomerMobile } from "../supabase/functions/_shared/order-customer-details";
+import { customerDetailsPrompt, isCancellationRequest, isOrderAcknowledgment, isPaymentRequest, isReservationRequest, missingCustomerDetails, parseOrderDetails, paymentSafetyMessage, reservationDetailsPrompt, sellerRepliedAfterOrder, validCustomerEmail, validCustomerMobile } from "../supabase/functions/_shared/order-customer-details";
 
 describe("order customer details", () => {
   it("asks for reservation details without asking for the delivery area again", () => {
@@ -11,6 +11,11 @@ describe("order customer details", () => {
     expect(prompt).toContain("Nakuha ko na po ang delivery area");
     expect(prompt).not.toContain("Anong area");
   });
+
+  it.each(["reserve", "pwede magpa reserve?", "can I reserve it?"])(
+    "recognizes a repeated reservation request while collecting details: %s",
+    (text) => expect(isReservationRequest(text)).toBe(true),
+  );
 
   it("parses a complete labeled details block", () => {
     expect(parseOrderDetails([
