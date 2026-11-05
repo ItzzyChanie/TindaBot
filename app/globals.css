@@ -625,6 +625,38 @@ h1 {
   flex-wrap: wrap;
   gap: 10px;
 }
+.overview-hero-controls {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 11px;
+}
+.hero-date-filter {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #d1e0d5;
+  font-size: 11px;
+}
+.hero-date-filter select {
+  min-height: 36px;
+  padding: 0 30px 0 11px;
+  border: 1px solid rgb(230 241 233 / 32%);
+  border-radius: 9px;
+  background: rgb(255 255 255 / 9%);
+  color: #f3f7f3;
+  font: inherit;
+  cursor: pointer;
+}
+.hero-date-filter option { background: #183b2b; color: #f3f7f3; }
+@media (max-width: 1050px) {
+  .overview-hero-controls { align-self: flex-end; }
+}
+@media (max-width: 700px) {
+  .overview-hero-controls { width: 100%; }
+  .overview-hero-controls .overview-hero-actions { width: 100%; }
+}
 .button-hero-primary,
 .button-hero-secondary {
   min-height: 43px;
@@ -688,14 +720,10 @@ h1 {
   margin: 0;
   padding: 22px 24px 17px;
 }
-.dashboard-content-grid > .sales-filter-panel,
 .dashboard-content-grid > .sales-trend-panel,
 .dashboard-content-grid > .sales-comparison-panel {
   grid-column: 1 / span 7;
 }
-.dashboard-content-grid > .sales-filter-panel { grid-row: 1; }
-.dashboard-content-grid > .sales-trend-panel { grid-row: 2; }
-.dashboard-content-grid > .sales-comparison-panel { grid-row: 3; }
 .dashboard-content-grid .panel-heading {
   align-items: flex-start;
   margin-bottom: 7px;
@@ -846,20 +874,8 @@ h1 {
 .sales-trend-panel .panel-heading > .muted {
   font-size: 12px;
 }
-.sales-filter-panel {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 18px;
-  padding: 18px 22px;
-  border-color: color-mix(in srgb, var(--green) 20%, var(--line));
-  background: color-mix(in srgb, var(--green) 7%, var(--surface));
-}
-.sales-filter-panel h2,
 .sales-comparison-panel h2 { margin: 0; font-size: 16px; }
-.sales-filter-panel .eyebrow,
 .sales-comparison-panel .eyebrow { margin-bottom: 5px; }
-.sales-filter-panel .muted { margin: 5px 0 0; font-size: 11px; }
 .sales-comparison-panel {
   padding: 20px 22px;
   border-color: color-mix(in srgb, #5574c7 20%, var(--line));
@@ -5163,35 +5179,40 @@ h2 {
 }
 .dashboard-content-grid > .sales-trend-panel {
   grid-column: 1 / span 7;
+  grid-row: 1;
+}
+.dashboard-content-grid > .sales-comparison-panel {
+  grid-column: 1 / span 7;
+  grid-row: 2;
 }
 .dashboard-content-grid > .activity-panel {
   grid-column: 8 / span 5;
-  grid-row: 2 / span 3;
+  grid-row: 1 / span 2;
 }
 .dashboard-content-grid > .dashboard-shortcuts {
   align-self: stretch;
-  grid-column: 1 / span 7;
-  grid-row: 4;
+  grid-column: 1 / -1;
+  grid-row: 3;
   align-items: stretch;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
 }
 .dashboard-content-grid > .dashboard-shortcuts .shortcut-card {
   height: 100%;
-  min-height: 168px;
-  gap: 12px;
-  padding: 24px 18px;
+  min-height: 94px;
+  gap: 9px;
+  padding: 14px 17px;
 }
 .dashboard-content-grid > .dashboard-shortcuts .shortcut-icon {
-  width: 54px;
-  height: 54px;
-  flex-basis: 54px;
+  width: 42px;
+  height: 42px;
+  flex-basis: 42px;
 }
 .dashboard-content-grid > .dashboard-shortcuts .shortcut-card strong {
-  font-size: 18px;
+  font-size: 14px;
 }
 .dashboard-content-grid > .dashboard-shortcuts .shortcut-card small {
-  font-size: 15px;
+  font-size: 11px;
   white-space: normal;
 }
 .dashboard-content-grid .sales-bars {
@@ -5263,7 +5284,6 @@ h2 {
     grid-template-columns: 1fr;
   }
   .dashboard-content-grid > .sales-trend-panel,
-  .dashboard-content-grid > .sales-filter-panel,
   .dashboard-content-grid > .sales-comparison-panel,
   .dashboard-content-grid > .activity-panel,
   .dashboard-content-grid > .dashboard-shortcuts {
@@ -5274,7 +5294,6 @@ h2 {
     min-height: 92px;
     padding: 16px;
   }
-  .sales-filter-panel { align-items: flex-start; flex-direction: column; }
   .comparison-row { grid-template-columns: minmax(100px, 1fr) minmax(70px, 1.5fr); gap: 9px; }
   .comparison-value { grid-column: 2; }
 }

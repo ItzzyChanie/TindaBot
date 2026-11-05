@@ -184,7 +184,16 @@ export function OverviewLive({
             Here’s your shop at a glance. Pick up where your customers need you.
           </p>
         </div>
-        {children}
+        <div className="overview-hero-controls">
+          {children}
+          <label className="hero-date-filter">Date range
+            <select value={range} onChange={(event) => setRange(event.target.value as typeof range)}>
+              <option value="week">Last 7 days</option>
+              <option value="month">Last 30 days</option>
+              <option value="all">All time</option>
+            </select>
+          </label>
+        </div>
       </section>
       <section className="stats-grid dashboard-stats" aria-label="Shop summary">
         {stats.map((stat, index) => (
@@ -200,14 +209,6 @@ export function OverviewLive({
         ))}
       </section>
       <section className="overview-grid dashboard-content-grid">
-        <article className="panel sales-filter-panel" aria-label="Filter sales performance period">
-          <div><p className="eyebrow">REPORTING PERIOD</p><h2>Choose a date range</h2><p className="muted">Update the sales and comparison charts below.</p></div>
-          <label className="sales-range-select"><span className="sr-only">Sales date range</span>
-            <select value={range} onChange={(event) => setRange(event.target.value as typeof range)}>
-              <option value="week">Last 7 days</option><option value="month">Last 30 days</option><option value="all">All time</option>
-            </select>
-          </label>
-        </article>
         <article
           className="panel sales-trend-panel"
           aria-label="Paid sales performance"
