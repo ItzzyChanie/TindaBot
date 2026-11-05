@@ -1701,6 +1701,9 @@ h2 {
   color: var(--green);
   border-color: var(--focus);
 }
+.thread-header-actions .mobile-action-button svg {
+  display: none;
+}
 .thread-messages {
   gap: 14px;
   padding: 24px clamp(16px, 4vw, 52px);
@@ -2787,19 +2790,20 @@ h2 {
     font-size: 0;
   }
   .thread-header-actions .mobile-action-button {
-    width: 34px;
-    min-width: 34px;
-    min-height: 34px;
-    padding: 7px;
+    width: 42px;
+    min-width: 42px;
+    min-height: 42px;
+    padding: 8px;
   }
   .mobile-action-button svg {
-    width: 17px;
-    height: 17px;
+    display: block;
+    width: 24px;
+    height: 24px;
     fill: none;
     stroke: currentColor;
     stroke-linecap: round;
     stroke-linejoin: round;
-    stroke-width: 1.8;
+    stroke-width: 2.1;
   }
   .mobile-action-label {
     position: absolute;
