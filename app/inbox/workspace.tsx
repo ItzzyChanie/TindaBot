@@ -64,9 +64,41 @@ function customerDisplayName(customer: Customer | null | undefined) {
 
 function formatTime(value: string) {
   return new Intl.DateTimeFormat("en-PH", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
     hour: "numeric",
     minute: "2-digit",
+    timeZone: "Asia/Manila",
   }).format(new Date(value));
+}
+
+function manilaDateKey(value: Date) {
+  return new Intl.DateTimeFormat("en-CA", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    timeZone: "Asia/Manila",
+  }).format(value);
+}
+
+function formatConversationTime(value: string) {
+  const date = new Date(value);
+  const time = new Intl.DateTimeFormat("en-PH", {
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: "Asia/Manila",
+  }).format(date);
+  const today = new Date();
+  if (manilaDateKey(date) === manilaDateKey(today)) return time;
+  const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
+  if (manilaDateKey(date) === manilaDateKey(yesterday)) return "Yesterday";
+  return new Intl.DateTimeFormat("en-PH", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "Asia/Manila",
+  }).format(date);
 }
 
 function isSimulatedChannel(channel?: string) {
@@ -748,8 +780,8 @@ export function InboxWorkspace() {
                       {channelLabel(contact?.channel)}
                     </span>
                   </span>
-                  <time className="conversation-time">
-                    {formatTime(conversation.last_message_at)}
+                  <time className="conversation-time" dateTime={conversation.last_message_at} title={formatTime(conversation.last_message_at)}>
+                    {formatConversationTime(conversation.last_message_at)}
                   </time>
                 </button>
               );
@@ -850,7 +882,7 @@ export function InboxWorkspace() {
                         // eslint-disable-next-line @next/next/no-img-element -- Seller-uploaded chart images are served from Supabase Storage.
                         <img className="inbox-message-image" src={url} alt="Size chart" key={url} loading="lazy" />
                       ))}
-                      <time>{message.pending ? "Sending…" : formatTime(message.created_at)}</time>
+                      <time dateTime={message.created_at}>{message.pending ? "Sending…" : formatTime(message.created_at)}</time>
                     </div>
                   </article>
                 ))
