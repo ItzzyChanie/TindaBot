@@ -143,6 +143,7 @@ export function OverviewLive({
   }).format(now);
   const activeTrend = performance.trend ?? salesTrend;
   const maxSales = Math.max(0, ...activeTrend.map((day) => day.total));
+  const maxComparedSales = Math.max(performance.sales, performance.previous_sales, 1);
   const stats = [
     {
       label: "Open conversations",
@@ -199,6 +200,14 @@ export function OverviewLive({
         ))}
       </section>
       <section className="overview-grid dashboard-content-grid">
+        <article className="panel sales-filter-panel" aria-label="Filter sales performance period">
+          <div><p className="eyebrow">REPORTING PERIOD</p><h2>Choose a date range</h2><p className="muted">Update the sales and comparison charts below.</p></div>
+          <label className="sales-range-select"><span className="sr-only">Sales date range</span>
+            <select value={range} onChange={(event) => setRange(event.target.value as typeof range)}>
+              <option value="week">Last 7 days</option><option value="month">Last 30 days</option><option value="all">All time</option>
+            </select>
+          </label>
+        </article>
         <article
           className="panel sales-trend-panel"
           aria-label="Paid sales performance"
@@ -214,12 +223,7 @@ export function OverviewLive({
               <strong>{money(performance.sales)}</strong>
             </span>
           </div>
-          <label className="sales-range-select">Period
-            <select value={range} onChange={(event) => setRange(event.target.value as typeof range)}>
-              <option value="week">Last 7 days</option><option value="month">Last 30 days</option><option value="all">All time</option>
-            </select>
-          </label>
-          <p className="sales-comparison">{money(Math.abs(performance.sales - performance.previous_sales))} {performance.sales >= performance.previous_sales ? "more" : "less"} than previous period ({money(performance.previous_sales)} · {performance.previous_order_count} orders){performanceLoading ? " · Updating…" : ""}</p>
+          {performanceLoading && <p className="muted sales-loading">Updating selected period…</p>}
           {maxSales === 0 && (
             <p className="muted sales-empty-note">
               Paid sales will appear here after an order is marked paid or
@@ -254,6 +258,14 @@ export function OverviewLive({
             ))}
           </div>
           <div className="top-products"><strong>Top products</strong>{performance.top_products?.length ? performance.top_products.map((product) => <span key={product.name}>{product.name} · {product.quantity} sold · {money(product.revenue)}</span>) : <span className="muted">No collected sales in this period.</span>}</div>
+        </article>
+        <article className="panel sales-comparison-panel" aria-label="Compare selected sales period with previous equivalent period">
+          <div className="panel-heading"><div><p className="eyebrow">PERIOD COMPARISON</p><h2>Selected range vs previous equivalent</h2></div><span className={`comparison-delta ${performance.sales >= performance.previous_sales ? "positive" : "negative"}`}>{performance.sales >= performance.previous_sales ? "↑" : "↓"} {money(Math.abs(performance.sales - performance.previous_sales))}</span></div>
+          <p className="muted comparison-caption">{performanceLoading ? "Updating comparison…" : "Collected sales compared over equal-length periods."}</p>
+          <div className="comparison-chart" role="img" aria-label={`Selected period ${money(performance.sales)}; previous equivalent ${money(performance.previous_sales)}`}>
+            <div className="comparison-row current"><div className="comparison-label"><strong>Selected range</strong><span>{performance.order_count} orders</span></div><div className="comparison-track"><span style={{ width: `${(performance.sales / maxComparedSales) * 100}%` }} /></div><strong className="comparison-value">{money(performance.sales)}</strong></div>
+            <div className="comparison-row previous"><div className="comparison-label"><strong>Previous equivalent</strong><span>{performance.previous_order_count} orders</span></div><div className="comparison-track"><span style={{ width: `${(performance.previous_sales / maxComparedSales) * 100}%` }} /></div><strong className="comparison-value">{money(performance.previous_sales)}</strong></div>
+          </div>
         </article>
         <section className="dashboard-shortcuts" aria-label="Shop shortcuts">
           <Link className="shortcut-card" href="/catalog">
