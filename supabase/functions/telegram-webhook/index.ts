@@ -1,3 +1,4 @@
+import { createClient } from "@supabase/supabase-js";
 import {
   claimTelegramUpdate,
   finishTelegramUpdate,
@@ -10,6 +11,9 @@ import { sendToChannel } from "../_shared/channel-messaging.ts";
 
 const telegramToken = Deno.env.get("TELEGRAM_BOT_TOKEN");
 const webhookSecret = Deno.env.get("TELEGRAM_WEBHOOK_SECRET");
+const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
+  auth: { autoRefreshToken: false, persistSession: false },
+});
 const replyMarkup = {
   keyboard: [faq.questions.slice(0, 2), faq.questions.slice(2, 4), faq.questions.slice(4)],
   resize_keyboard: true,
@@ -29,10 +33,11 @@ type TelegramMessage = {
   };
   chat?: { id?: number };
   message_id?: number;
+  reply_to_message?: { message_id?: number };
   from?: { first_name?: string; last_name?: string; username?: string };
 };
 
-type TelegramUpdate = { update_id?: number; message?: TelegramMessage };
+type TelegramUpdate = { update_id?: number; message?: TelegramMessage; edited_message?: TelegramMessage };
 
 async function sendTelegramMessage(chatId: number, text: string): Promise<string | null> {
   if (!telegramToken) throw new Error("Telegram bot is not configured");
@@ -76,6 +81,7 @@ async function sendTelegramPhoto(chatId: number, photo: string, caption = ""): P
 async function processTelegramUpdate(
   updateId: number,
   message: TelegramMessage,
+  edited = false,
 ): Promise<void> {
   let claimed = false;
   let succeeded = false;
@@ -88,6 +94,33 @@ async function processTelegramUpdate(
 
     const chatId = message.chat?.id;
     if (!chatId) return;
+    if (edited) {
+      const channelMessageId = message.message_id === undefined ? null : String(message.message_id);
+      const editedText = typeof message.text === "string" ? message.text : typeof message.caption === "string" ? message.caption : "";
+      if (!channelMessageId || !editedText || editedText.length > 4000) {
+        succeeded = true;
+        return;
+      }
+      const { data: customer, error: customerError } = await supabase.from("customers")
+        .select("id").eq("channel", "telegram").eq("external_id", String(chatId)).maybeSingle();
+      if (customerError) throw customerError;
+      const { data: conversations, error: conversationError } = customer
+        ? await supabase.from("conversations").select("id").eq("customer_id", customer.id)
+        : { data: [], error: null };
+      if (conversationError) throw conversationError;
+      const conversationIds = (conversations ?? []).map((conversation) => conversation.id);
+      const { data: existing, error: lookupError } = conversationIds.length
+        ? await supabase.from("messages").select("id").in("conversation_id", conversationIds)
+          .eq("sender", "customer").contains("channel_message_ids", [channelMessageId]).maybeSingle()
+        : { data: null, error: null };
+      if (lookupError) throw lookupError;
+      if (existing) {
+        const { error } = await supabase.from("messages").update({ body: editedText, edited_at: new Date().toISOString() }).eq("id", existing.id);
+        if (error) throw error;
+      }
+      succeeded = true;
+      return;
+    }
     const photo = message.photo?.at(-1);
     const document = message.document;
     const hasProof = Boolean(photo?.file_id || document?.file_id);
@@ -123,6 +156,7 @@ async function processTelegramUpdate(
     const incoming = await handleIncoming("telegram", String(chatId), text, {
       name,
       channelMessageId: message.message_id === undefined ? undefined : String(message.message_id),
+      replyToChannelMessageId: message.reply_to_message?.message_id === undefined ? undefined : String(message.reply_to_message.message_id),
       productId: startPayload?.[1] ?? null,
       paymentProof: hasProof
         ? {
@@ -197,13 +231,14 @@ Deno.serve(async (request: Request) => {
     return new Response("Invalid JSON", { status: 400 });
   }
 
-  const message = update.message;
+  const edited = Boolean(update.edited_message);
+  const message = update.edited_message ?? update.message;
   if (!message?.chat?.id) return Response.json({ ok: true });
   if (!Number.isSafeInteger(update.update_id))
     return new Response("Invalid Telegram update ID", { status: 400 });
 
   const updateId = update.update_id as number;
-  const task = processTelegramUpdate(updateId, message);
+  const task = processTelegramUpdate(updateId, message, edited);
   const edgeRuntime = (
     globalThis as typeof globalThis & {
       EdgeRuntime?: { waitUntil(promise: Promise<unknown>): void };

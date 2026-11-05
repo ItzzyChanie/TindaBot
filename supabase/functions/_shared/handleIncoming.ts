@@ -19,6 +19,8 @@ type ProductRow = Omit<BrainProduct, "price" | "discount_value" | "variants" | "
 export type IncomingContext = {
   externalMessageId?: string;
   channelMessageId?: string;
+  replyToMessageId?: string;
+  replyToChannelMessageId?: string;
   name?: string | null;
   productId?: string | null;
   paymentProof?: {
@@ -193,12 +195,28 @@ export async function handleIncoming(
     if (error) throw error;
   }
 
+  let replyTarget: { id: string; body: string; unsent_at: string | null } | null = null;
+  if (context.replyToMessageId) {
+    const { data, error } = await supabase.from("messages")
+      .select("id, body, unsent_at").eq("id", context.replyToMessageId)
+      .eq("conversation_id", conversationId).maybeSingle();
+    if (error) throw error;
+    replyTarget = data;
+  } else if (context.replyToChannelMessageId) {
+    const { data, error } = await supabase.from("messages")
+      .select("id, body, unsent_at").eq("conversation_id", conversationId)
+      .contains("channel_message_ids", [context.replyToChannelMessageId]).maybeSingle();
+    if (error) throw error;
+    replyTarget = data;
+  }
   const { error: messageError } = await supabase.from("messages").insert({
     conversation_id: conversationId,
     sender: "customer",
     body: text,
     external_message_id: context.externalMessageId ?? null,
     channel_message_ids: context.channelMessageId ? [context.channelMessageId] : [],
+    reply_to_message_id: replyTarget?.id ?? null,
+    reply_to_text: replyTarget ? (replyTarget.unsent_at ? "Message was unsent" : replyTarget.body.slice(0, 180)) : null,
   });
   if (messageError?.code === "23505" && context.externalMessageId) {
     return { conversationId, reply: null, draft: null, duplicate: true };

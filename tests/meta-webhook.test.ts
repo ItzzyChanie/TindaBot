@@ -86,6 +86,20 @@ describe("Meta webhook security", () => {
     ]);
   });
 
+  it("extracts a customer's reply reference from a Meta message", () => {
+    const payload = {
+      object: "page",
+      entry: [{ id: "page-1", messaging: [{
+        sender: { id: "customer-1" },
+        message: { mid: "customer-mid", text: "Yes po", reply_to: { mid: "seller-mid" } },
+      }] }],
+    };
+    expect(extractMetaInboundMessages(payload)[0]).toMatchObject({
+      messageId: "customer-mid",
+      replyToMessageId: "seller-mid",
+    });
+  });
+
   it("formats Messenger and Instagram profile names with safe fallbacks", () => {
     expect(metaCustomerDisplayName("messenger", { first_name: "Ana", last_name: "Santos" })).toBe("Ana Santos");
     expect(metaCustomerDisplayName("instagram", { name: "Ana Santos", username: "ana" })).toBe("Ana Santos");

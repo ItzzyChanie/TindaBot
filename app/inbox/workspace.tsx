@@ -1059,7 +1059,7 @@ export function InboxWorkspace() {
                         <button className="message-icon-button" type="button" onClick={() => startReply(message)} aria-label="Reply to message" title="Reply">
                           <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M9 10 4 15l5 5"/><path d="M20 4v7a4 4 0 0 1-4 4H4"/></svg>
                         </button>
-                        {message.sender === "seller" && message.delivery_status === "sent" && !message.unsent_at && (
+                        {(["seller", "ai"].includes(message.sender)) && message.delivery_status === "sent" && !message.unsent_at && (
                           <div className="message-menu-wrap">
                             <button className="message-icon-button" type="button" onClick={() => setOpenMessageMenuId((current) => current === message.id ? null : message.id)} aria-label="More message actions" title="More">
                               <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg>

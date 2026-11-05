@@ -104,7 +104,11 @@ async function processEvents(events: MetaInboundMessage[]): Promise<void> {
       }
 
       const name = await getCustomerName(event.channel, senderId);
-      const incoming = await handleIncoming(event.channel, senderId, text, { externalMessageId: messageId, name });
+      const incoming = await handleIncoming(event.channel, senderId, text, {
+        externalMessageId: messageId,
+        replyToChannelMessageId: event.replyToMessageId ?? undefined,
+        name,
+      });
       if (incoming.duplicate) {
         ignoredReason = "duplicate_message_id";
         logMetaEvent(event, true, ignoredReason);

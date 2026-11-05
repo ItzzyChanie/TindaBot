@@ -39,7 +39,7 @@ Deno.serve(async (request: Request) => {
 
   const contentLength = Number(request.headers.get("content-length") ?? 0);
   if (contentLength > 4096) return json({ error: "Request is too large" }, 413, cors);
-  let body: { token?: unknown; text?: unknown; cursor?: unknown; product_id?: unknown };
+  let body: { token?: unknown; text?: unknown; cursor?: unknown; product_id?: unknown; action?: unknown; message_id?: unknown; reply_to_message_id?: unknown };
   try {
     const rawBody = await request.text();
     if (rawBody.length > 4096) return json({ error: "Request is too large" }, 413, cors);
@@ -56,14 +56,14 @@ Deno.serve(async (request: Request) => {
     return json({ error: "Invalid product" }, 400, cors);
   const text = typeof body.text === "string" ? body.text : "";
   if ([...text].length > 500) return json({ error: "Messages can be up to 500 characters" }, 413, cors);
-  const message = text.trim();
   let cursor: string | null = null;
   if (body.cursor !== undefined && body.cursor !== null) {
     if (typeof body.cursor !== "string" || !Number.isFinite(Date.parse(body.cursor)))
       return json({ error: "Invalid message cursor" }, 400, cors);
-    cursor = body.cursor;
+    cursor = new Date(body.cursor).toISOString();
   }
-
+  const syncCursor = new Date().toISOString();
+  const message = text.trim();
   const tokenHash = await sha256(token);
   const { data: session, error: sessionError } = await supabase
     .from("widget_sessions")
@@ -74,13 +74,35 @@ Deno.serve(async (request: Request) => {
 
   const { data: allowed, error: rateError } = await supabase.rpc("consume_widget_request", {
     p_token: tokenHash,
-    p_is_message: message.length > 0,
+    p_is_message: message.length > 0 && body.action === undefined,
   });
   if (rateError) {
     console.error("[widget-message] rate limit check failed", rateError.message);
     return json({ error: "Chat is temporarily unavailable. Please try again." }, 503, cors);
   }
   if (allowed !== true) return json({ error: "Sending messages too quickly. Please wait a moment." }, 429, cors);
+
+  const action = body.action === "edit" || body.action === "unsend" ? body.action : null;
+  if (body.action !== undefined && !action) return json({ error: "Unsupported message action" }, 400, cors);
+  if (action) {
+    if (typeof body.message_id !== "string" || !/^[0-9a-f-]{36}$/i.test(body.message_id))
+      return json({ error: "Invalid message" }, 400, cors);
+    const editedText = typeof body.text === "string" ? body.text.trim() : "";
+    if (action === "edit" && (!editedText || [...editedText].length > 500))
+      return json({ error: "Edited messages must be 1 to 500 characters" }, 400, cors);
+    const { data: target, error: targetError } = await supabase.from("messages")
+      .select("id, sender, body, image_urls, attachments, unsent_at")
+      .eq("id", body.message_id).eq("conversation_id", session.conversation_id).maybeSingle();
+    if (targetError || !target || target.sender !== "customer" || target.unsent_at)
+      return json({ error: "This message cannot be changed" }, 409, cors);
+    if ((target.image_urls?.length ?? 0) || (target.attachments?.length ?? 0))
+      return json({ error: "Only text messages can be edited or unsent" }, 409, cors);
+    const { error: updateError } = await supabase.from("messages").update(action === "edit"
+      ? { body: editedText, edited_at: new Date().toISOString() }
+      : { body: "", unsent_at: new Date().toISOString() }).eq("id", target.id);
+    if (updateError) return json({ error: "Could not update this message" }, 500, cors);
+    return json({ ok: true }, 200, cors);
+  }
 
   let conversationId = session.conversation_id as string;
   let productId = typeof body.product_id === "string" ? body.product_id : null;
@@ -95,7 +117,8 @@ Deno.serve(async (request: Request) => {
     if (contextError) throw contextError;
   }
   if (message) {
-    const incoming = await handleIncoming("web", session.customer_id, message, { name: "Web chat visitor", productId });
+    const replyToMessageId = typeof body.reply_to_message_id === "string" ? body.reply_to_message_id : undefined;
+    const incoming = await handleIncoming("web", session.customer_id, message, { name: "Web chat visitor", productId, replyToMessageId });
     conversationId = incoming.conversationId;
     if (conversationId !== session.conversation_id) {
       const { error: updateError } = await supabase.from("widget_sessions")
@@ -113,16 +136,16 @@ Deno.serve(async (request: Request) => {
     .select("id, sender, body, image_urls, attachments, reply_to_text, edited_at, unsent_at, created_at")
     .eq("conversation_id", conversationId)
     .in("sender", ["customer", "ai", "seller"])
-    .order("created_at", { ascending: true })
+    .order("created_at", { ascending: false })
     .limit(100);
-  if (cursor) query = query.gte("created_at", cursor);
+  if (cursor) query = query.or(`created_at.gte.${cursor},edited_at.gte.${cursor},unsent_at.gte.${cursor}`);
   const { data: messages, error: messagesError } = await query;
   if (messagesError) {
     console.error("[widget-message] messages could not be loaded", messagesError.message);
     return json({ error: "Could not load chat messages. Please try again." }, 500, cors);
   }
 
-  const messageRows = messages ?? [];
+  const messageRows = [...(messages ?? [])].reverse();
   const attachmentRows = messageRows.flatMap((message) => (message.attachments ?? []) as MessageAttachment[]);
   const { data: signedRows, error: signingError } = attachmentRows.length
     ? await supabase.storage.from(ATTACHMENT_BUCKET).createSignedUrls(
@@ -142,6 +165,6 @@ Deno.serve(async (request: Request) => {
 
   return json({
     messages: messagesWithSignedAttachments,
-    cursor: messages?.at(-1)?.created_at ?? cursor,
+    cursor: syncCursor,
   }, 200, cors);
 });

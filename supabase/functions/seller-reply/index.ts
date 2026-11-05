@@ -157,8 +157,8 @@ Deno.serve(async (request: Request) => {
       .eq("id", actionMessageId)
       .eq("conversation_id", conversation.id)
       .maybeSingle();
-    if (targetError || !target || target.sender !== "seller" || target.delivery_status !== "sent" || target.unsent_at) {
-      return Response.json({ error: "This message can no longer be changed" }, { status: 409, headers: cors ?? {} });
+    if (targetError || !target || !["seller", "ai"].includes(target.sender) || target.delivery_status !== "sent" || target.unsent_at) {
+      return Response.json({ error: "Only sent seller and bot replies can be changed" }, { status: 409, headers: cors ?? {} });
     }
     if ((target.attachments?.length ?? 0) > 0 || (target.image_urls?.length ?? 0) > 0) {
       return Response.json({ error: "Edit and unsend are available for text-only replies" }, { status: 409, headers: cors ?? {} });

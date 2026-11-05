@@ -38,6 +38,7 @@ export type MetaInboundMessage = {
   senderId: string | null;
   recipientId: string | null;
   messageId: string | null;
+  replyToMessageId: string | null;
   text?: string;
   hasAttachments: boolean;
   ignoredReason: string | null;
@@ -81,6 +82,8 @@ export function extractMetaInboundMessages(
       const senderId = typeof sender === "string" ? sender : null;
       const recipientId = typeof recipient === "string" ? recipient : null;
       const messageId = typeof msg?.mid === "string" && msg.mid ? msg.mid : null;
+      const replyTo = msg?.reply_to && typeof msg.reply_to === "object" ? msg.reply_to as Record<string, unknown> : null;
+      const replyToMessageId = typeof replyTo?.mid === "string" && replyTo.mid ? replyTo.mid : null;
       const eventType = msg ? "message" : ["postback", "reaction", "read", "delivery", "referral", "optin", "account_linking", "handover"].find((key) => key in item) ?? "unknown";
       let ignoredReason: string | null = null;
       if (!msg) ignoredReason = "unsupported_event_type";
@@ -104,6 +107,7 @@ export function extractMetaInboundMessages(
         senderId,
         recipientId,
         messageId,
+        replyToMessageId,
         text: typeof msg?.text === "string" ? msg.text : undefined,
         hasAttachments: Array.isArray(msg?.attachments) && msg.attachments.length > 0,
         ignoredReason,
@@ -121,6 +125,7 @@ export function extractMetaInboundMessages(
         senderId: null,
         recipientId: null,
         messageId: null,
+        replyToMessageId: null,
         hasAttachments: false,
         ignoredReason: "unsupported_field_event",
       });
