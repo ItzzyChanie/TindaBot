@@ -62,3 +62,7 @@ import_map = "./functions/import_map.json"
 [functions.widget-message]
 verify_jwt = false
 import_map = "./functions/import_map.json"
+
+[functions.notification-scheduler]
+verify_jwt = false
+import_map = "./functions/import_map.json"

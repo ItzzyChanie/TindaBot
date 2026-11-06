@@ -46,6 +46,16 @@ export type NotifySellerResult = {
   error?: string;
 };
 
+export type ScheduledNotificationResult = {
+  ok: boolean;
+  attempted: number;
+  sent: number;
+  suppressed: number;
+  failed: number;
+  summary: DeliveryStatus | "not_applicable";
+  error?: string;
+};
+
 function clean(value: unknown, limit = 100): string {
   return String(value ?? "")
     .replace(/[\r\n\u0000-\u001f\u007f]/g, " ")
@@ -332,7 +342,14 @@ export async function sendQuietHoursSummary(client: SupabaseClient = supabase): 
       .reduce((total, [, value]) => total + value.group_count, 0);
     const orders = pending.filter(([, value]) => value.type === "new_order")
       .reduce((total, [, value]) => total + value.group_count, 0);
-    const summary = `While you were away: ${needsYou} need you, ${orders} new order${orders === 1 ? "" : "s"}. ${Deno.env.get("APP_URL")?.replace(/\/$/, "") ?? ""}/inbox`;
+    const lowStock = pending.filter(([, value]) => value.type === "low_stock").length;
+    const windows = pending.filter(([, value]) => value.type === "window_closing").length;
+    const otherAlerts = pending.filter(([, value]) => !["needs_seller", "new_order", "low_stock", "window_closing"].includes(value.type)).length;
+    const parts = [`${needsYou} need you`, `${orders} new order${orders === 1 ? "" : "s"}`];
+    if (lowStock) parts.push(`${lowStock} low-stock alert${lowStock === 1 ? "" : "s"}`);
+    if (windows) parts.push(`${windows} Messenger window${windows === 1 ? "" : "s"}`);
+    if (otherAlerts) parts.push(`${otherAlerts} other alert${otherAlerts === 1 ? "" : "s"}`);
+    const summary = `While you were away: ${parts.join(", ")}. ${Deno.env.get("APP_URL")?.replace(/\/$/, "") ?? ""}/inbox`;
     const delivery = await telegramSend(settings.telegram_chat_id, summary);
     if (!delivery.ok) {
       result.telegram = "failed";
@@ -349,6 +366,92 @@ export async function sendQuietHoursSummary(client: SupabaseClient = supabase): 
   } catch (error) {
     result.error = safeError(error);
     console.error("[notify] Quiet-hours summary failed", result.error);
+    return result;
+  }
+}
+
+/** Delivers database-created low-stock and window-closing alerts from a scheduled Edge Function. */
+export async function runScheduledNotifications(
+  client: SupabaseClient = supabase,
+): Promise<ScheduledNotificationResult> {
+  const result: ScheduledNotificationResult = {
+    ok: false, attempted: 0, sent: 0, suppressed: 0, failed: 0, summary: "not_applicable",
+  };
+  try {
+    const settings = await loadSettings(client);
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const { data: notifications, error } = await client.from("notifications")
+      .select("id, type, title, body, link, conversation_id, order_id, resolved_at, created_at")
+      .in("type", ["low_stock", "window_closing"])
+      .is("resolved_at", null)
+      .gte("created_at", since)
+      .order("created_at", { ascending: true })
+      .limit(100);
+    if (error) throw error;
+
+    for (const notification of notifications ?? []) {
+      const { data: previous, error: previousError } = await client.from("notification_deliveries")
+        .select("status").eq("notification_id", notification.id).eq("channel", "telegram")
+        .order("created_at", { ascending: false }).limit(1).maybeSingle();
+      if (previousError) throw previousError;
+      if (previous && previous.status !== "rate_limited") continue;
+
+      result.attempted += 1;
+      const preferences = settings.event_prefs?.[notification.type] ?? { telegram: true };
+      let status: DeliveryStatus;
+      let reason: string | null = null;
+      if (!settings.telegram_enabled || !settings.telegram_chat_id || preferences.telegram === false) {
+        status = "suppressed_prefs";
+        reason = !settings.telegram_enabled ? "Telegram alerts are disabled" : !settings.telegram_chat_id ? "Telegram chat is not linked" : "Event Telegram preference is off";
+      } else if (inQuietHours(settings) || (settings.quiet_hours_enabled && inQuietHours(settings, new Date(notification.created_at)))) {
+        status = "suppressed_quiet_hours";
+        reason = "Quiet hours are active";
+      } else if (!Deno.env.get("APP_URL")) {
+        status = "failed";
+        reason = "APP_URL is not configured";
+      } else {
+        const hourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+        const { count, error: countError } = await client.from("notification_deliveries")
+          .select("id", { count: "exact", head: true }).eq("channel", "telegram").eq("status", "sent")
+          .gte("created_at", hourAgo);
+        if (countError) throw countError;
+        if ((count ?? 0) >= 20) {
+          status = "rate_limited";
+          reason = "Hourly Telegram alert cap reached";
+        } else {
+          const appUrl = (Deno.env.get("APP_URL") ?? "").replace(/\/$/, "");
+          const link = typeof notification.link === "string" && notification.link.startsWith("/")
+            ? `${appUrl}${notification.link}`
+            : notification.link;
+          const delivery = await telegramSend(settings.telegram_chat_id, `${clean(notification.title, 160)}\n${clean(notification.body, 240)}${link ? `\n${link}` : ""}`);
+          status = delivery.ok ? "sent" : "failed";
+          reason = delivery.ok ? null : delivery.reason;
+          if (!delivery.ok && delivery.permanent) {
+            await createPausedNotification(client, settings, delivery.reason);
+            settings.telegram_enabled = false;
+          }
+        }
+      }
+      try {
+        await recordDelivery(client, notification.id, "telegram", status, reason);
+      } catch (deliveryError) {
+        console.error("[notify] Could not record scheduled Telegram delivery", safeError(deliveryError));
+        result.failed += 1;
+        continue;
+      }
+      if (status === "sent") result.sent += 1;
+      else if (status === "failed") result.failed += 1;
+      else result.suppressed += 1;
+    }
+
+    const summary = await sendQuietHoursSummary(client);
+    result.summary = summary.telegram;
+    result.ok = summary.ok && result.failed === 0;
+    if (!summary.ok) result.error = summary.error;
+    return result;
+  } catch (error) {
+    result.error = safeError(error);
+    console.error("[notify] Scheduled notification check failed", result.error);
     return result;
   }
 }
