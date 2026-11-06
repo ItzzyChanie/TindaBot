@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { quote, type QuotePromo } from "@/supabase/functions/_shared/quote";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
-type Variant = { id: string; size: string; stock: number; reserved_stock: number };
+type Variant = { id: string; size: string; stock: number; reserved_stock: number; price: number | null };
 type Product = {
   id: string;
   name: string;
@@ -104,6 +104,7 @@ export function CatalogManager({
     additionalImages: "",
     videoUrl: "",
   });
+  const editingProduct = products.find((product) => product.id === editingId);
   useEffect(() => {
     if (initialName)
       document
@@ -117,11 +118,14 @@ export function CatalogManager({
           price: Number(form.price) || 0,
           discount_type: form.discountType || null,
           discount_value: Number(form.discountValue) || null,
+          discount_starts: editingProduct?.discount_starts ?? null,
+          discount_ends: editingProduct?.discount_ends ?? null,
         },
         previewQty,
         new Date(),
+        editingProduct?.promos ?? [],
       ),
-    [form.price, form.discountType, form.discountValue, previewQty],
+    [form.price, form.discountType, form.discountValue, previewQty, editingProduct],
   );
   const visibleProducts = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase();
@@ -169,7 +173,7 @@ export function CatalogManager({
       description: product.description,
       price: String(product.price),
       sizes: product.variants
-        .map((variant) => `${variant.size}:${variant.stock}`)
+        .map((variant) => `${variant.size}:${variant.stock}${variant.price == null ? "" : `:${variant.price}`}`)
         .join(", "),
       active: product.active,
       discountType: product.discount_type ?? "",
@@ -263,11 +267,15 @@ export function CatalogManager({
       };
       let productId = editingId;
       if (productId) {
-        const { error: updateError } = await supabase
+        const { data: updatedProduct, error: updateError } = await supabase
           .from("products")
           .update(fields)
-          .eq("id", productId);
+          .eq("id", productId)
+          .select("id,price")
+          .maybeSingle();
         if (updateError) throw updateError;
+        if (!updatedProduct || Number(updatedProduct.price) !== Number(fields.price))
+          throw new Error("The product price was not saved. Refresh and try again po.");
       } else {
         const { data, error: insertError } = await supabase
           .from("products")
@@ -278,13 +286,14 @@ export function CatalogManager({
         productId = data.id;
       }
       const variants = form.sizes.split(",").map((entry) => {
-        const [size, stock] = entry.split(":");
-        if (!size?.trim() || !/^\d+$/.test(stock?.trim() ?? ""))
-          throw new Error("Enter sizes as Size:stock, for example S:4, M:2.");
+        const [size, stock, price] = entry.split(":").map((part) => part.trim());
+        if (!size || !/^\d+$/.test(stock ?? "") || (price && (!/^\d+(\.\d{1,2})?$/.test(price) || Number(price) < 0)))
+          throw new Error("Enter sizes as Size:stock[:price], for example S:4:350, M:2. Leave price blank to use the product price.");
         return {
           product_id: productId,
-          size: size.trim(),
+          size,
           stock: Number(stock),
+          price: price ? Number(price) : null,
         };
       });
       const savedId = productId;
@@ -301,6 +310,15 @@ export function CatalogManager({
             .insert(variant);
           if (insertVariantError) throw insertVariantError;
         } else {
+          if (previous.price !== variant.price) {
+            const { data: priceUpdated, error: priceError } = await supabase.rpc(
+              "set_variant_price",
+              { p_variant: previous.id, p_price: variant.price },
+            );
+            if (priceError) throw priceError;
+            if (!priceUpdated)
+              throw new Error(`Could not update the ${variant.size} price. Refresh and try again po.`);
+          }
           const delta = variant.stock - previous.stock;
           if (delta !== 0) {
             const { data: stock, error: stockError } = await supabase.rpc(
@@ -334,8 +352,9 @@ export function CatalogManager({
       const { data: refreshedProducts, error: refreshError } = await supabase
         .from("products")
         .select(
-          "*, variants(id,size,stock,reserved_stock), promos(label,kind,min_qty,value,starts_at,ends_at,active)",
+        "*, variants(id,size,stock,reserved_stock,price), promos(label,kind,min_qty,value,starts_at,ends_at,active)",
         )
+        .order("updated_at", { ascending: false })
         .order("created_at", { ascending: false });
       if (refreshError)
         setNotice("Saved po. Refresh this page to update the product list.");
@@ -344,7 +363,11 @@ export function CatalogManager({
       window.history.replaceState(null, "", "/catalog");
     } catch (cause) {
       setError(
-        cause instanceof Error ? cause.message : "Could not save this product.",
+        cause instanceof Error
+          ? cause.message
+          : typeof cause === "object" && cause !== null && "message" in cause
+            ? String(cause.message)
+            : "Could not save this product.",
       );
     } finally {
       setBusy(false);
@@ -489,6 +512,7 @@ export function CatalogManager({
                       {product.variants.map((variant) => (
                         <span className="size-chip" key={variant.id}>
                           <b>{variant.size}</b>
+                          <span>{currency(variant.price ?? product.price)}</span>
                           <span>{variant.stock} in stock</span>
                           <span>{variant.reserved_stock ?? 0} reserved</span>
                           <button
@@ -626,7 +650,7 @@ export function CatalogManager({
             )}
           </div>
           <label>
-            Sizes and stock <small>Format: S:4, M:2 or One size:8</small>
+            Sizes, stock, and optional price <small>Format: S:4:350, M:2; omitted price uses the product price</small>
             <input
               required
               value={form.sizes}

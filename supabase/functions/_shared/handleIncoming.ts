@@ -13,7 +13,7 @@ const supabase = createClient(
 type ProductRow = Omit<BrainProduct, "price" | "discount_value" | "variants" | "promos"> & {
   price: number | string;
   discount_value: number | string | null;
-  variants: Array<BrainProduct["variants"][number] & { stock: number | string }>;
+  variants: Array<BrainProduct["variants"][number] & { stock: number | string; price: number | string | null }>;
   promos: Array<QuotePromo & { value: number | string }>;
 };
 
@@ -282,14 +282,14 @@ export async function handleIncoming(
 
   const { data: productRows, error: productsError } = await supabase
     .from("products")
-    .select("id, name, aliases, description, image_url, colors, material, fabric_details, fit_notes, size_guidance, restock_note, model_details, photos_are_actual, additional_images, video_url, price, active, discount_type, discount_value, discount_starts, discount_ends, variants(id, size, stock), promos(label, kind, min_qty, value, starts_at, ends_at, active)")
+    .select("id, name, aliases, description, image_url, colors, material, fabric_details, fit_notes, size_guidance, restock_note, model_details, photos_are_actual, additional_images, video_url, price, active, discount_type, discount_value, discount_starts, discount_ends, variants(id, size, stock, price), promos(label, kind, min_qty, value, starts_at, ends_at, active)")
     .eq("active", true);
   if (productsError) throw productsError;
   const products = ((productRows ?? []) as unknown as ProductRow[]).map((row) => ({
     ...row,
     price: Number(row.price),
     discount_value: row.discount_value === null ? null : Number(row.discount_value),
-    variants: (row.variants ?? []).map((variant) => ({ ...variant, stock: Number(variant.stock) })),
+    variants: (row.variants ?? []).map((variant) => ({ ...variant, stock: Number(variant.stock), price: variant.price === null ? null : Number(variant.price) })),
     promos: (row.promos ?? []).map((promo) => ({ ...promo, value: Number(promo.value) })),
   })) as BrainProduct[];
 
@@ -412,7 +412,7 @@ export async function handleIncoming(
         notifySellerSafely({ type: "needs_seller", conversationId, customerName, channel, dedupeKey: `needs_seller:${conversationId}` });
         return { conversationId, reply: aiMode === "auto" ? labelAutoReply(message, aiMode) : null, draft: aiMode === "suggest" ? message : null };
       }
-      const pricing = quote(product, quantity, new Date(), product.promos);
+      const pricing = quote(product, quantity, new Date(), product.promos, variant.price);
       const shipping = Number(provisionalOrder.shipping);
       const total = Math.round((pricing.total + shipping + Number.EPSILON) * 100) / 100;
       if (Math.round(Number(provisionalOrder.total) * 100) !== Math.round(total * 100)) {
@@ -577,7 +577,7 @@ export async function handleIncoming(
             missedRequest = true;
           }
         } else {
-          const pricing = quote(product, quantity, new Date(), product.promos);
+          const pricing = quote(product, quantity, new Date(), product.promos, variant.price);
           const rates = object(settings.shipping_rates) as Record<string, number>;
           const region = typeof order.region === "string" ? order.region : null;
           const freeMinimum = Number(object(settings.bot_options).free_shipping_minimum ?? 0);

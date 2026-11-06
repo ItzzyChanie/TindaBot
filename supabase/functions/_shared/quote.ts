@@ -41,9 +41,10 @@ export function quote(
   quantity: number,
   now: Date,
   promos: QuotePromo[] = [],
+  variantPrice?: number | null,
 ) {
   const qty = Math.max(0, Math.floor(quantity));
-  const price = Math.max(0, Number(product.price) || 0);
+  const price = Math.max(0, Number(variantPrice ?? product.price) || 0);
   const subtotal = roundLine(price * qty);
   const options: { total: number; label: string | null }[] = [
     { total: subtotal, label: null },

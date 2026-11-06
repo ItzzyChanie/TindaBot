@@ -188,6 +188,50 @@ describe("grounded incoming conversation brain", () => {
     expect(result.reply).not.toContain("Sabihin po ang area");
   });
 
+  it.each([
+    "No",
+    "no po",
+    "hindi",
+    "hindi po",
+    "not now",
+    "not now po",
+    "wag muna",
+    "huwag muna po",
+    "wag muna ngayon",
+    "hindi muna sa ngayon",
+  ])("acknowledges a reservation decline in context (%s)", async (message) => {
+    const result = await runIncomingBrain({
+      ...baseInput,
+      message,
+      pending: {
+        last_product: { product_id: product.id, size: "S", quantity: 1 },
+        clarification: { kind: "reserve_decision", product_id: product.id },
+      },
+    });
+
+    expect(result.reply).toContain("Hindi muna natin itutuloy ang reservation");
+    expect(result.needsSeller).toBe(false);
+    expect(result.pending.clarification).toBeUndefined();
+  });
+
+  it.each(["Thank you po", "salamat po", "thanks", "okay po"])(
+    "does not reply to a closing phrase after a reserve prompt (%s)",
+    async (message) => {
+      const result = await runIncomingBrain({
+        ...baseInput,
+        message,
+        pending: {
+          last_product: { product_id: product.id, size: "S", quantity: 1 },
+          clarification: { kind: "reserve_decision", product_id: product.id },
+        },
+      });
+
+      expect(result.action).toBe("none");
+      expect(result.reply).toBeNull();
+      expect(result.pending.clarification).toBeUndefined();
+    },
+  );
+
   it("turns a short reserve request into a stock checked order confirmation", async () => {
     const result = await runIncomingBrain({
       ...baseInput,
@@ -365,6 +409,7 @@ describe("grounded incoming conversation brain", () => {
 
     expect(result.action).toBe("reply");
     expect(result.reply).toContain("₱99.99");
+    expect(result.reply).not.toContain("Original price po ay");
     expect(result.quotedPriceMatches).toBe(true);
   });
 
@@ -425,6 +470,46 @@ describe("grounded incoming conversation brain", () => {
     });
 
     expect(result.reply).toContain("980.00");
+    expect(result.quotedPriceMatches).toBe(true);
+  });
+
+  it("uses the selected size price in a chat quote", async () => {
+    const variablePriceProduct: BrainProduct = {
+      ...product,
+      price: 350,
+      variants: [
+        { id: "variant-s", size: "S", stock: 5, price: 350 },
+        { id: "variant-m", size: "M", stock: 5, price: 425 },
+      ],
+    };
+    const result = await runIncomingBrain({
+      ...baseInput,
+      message: "How much is Isla blouse, size M?",
+      products: [variablePriceProduct],
+    }, ai(understanding({ size: "M", quantity: 1, location: null })));
+
+    expect(result.reply).toContain("425.00");
+    expect(result.quotedPriceMatches).toBe(true);
+  });
+
+  it("applies the active product discount to the selected size price", async () => {
+    const variablePriceProduct: BrainProduct = {
+      ...product,
+      price: 1090,
+      discount_type: "percent",
+      discount_value: 50,
+      variants: [{ id: "variant-s", size: "S", stock: 5, price: 900 }],
+    };
+    const result = await runIncomingBrain({
+      ...baseInput,
+      message: "magkano po sa Isla blouse, small size?",
+      products: [variablePriceProduct],
+    }, ai(understanding({ size: "S", quantity: 1, quantities_mentioned: [], location: null })));
+
+    expect(result.reply).toContain("450.00");
+    expect(result.reply).not.toContain("545.00");
+    expect(result.reply).toContain("Original price po ay ₱900.00");
+    expect(result.reply).toContain("tipid na ₱450.00");
     expect(result.quotedPriceMatches).toBe(true);
   });
 
@@ -668,8 +753,8 @@ describe("grounded incoming conversation brain", () => {
     });
     expect(result.reply).toContain("Isla Linen Top");
     expect(result.reply).toContain("Habi Ribbed Tank Top");
-    expect(result.reply).toContain("S (5 available)");
-    expect(result.reply).toContain("M (sold out)");
+    expect(result.reply).toContain("S — ₱33.33 (5 available)");
+    expect(result.reply).toContain("M — ₱33.33 (sold out)");
     expect(result.reply).toContain("33.33");
     expect(result.reply).toContain("120.00");
   });

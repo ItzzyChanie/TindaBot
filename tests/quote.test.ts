@@ -13,6 +13,32 @@ const promo = (overrides = {}) => ({
 describe("quote", () => {
   it("quotes without an offer", () =>
     expect(quote({ price: 100 }, 2, now).total).toBe(200));
+  it("uses a size price override when provided", () =>
+    expect(quote({ price: 350 }, 2, now, [], 425).total).toBe(850));
+  it("falls back to the product price when a size has no override", () =>
+    expect(quote({ price: 350 }, 2, now, [], null).total).toBe(700));
+  it("applies the product offer to the selected size price", () =>
+    expect(
+      quote(
+        { price: 350, discount_type: "percent", discount_value: 10 },
+        2,
+        now,
+        [],
+        425,
+      ).total,
+    ).toBe(765));
+  it("uses an edited base price with a fixed discount", () =>
+    expect(
+      quote(
+        { price: 400, discount_type: "fixed", discount_value: 25 },
+        2,
+        now,
+      ).total,
+    ).toBe(750));
+  it("uses an edited base price with a quantity promo", () =>
+    expect(quote({ price: 400 }, 3, now, [promo()]).total).toBe(1080));
+  it("applies quantity promos to a selected size override", () =>
+    expect(quote({ price: 400 }, 3, now, [promo()], 450).total).toBe(1215));
   it("applies a percent discount", () =>
     expect(
       quote(

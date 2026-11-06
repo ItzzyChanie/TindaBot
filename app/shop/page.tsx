@@ -11,6 +11,7 @@ import tindabotLogo from "@/app/logo/TindaBot-logo.png";
 
 type PublicSize = {
   size: string;
+  price: number | null;
   availability: "in_stock" | "low_stock" | "sold_out";
 };
 type PublicProduct = {
@@ -219,18 +220,27 @@ export default function ShopPage() {
         ) : (
           <section className="shop-grid" aria-label="Shop catalog">
             {filtered.map((product) => {
-              const pricing = quote(
-                product,
-                1,
-                new Date(),
-                product.promos ?? [],
-              );
-              const listPrice = quote(product, 1, new Date()).subtotal;
+              const sizes = product.sizes ?? [];
+              const prices = (product.sizes ?? []).map((size) => ({
+                offer: quote(product, 1, new Date(), product.promos ?? [], size.price),
+                list: quote(product, 1, new Date(), [], size.price).subtotal,
+              }));
+              const bestPrice = prices.length
+                ? prices.reduce((lowest, current) => current.offer.total < lowest.offer.total ? current : lowest)
+                : null;
+              const pricing = bestPrice
+                ? bestPrice.offer
+                : quote(product, 1, new Date(), product.promos ?? []);
+              const listPrice = bestPrice
+                ? bestPrice.list
+                : quote(product, 1, new Date()).subtotal;
+              const hasSizePriceDifferences = new Set(
+                sizes.map((size) => size.price ?? product.price),
+              ).size > 1;
               const badges = (product.promos ?? []).filter(
                 (promo) =>
                   quote(product, promo.min_qty, new Date(), [promo]).saved > 0,
               );
-              const sizes = product.sizes ?? [];
               const available = sizes.some(
                 (size) => size.availability !== "sold_out",
               );
@@ -267,6 +277,7 @@ export default function ShopPage() {
                       {product.description || " "}
                     </p>
                     <div className="shop-price-row">
+                      {hasSizePriceDifferences && <small>From</small>}
                       <strong>{currency(pricing.unit)}</strong>
                       {pricing.saved > 0 && <del>{currency(listPrice)}</del>}
                       {pricing.label && (
@@ -296,6 +307,7 @@ export default function ShopPage() {
                           key={item.size}
                         >
                           <b>{item.size}</b>
+                          <small>{currency(item.price ?? product.price)}</small>
                           <small>
                             {item.availability === "sold_out"
                               ? "Sold out"
