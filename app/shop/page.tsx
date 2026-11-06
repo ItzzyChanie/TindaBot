@@ -5,7 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getSupabasePublicEnv } from "@/lib/supabase/env";
-import { quote, type QuotePromo } from "@/supabase/functions/_shared/quote";
+import { formatOfferDateTime, offerTiming, quote, type QuotePromo } from "@/supabase/functions/_shared/quote";
 import { ChatWidget } from "@/app/chat/chat-widget";
 import tindabotLogo from "@/app/logo/TindaBot-logo.png";
 
@@ -37,12 +37,18 @@ export default function ShopPage() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [currentTime, setCurrentTime] = useState(() => new Date());
   const [chatSession, setChatSession] = useState<{
     productId: string;
     sessionId: string;
   } | null>(null);
   const [chatOpen, setChatOpen] = useState(false);
   const closeTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setCurrentTime(new Date()), 10_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   function openChat(productId: string) {
     if (closeTimerRef.current !== null)
@@ -222,24 +228,27 @@ export default function ShopPage() {
             {filtered.map((product) => {
               const sizes = product.sizes ?? [];
               const prices = (product.sizes ?? []).map((size) => ({
-                offer: quote(product, 1, new Date(), product.promos ?? [], size.price),
-                list: quote(product, 1, new Date(), [], size.price).subtotal,
+                offer: quote(product, 1, currentTime, product.promos ?? [], size.price),
+                list: quote(product, 1, currentTime, [], size.price).subtotal,
               }));
               const bestPrice = prices.length
                 ? prices.reduce((lowest, current) => current.offer.total < lowest.offer.total ? current : lowest)
                 : null;
               const pricing = bestPrice
                 ? bestPrice.offer
-                : quote(product, 1, new Date(), product.promos ?? []);
+                : quote(product, 1, currentTime, product.promos ?? []);
               const listPrice = bestPrice
                 ? bestPrice.list
-                : quote(product, 1, new Date()).subtotal;
+                : quote(product, 1, currentTime).subtotal;
               const hasSizePriceDifferences = new Set(
                 sizes.map((size) => size.price ?? product.price),
               ).size > 1;
+              const timing = offerTiming(product.discount_starts, product.discount_ends, currentTime);
+              const offerStart = formatOfferDateTime(product.discount_starts);
+              const offerEnd = formatOfferDateTime(product.discount_ends);
               const badges = (product.promos ?? []).filter(
                 (promo) =>
-                  quote(product, promo.min_qty, new Date(), [promo]).saved > 0,
+                  quote(product, promo.min_qty, currentTime, [promo]).saved > 0,
               );
               const available = sizes.some(
                 (size) => size.availability !== "sold_out",
@@ -277,6 +286,16 @@ export default function ShopPage() {
                       {product.description || " "}
                     </p>
                     <div className="shop-price-row">
+                      {product.discount_type && !timing.ended && offerStart && offerEnd && (
+                        <small className={`offer-schedule${timing.active && timing.daysLeft !== null && timing.daysLeft <= 3 ? " offer-ending-soon" : ""}`}>
+                          {timing.upcoming ? "Offer starts " : "Offer "}{offerStart} – {offerEnd}
+                          {timing.active && timing.daysLeft !== null && timing.daysLeft <= 3 && (
+                            <b className="offer-urgency">
+                              {timing.daysLeft <= 1 ? "Ends today. Buy now!" : `${timing.daysLeft} days left. Buy now!`}
+                            </b>
+                          )}
+                        </small>
+                      )}
                       {hasSizePriceDifferences && <small>From</small>}
                       <strong>{currency(pricing.unit)}</strong>
                       {pricing.saved > 0 && <del>{currency(listPrice)}</del>}

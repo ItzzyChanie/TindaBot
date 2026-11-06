@@ -20,20 +20,48 @@ function roundLine(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }
 
-function manilaDay(value: Date | string): string {
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Manila",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(date);
+function boundary(value: string | null | undefined, isEnd: boolean): number | null {
+  if (!value) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const time = isEnd ? "23:59:59.999" : "00:00:00.000";
+    const parsed = new Date(`${value}T${time}+08:00`).getTime();
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  const parsed = new Date(value).getTime();
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function withinDates(now: Date, starts?: string | null, ends?: string | null) {
-  const today = manilaDay(now);
-  return (!starts || today >= manilaDay(starts)) && (!ends || today <= manilaDay(ends));
+  const current = now.getTime();
+  const start = boundary(starts, false);
+  const end = boundary(ends, true);
+  return (start === null || current >= start) && (end === null || current <= end);
+}
+
+export function offerTiming(starts?: string | null, ends?: string | null, now = new Date()) {
+  const start = boundary(starts, false);
+  const end = boundary(ends, true);
+  const current = now.getTime();
+  const active = (start === null || current >= start) && (end === null || current <= end);
+  const upcoming = start !== null && current < start;
+  const daysLeft = end !== null && current <= end
+    ? Math.ceil((end - current) / 86_400_000)
+    : null;
+  return { active, upcoming, ended: end !== null && current > end, startsAt: start, endsAt: end, daysLeft };
+}
+
+export function formatOfferDateTime(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const date = new Date(value.length === 10 ? `${value}T00:00:00+08:00` : value);
+  if (Number.isNaN(date.getTime())) return null;
+  return new Intl.DateTimeFormat("en-PH", {
+    timeZone: "Asia/Manila",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date) + " PHT";
 }
 
 export function quote(

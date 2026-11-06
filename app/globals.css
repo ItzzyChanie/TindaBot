@@ -3072,6 +3072,31 @@ h2 {
   color: var(--muted);
   font-size: 10px;
 }
+.offer-schedule {
+  display: grid;
+  max-width: 210px;
+  padding: 5px 7px;
+  border-radius: 7px;
+  background: #e4f3e8;
+  color: #245c39;
+  font-size: 10px;
+  line-height: 1.35;
+  text-align: right;
+  white-space: normal;
+}
+.offer-urgency {
+  color: inherit;
+  font-weight: 700;
+}
+.offer-schedule.offer-ending-soon {
+  background: #fbe3e0;
+  color: #8f2922;
+}
+.discount-window-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
 .stock-status,
 .inactive-status {
   color: var(--green);
@@ -4085,6 +4110,12 @@ h2 {
 .shop-price-row del {
   color: var(--muted);
   font-size: 12px;
+}
+.shop-price-row .offer-schedule {
+  flex: 0 0 100%;
+  max-width: none;
+  text-align: left;
+  font-size: 11px;
 }
 .shop-colors {
   display: flex;

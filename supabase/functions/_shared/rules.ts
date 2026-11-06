@@ -12,6 +12,8 @@ export type UnderstandingIntent =
   | "business_hours"
   | "after_sales"
   | "discount"
+  | "discount_timing"
+  | "future_discount"
   | "seller_handoff"
   | "catalog"
   | "size_chart"
@@ -176,6 +178,8 @@ const intentPhrases = {
   after_sales: ["exchange", "return policy", "refund policy", "can i return", "pwede mag return", "pwede mag exchange", "do you accept returns", "do you accept exchange"],
   seller_handoff: ["restock", "material", "materials", "fabric", "fabrics", "quality", "good quality", "poor quality", "quality ba", "matibay", "tibay", "durable", "long lasting", "pangmatagalan", "see through", "see thru", "stretch", "stretchable", "stretchy", "thick ba", "thin", "makapal", "manipis", "true to size", "size fit sa akin", "fit sa akin", "anong size ang fit", "what size would fit", "recommend a size", "height weight", "actual photo", "actual photos", "real photo", "real photos", "actual images", "same as picture", "same as photo", "sa picture", "picture lang", "photo", "photos", "picture", "video", "model", "height of the model", "available colors", "what colors", "what color", "which colors", "which color", "colors", "color", "colours", "colour", "ibang color", "other color", "other colors", "anong kulay", "kulay", "reviews", "review", "testimonials", "feedback", "reseller", "reseller price", "dropship", "dropshipping", "dropshipper"],
   discount: ["discount", "tawad", "less pa", "best price", "may bawas", "may bawas pa", "bawas ba", "bawasan pa", "pwede pang bawas", "may discount ba", "may discount pa", "may less", "may less pa", "may promo", "promo ba", "promos", "sale ba", "on sale", "price cut", "marked down", "can you lower", "lower the price", "give me a discount"],
+  discount_timing: ["hanggang kailan", "kailan matatapos", "kailan magtatapos", "kailan ang ending", "until when", "when does the discount end", "when will the discount end", "how long is the discount", "what is the duration", "discount duration", "ending ng discount", "end date ng discount"],
+  future_discount: ["magkaka discount", "magkakaroon ng discount", "kailan magkaka discount", "kailan magkakaroon ng discount", "kailan gagana ang discount", "kailan magiging available ang discount", "when will the discount be available", "when will discount start", "is there going to be a discount"],
   price: ["magkano", "how much", "price", "presyo", "hm", "total", "cost", "pm price"],
   availability: ["available", "availability", "avail", "may stock", "in stock", "meron", "mayroon", "anong sizes", "anong size", "available sizes"],
   shipping: ["shipping", "delivery fee", "shipping fee", "pa deliver", "padeliver", "deliver sa", "ship to", "shipping to", "delivery", "deliver", "ship out", "ship-out", "nag ship", "nagship", "ship with", "dispatch", "cut off", "cutoff", "same day", "same-day", "lalamove", "move it", "j t", "lbc", "flash", "ninja van", "spx", "jrs", "gaano katagal", "courier", "couriers", "which courier", "what courier", "ibang lugar", "other places", "other areas", "outside metro manila", "outside manila", "outside ncr", "elsewhere", "provincial shipping"],
@@ -541,6 +545,8 @@ export function understandFromRules(
   else if (hasAny(normalized, intentPhrases.payment) || /\b(pay|paid|paying|downpayment|deposit)\b/.test(normalized)) intent = "payment";
   else if (hasAny(normalized, intentPhrases.order_help)) intent = "order_help";
   else if (hasAny(normalized, intentPhrases.bulk)) intent = "bulk";
+  else if (hasAny(normalized, intentPhrases.discount_timing) || /\b(kailan|kelan|until when|how long)\b.*\b(discount|sale|promo|offer|available|avail|ending|end|matatapos)\b/.test(normalized)) intent = "discount_timing";
+  else if (hasAny(normalized, intentPhrases.future_discount) || /\b(magkaka|magkakaroon|kailan gagana|kailan magiging available|when will)\b.*\b(discount|sale|promo|offer)\b/.test(normalized)) intent = "future_discount";
   else if (hasAny(normalized, intentPhrases.discount)) intent = "discount";
   else if (hasAny(normalized, otherAreaShippingPhrases)) intent = "shipping";
   else if (!bestMatch && hasAny(normalized, intentPhrases.shipping)) intent = "shipping";

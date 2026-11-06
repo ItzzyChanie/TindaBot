@@ -11,7 +11,7 @@ import {
   type CatalogProduct,
   type Understanding,
 } from "./rules.ts";
-import { quote, type QuotePromo } from "./quote.ts";
+import { formatOfferDateTime, offerTiming, quote, type QuotePromo } from "./quote.ts";
 import {
   isCancellationRequest,
   paymentSafetyMessage,
@@ -447,7 +447,7 @@ export function runIncomingBrain(
     );
   if (
     (contextProduct || lastProduct || understanding.intent === "discount") &&
-    ["price", "discount"].includes(understanding.intent) &&
+    ["price", "discount", "discount_timing", "future_discount"].includes(understanding.intent) &&
     understanding.quantities_mentioned.length === 0
   ) {
     const quantity = matchQuantityAnswer(input.message);
@@ -465,6 +465,8 @@ export function runIncomingBrain(
     [
       "price",
       "discount",
+      "discount_timing",
+      "future_discount",
       "availability",
       "question",
       "order_confirm",
@@ -626,6 +628,8 @@ export function runIncomingBrain(
     [
       "price",
       "discount",
+      "discount_timing",
+      "future_discount",
       "availability",
       "question",
       "order_confirm",
@@ -1346,7 +1350,7 @@ export function runIncomingBrain(
         ". Anong item po ito? Pakisend din po ang order number para matulungan kayo.",
     );
   }
-  if (understanding.intent === "discount") {
+  if (["discount", "discount_timing", "future_discount"].includes(understanding.intent)) {
     const resolution = resolveProduct(
       understanding.product_query,
       input.products.filter((item) => item.active),
@@ -1358,8 +1362,57 @@ export function runIncomingBrain(
           ? (contextProduct ?? lastProduct ?? null)
           : null;
     if (!product) {
-      return escalate(
-        "Hindi po ako sigurado kung may discount o bawas sa item na tinutukoy ninyo. I-aask ko po muna ito sa seller. Kaya ko pong tumulong sa presyo, sizes, stock, shipping, bayad, at order status.",
+      if (understanding.intent === "discount")
+        return escalate(
+          "Hindi po ako sigurado kung may discount o bawas sa item na tinutukoy ninyo. I-aask ko po muna ito sa seller. Kaya ko pong tumulong sa presyo, sizes, stock, shipping, bayad, at order status.",
+        );
+      return respond(
+        { discount_product_required: true },
+        "Aling item po ang tinatanong ninyo tungkol sa discount? Sabihin lang po ang pangalan para ma-check ko ang offer at schedule.",
+      );
+    }
+    const now = input.now ?? new Date();
+    const productHasDiscount = Boolean(product.discount_type && Number(product.discount_value) > 0);
+    const productWindow = offerTiming(product.discount_starts, product.discount_ends, now);
+    const scheduledPromos = product.promos
+      .filter((promo) => promo.active !== false)
+      .map((promo) => ({ promo, timing: offerTiming(promo.starts_at, promo.ends_at, now) }));
+    if (understanding.intent === "discount_timing" || understanding.intent === "future_discount") {
+      const details: string[] = [];
+      if (productHasDiscount) {
+        const start = formatOfferDateTime(product.discount_starts);
+        const end = formatOfferDateTime(product.discount_ends);
+        if (productWindow.active) {
+          details.push(end
+            ? `Ang ${product.discount_type === "percent" ? `${product.discount_value}% off` : "discount"} po ay available hanggang ${end}.`
+            : "Active po ang discount, pero walang nakalistang ending date/time.");
+          if (productWindow.daysLeft !== null && productWindow.daysLeft <= 3)
+            details.push(productWindow.daysLeft <= 1 ? "Magtatapos na po ito today—habol na po!" : `${productWindow.daysLeft} days na lang po—habol na po!`);
+        } else if (productWindow.upcoming) {
+          details.push(`Naka-schedule po ang discount mula ${start ?? "sa nakatakdang oras"}${end ? ` hanggang ${end}` : ""}.`);
+        } else if (productWindow.ended) {
+          details.push(`Natapos na po ang discount noong ${end ?? "nakaraang schedule"}.`);
+        }
+      }
+      for (const { promo, timing } of scheduledPromos) {
+        const start = formatOfferDateTime(promo.starts_at);
+        const end = formatOfferDateTime(promo.ends_at);
+        if (timing.active && end)
+          details.push(`${promo.label} po ay active hanggang ${end}.`);
+        else if (timing.upcoming && start)
+          details.push(`${promo.label} po ay magsisimula ${start}${end ? ` hanggang ${end}` : ""}.`);
+      }
+      if (!details.length) {
+        return respond(
+          { product: product.name, discount_scheduled: false },
+          understanding.intent === "future_discount"
+            ? `Wala pong naka-list na susunod na discount schedule para sa ${product.name} sa ngayon.`
+            : `Wala pong active o naka-schedule na discount date/time para sa ${product.name} sa catalog ngayon.`,
+        );
+      }
+      return respond(
+        { product: product.name, discount_starts: product.discount_starts, discount_ends: product.discount_ends, schedules: details },
+        `${product.name}: ${details.join(" ")}`,
       );
     }
     const quantity = understanding.quantity ?? 1;
@@ -1369,10 +1422,15 @@ export function runIncomingBrain(
     const pricing = quote(
       product,
       quantity,
-      input.now ?? new Date(),
+      now,
       product.promos,
       sizeVariant?.price,
     );
+    const end = formatOfferDateTime(product.discount_ends);
+    const urgency = productHasDiscount && productWindow.active && productWindow.daysLeft !== null && productWindow.daysLeft <= 3
+      ? productWindow.daysLeft <= 1 ? " Magtatapos na po ang offer today—habol na po!" : ` ${productWindow.daysLeft} days na lang po ang offer—habol na po!`
+      : "";
+    const endNote = (productHasDiscount && productWindow.active && end ? ` Valid po hanggang ${end}.` : "") + urgency;
     const reply =
       pricing.saved > 0 && pricing.label
         ? "Opo, may " +
@@ -1385,14 +1443,14 @@ export function runIncomingBrain(
           peso(pricing.saved) +
           " at item total ay " +
           peso(pricing.total) +
-          "."
+          "." + endNote
         : "Wala pong active discount o promo na naka-lista sa catalog para sa " +
           product.name +
           " ngayon. Regular item total po para sa " +
           quantity +
           " piraso ay " +
           peso(pricing.total) +
-          ".";
+          "." + (productHasDiscount && productWindow.ended && end ? ` Natapos po ang discount noong ${end}.` : "");
     return respond(
       {
         product: product.name,
@@ -1404,7 +1462,7 @@ export function runIncomingBrain(
         offer: pricing.label,
       },
       reply,
-      {
+      understanding.intent === "discount" ? {
         ...activePending,
         last_product: {
           ...lastProductContext,
@@ -1412,7 +1470,7 @@ export function runIncomingBrain(
           quantity,
         },
         clarification: { kind: "order_interest", product_id: product.id },
-      },
+      } : activePending,
     );
   }
   if (understanding.intent === "payment") {

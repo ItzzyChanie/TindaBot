@@ -2,7 +2,7 @@
 /* eslint-disable @next/next/no-img-element -- Storage image URLs are configured per Supabase project. */
 
 import { useEffect, useMemo, useState } from "react";
-import { quote, type QuotePromo } from "@/supabase/functions/_shared/quote";
+import { formatOfferDateTime, offerTiming, quote, type QuotePromo } from "@/supabase/functions/_shared/quote";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 type Variant = { id: string; size: string; stock: number; reserved_stock: number; price: number | null };
@@ -82,6 +82,7 @@ export function CatalogManager({
   const [error, setError] = useState(loadError);
   const [query, setQuery] = useState("");
   const [previewQty, setPreviewQty] = useState(1);
+  const [currentTime, setCurrentTime] = useState(() => new Date());
   const [photo, setPhoto] = useState<File | null>(null);
   const [extraPhotos, setExtraPhotos] = useState<File[]>([]);
   const [form, setForm] = useState({
@@ -93,6 +94,8 @@ export function CatalogManager({
     active: true,
     discountType: "" as "" | "percent" | "fixed",
     discountValue: "",
+    discountStarts: "",
+    discountEnds: "",
     colors: "",
     material: "",
     fabricDetails: "",
@@ -106,6 +109,10 @@ export function CatalogManager({
   });
   const editingProduct = products.find((product) => product.id === editingId);
   useEffect(() => {
+    const timer = window.setInterval(() => setCurrentTime(new Date()), 10_000);
+    return () => window.clearInterval(timer);
+  }, []);
+  useEffect(() => {
     if (initialName)
       document
         .querySelector(".catalog-form")
@@ -118,14 +125,14 @@ export function CatalogManager({
           price: Number(form.price) || 0,
           discount_type: form.discountType || null,
           discount_value: Number(form.discountValue) || null,
-          discount_starts: editingProduct?.discount_starts ?? null,
-          discount_ends: editingProduct?.discount_ends ?? null,
+          discount_starts: form.discountStarts ? `${form.discountStarts}:00+08:00` : null,
+          discount_ends: form.discountEnds ? `${form.discountEnds}:00+08:00` : null,
         },
         previewQty,
-        new Date(),
+        currentTime,
         editingProduct?.promos ?? [],
       ),
-    [form.price, form.discountType, form.discountValue, previewQty, editingProduct],
+    [form.price, form.discountType, form.discountValue, form.discountStarts, form.discountEnds, previewQty, editingProduct, currentTime],
   );
   const visibleProducts = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase();
@@ -150,6 +157,8 @@ export function CatalogManager({
       active: true,
       discountType: "",
       discountValue: "",
+      discountStarts: "",
+      discountEnds: "",
       colors: "",
       material: "",
       fabricDetails: "",
@@ -179,6 +188,8 @@ export function CatalogManager({
       discountType: product.discount_type ?? "",
       discountValue:
         product.discount_value == null ? "" : String(product.discount_value),
+      discountStarts: product.discount_starts ? toManilaDateTimeInput(product.discount_starts) : "",
+      discountEnds: product.discount_ends ? toManilaDateTimeInput(product.discount_ends) : "",
       colors: (product.colors ?? []).join(", "),
       material: product.material ?? "",
       fabricDetails: product.fabric_details ?? "",
@@ -194,12 +205,27 @@ export function CatalogManager({
     setError("");
   }
 
+  function toManilaDateTimeInput(value: string): string {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Manila", year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+    }).formatToParts(date);
+    const part = (type: string) => parts.find((item) => item.type === type)?.value ?? "";
+    return `${part("year")}-${part("month")}-${part("day")}T${part("hour")}:${part("minute")}`;
+  }
+
   async function saveProduct(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
     setNotice("");
     setError("");
     try {
+      if (form.discountType && (!form.discountStarts || !form.discountEnds))
+        throw new Error("Add the offer start and end date/time po.");
+      if (form.discountType && new Date(`${form.discountEnds}:00+08:00`) <= new Date(`${form.discountStarts}:00+08:00`))
+        throw new Error("Offer end date/time must be after its start date/time po.");
       const supabase = createSupabaseBrowserClient();
       let imageUrl = editingId
         ? (products.find((p) => p.id === editingId)?.image_url ?? null)
@@ -254,6 +280,8 @@ export function CatalogManager({
         image_url: imageUrl,
         discount_type: form.discountType || null,
         discount_value: form.discountType ? Number(form.discountValue) : null,
+        discount_starts: form.discountType ? `${form.discountStarts}:00+08:00` : null,
+        discount_ends: form.discountType ? `${form.discountEnds}:00+08:00` : null,
         colors: form.colors.split(",").map((value) => value.trim()).filter(Boolean),
         material: form.material.trim(),
         fabric_details: form.fabricDetails.trim(),
@@ -462,7 +490,10 @@ export function CatalogManager({
             </div>
           ) : (
             visibleProducts.map((product) => {
-              const offer = quote(product, 1, new Date(), product.promos ?? []);
+              const offer = quote(product, 1, currentTime, product.promos ?? []);
+              const timing = offerTiming(product.discount_starts, product.discount_ends, currentTime);
+              const offerStart = formatOfferDateTime(product.discount_starts);
+              const offerEnd = formatOfferDateTime(product.discount_ends);
               return (
                 <article className="panel product-card" key={product.id}>
                   {product.image_url ? (
@@ -496,6 +527,16 @@ export function CatalogManager({
                         </span>
                       </div>
                       <div className="product-price">
+                        {product.discount_type && offerStart && offerEnd && (
+                          <small className={`offer-schedule${timing.active && timing.daysLeft !== null && timing.daysLeft <= 3 ? " offer-ending-soon" : ""}`}>
+                            {offerStart} – {offerEnd}
+                            {timing.active && timing.daysLeft !== null && timing.daysLeft <= 3 && (
+                              <b className="offer-urgency">
+                                {timing.daysLeft <= 1 ? "Ends today. Buy now!" : `${timing.daysLeft} days left. Buy now!`}
+                              </b>
+                            )}
+                          </small>
+                        )}
                         {offer.label ? (
                           <del>{currency(product.price)}</del>
                         ) : null}
@@ -649,6 +690,18 @@ export function CatalogManager({
               </label>
             )}
           </div>
+          {form.discountType && (
+            <div className="discount-window-fields">
+              <label>
+                Offer starts (PHT)
+                <input type="datetime-local" required value={form.discountStarts} onChange={(event) => setForm({ ...form, discountStarts: event.target.value })} />
+              </label>
+              <label>
+                Offer ends (PHT)
+                <input type="datetime-local" required value={form.discountEnds} onChange={(event) => setForm({ ...form, discountEnds: event.target.value })} />
+              </label>
+            </div>
+          )}
           <label>
             Sizes, stock, and optional price <small>Format: S:4:350, M:2; omitted price uses the product price</small>
             <input

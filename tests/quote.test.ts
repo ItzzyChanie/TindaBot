@@ -83,6 +83,19 @@ describe("quote", () => {
         now,
       ).total,
     ).toBe(100));
+  it("expires a discount after its exact end time", () =>
+    expect(
+      quote(
+        {
+          price: 100,
+          discount_type: "percent",
+          discount_value: 50,
+          discount_ends: "2026-10-29T12:00:00+08:00",
+        },
+        1,
+        new Date("2026-10-29T04:00:00.001Z"),
+      ).total,
+    ).toBe(100));
   it("does not apply a promo below its threshold", () =>
     expect(quote({ price: 100 }, 2, now, [promo()]).total).toBe(200));
   it("applies a promo at its threshold", () =>

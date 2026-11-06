@@ -323,6 +323,60 @@ describe("grounded incoming conversation brain", () => {
     expect(followUp.reply).toContain(product.name);
   });
 
+  it("answers discount end-time questions from the selected product schedule", async () => {
+    const scheduled = {
+      ...product,
+      discount_type: "percent" as const,
+      discount_value: 50,
+      discount_starts: "2026-10-28T00:00:00+08:00",
+      discount_ends: "2026-10-30T12:00:00+08:00",
+    };
+    const result = await runIncomingBrain({
+      ...baseInput,
+      message: "Hanggang kailan po ang discount nito?",
+      contextProductId: scheduled.id,
+      products: [scheduled],
+    });
+    expect(result.reply).toContain("available hanggang");
+    expect(result.reply).toContain("Oct 30, 2026");
+    expect(result.needsSeller).toBe(false);
+  });
+
+  it("answers when a future product discount becomes available", async () => {
+    const scheduled = {
+      ...product,
+      discount_type: "percent" as const,
+      discount_value: 50,
+      discount_starts: "2026-10-30T12:00:00+08:00",
+      discount_ends: "2026-11-02T12:00:00+08:00",
+    };
+    const result = await runIncomingBrain({
+      ...baseInput,
+      message: "Kailan po magiging available ang discount sa Isla blouse?",
+      products: [scheduled],
+    });
+    expect(result.reply).toContain("Naka-schedule po ang discount");
+    expect(result.reply).toContain("Oct 30, 2026");
+    expect(result.needsSeller).toBe(false);
+  });
+
+  it("warns customers when an active discount ends within three days", async () => {
+    const scheduled = {
+      ...product,
+      discount_type: "percent" as const,
+      discount_value: 50,
+      discount_starts: "2026-10-28T00:00:00+08:00",
+      discount_ends: "2026-11-01T00:00:00+08:00",
+    };
+    const result = await runIncomingBrain({
+      ...baseInput,
+      message: "May discount po ba sa Isla blouse?",
+      products: [scheduled],
+    });
+    expect(result.reply).toContain("3 days na lang po ang offer");
+    expect(result.reply).toContain("Nov 1, 2026");
+  });
+
   it("hands uncertain discount questions to the seller", async () => {
     const result = await runIncomingBrain({ ...baseInput, message: "May discount po ba?" });
     expect(result.reply).toContain("Hindi po ako sigurado");
