@@ -35,6 +35,7 @@ export type SellerNotificationEvent = {
   reason?: string | null;
   customerText?: string | null;
   dedupeKey?: string;
+  reminder?: { notificationId: string; waitedMinutes: number };
 };
 
 export type NotifySellerResult = {
@@ -220,21 +221,48 @@ export async function notifySeller(
   try {
     const settings = await loadSettings(client);
     const preferences = settings.event_prefs?.[event.type] ?? { bell: true, telegram: true };
-    const { title, body } = titleAndBody(event, settings);
-    const link = notificationLink(event);
+    let title: string;
+    let body: string;
+    let link: string | null;
+    if (event.reminder) {
+      const waitedMinutes = Math.max(1, Math.floor(event.reminder.waitedMinutes));
+      title = `Still waiting: ${clean(event.customerName || "Customer", 50)} has waited ${waitedMinutes} minutes`;
+      body = event.type === "payment_proof"
+        ? `Payment proof for order #${Number(event.orderId) || "?"} is waiting for review.`
+        : "A customer is still waiting for a seller reply.";
+      const { data: updated, error: updateError } = await client.from("notifications")
+        .update({ title, body, severity: "urgent", read_at: null })
+        .eq("id", event.reminder.notificationId)
+        .eq("type", event.type)
+        .is("resolved_at", null)
+        .select("id, link")
+        .maybeSingle();
+      if (updateError) throw updateError;
+      if (!updated) { result.ok = true; return result; }
+      result.notificationId = updated.id;
+      result.isNew = true;
+      link = typeof updated.link === "string" && updated.link.startsWith("/")
+        ? `${(Deno.env.get("APP_URL") ?? "").replace(/\/$/, "")}${updated.link}`
+        : updated.link;
+    } else {
+      ({ title, body } = titleAndBody(event, settings));
+      link = notificationLink(event);
+    }
     if (!link) throw new Error("APP_URL or notification target is missing");
-    const subject = event.conversationId ? `conversation:${event.conversationId}` : `order:${event.orderId ?? "none"}`;
-    const dedupeKey = event.dedupeKey || `${event.type}:${subject}`;
-    const { data, error } = await client.rpc("upsert_notification", {
-      p_type: event.type,
-      p_severity: event.type === "needs_seller" ? "urgent" : event.type === "low_stock" ? "info" : "attention",
-      p_title: title, p_body: body, p_link: link,
-      p_conversation_id: event.conversationId ?? null, p_order_id: event.orderId ?? null,
-      p_dedupe_key: dedupeKey, p_group_window_minutes: settings.group_window_minutes,
-    });
-    if (error) throw error;
-    result.notificationId = data?.[0]?.notification_id ?? null;
-    result.isNew = data?.[0]?.is_new === true;
+    if (!event.reminder) {
+      const subject = event.conversationId ? `conversation:${event.conversationId}` : `order:${event.orderId ?? "none"}`;
+      const dedupeKey = event.dedupeKey || `${event.type}:${subject}`;
+      const { data, error } = await client.rpc("upsert_notification", {
+        p_type: event.type,
+        p_severity: event.type === "needs_seller" ? "urgent" : event.type === "low_stock" ? "info" : "attention",
+        p_title: title, p_body: body, p_link: link,
+        p_conversation_id: event.conversationId ?? null, p_order_id: event.orderId ?? null,
+        p_dedupe_key: dedupeKey, p_group_window_minutes: settings.group_window_minutes,
+      });
+      if (error) throw error;
+      result.notificationId = data?.[0]?.notification_id ?? null;
+      result.isNew = data?.[0]?.is_new === true;
+    }
     if (!result.notificationId) throw new Error("Notification was not saved");
 
     result.bell = settings.bell_enabled && preferences.bell !== false ? "sent" : "suppressed_prefs";
@@ -293,6 +321,47 @@ export async function notifySeller(
   } catch (error) {
     result.error = safeError(error);
     console.error("[notify] Seller notification failed", result.error);
+    return result;
+  }
+}
+
+export type NotificationReminderRun = {
+  ok: boolean;
+  claimed: number;
+  sent: number;
+  failed: number;
+  suppressed: number;
+  error?: string;
+};
+
+/** Claim and send at most one overdue reminder per notification per run. */
+export async function runNotificationReminders(
+  client: SupabaseClient = supabase,
+): Promise<NotificationReminderRun> {
+  const result: NotificationReminderRun = { ok: false, claimed: 0, sent: 0, failed: 0, suppressed: 0 };
+  try {
+    const { data: reminders, error } = await client.rpc("claim_notification_reminders", { p_limit: 50 });
+    if (error) throw error;
+    for (const reminder of reminders ?? []) {
+      result.claimed += 1;
+      const waitedMinutes = Math.max(1, Math.floor((Date.now() - Date.parse(reminder.created_at)) / 60_000));
+      const outcome = await notifySeller({
+        type: reminder.type,
+        conversationId: reminder.conversation_id,
+        orderId: reminder.order_id === null ? null : Number(reminder.order_id),
+        customerName: reminder.customer_name,
+        channel: reminder.channel,
+        reminder: { notificationId: reminder.notification_id, waitedMinutes },
+      }, client);
+      if (!outcome.ok) result.failed += 1;
+      else if (outcome.telegram === "sent") result.sent += 1;
+      else result.suppressed += 1;
+    }
+    result.ok = result.failed === 0;
+    return result;
+  } catch (error) {
+    result.error = safeError(error);
+    console.error("[notify] Reminder run failed", result.error);
     return result;
   }
 }
