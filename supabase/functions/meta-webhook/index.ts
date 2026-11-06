@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { handleIncoming, saveAssistantReply } from "../_shared/handleIncoming.ts";
 import { isWithinCustomerWindow, sendToChannel } from "../_shared/channel-messaging.ts";
+import { notifySeller } from "../_shared/notify.ts";
 import {
   extractMetaInboundMessages,
   metaCustomerDisplayName,
@@ -74,6 +75,8 @@ async function processEvents(events: MetaInboundMessage[]): Promise<void> {
     let ignoredReason = event.ignoredReason;
     let processingFailure: string | null = null;
     let replyId: string | null = null;
+    let conversationId: string | null = null;
+    let customerName: string | undefined;
     try {
       if (ignoredReason) {
         logMetaEvent(event, true, ignoredReason);
@@ -104,6 +107,7 @@ async function processEvents(events: MetaInboundMessage[]): Promise<void> {
       }
 
       const name = await getCustomerName(event.channel, senderId);
+      customerName = name;
       const incoming = await handleIncoming(event.channel, senderId, text, {
         externalMessageId: messageId,
         replyToChannelMessageId: event.replyToMessageId ?? undefined,
@@ -114,6 +118,7 @@ async function processEvents(events: MetaInboundMessage[]): Promise<void> {
         logMetaEvent(event, true, ignoredReason);
         continue;
       }
+      conversationId = incoming.conversationId;
       if (!incoming.reply) {
         ignoredReason = "no_automatic_reply";
         logMetaEvent(event, true, ignoredReason);
@@ -145,6 +150,11 @@ async function processEvents(events: MetaInboundMessage[]): Promise<void> {
         const failureReason = error instanceof Error && error.message === "token_rejected" ? "token_rejected" : "delivery_failed";
         await supabase.from("messages").update({ delivery_status: "failed", failure_reason: failureReason })
           .eq("id", replyId);
+        void notifySeller({
+          type: "delivery_failed", conversationId: conversationId ?? undefined,
+          customerName, channel: event.channel, reason: failureReason,
+          dedupeKey: conversationId ? `delivery_failed:${conversationId}` : undefined,
+        });
       }
       processingFailure = error instanceof Error ? error.name : "unknown_error";
       console.error("Meta webhook event processing failed", {

@@ -1,6 +1,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { deleteTelegramMessage, editTelegramTextMessage, isWithinCustomerWindow, sendToChannel, type MessageChannel } from "../_shared/channel-messaging.ts";
 import { ATTACHMENT_BUCKET, validateAttachments, type MessageAttachment } from "../_shared/message-attachments.ts";
+import { notifySeller } from "../_shared/notify.ts";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
 const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
@@ -129,7 +130,7 @@ Deno.serve(async (request: Request) => {
 
   const { data: customer, error: customerError } = await supabase
     .from("customers")
-    .select("channel, external_id")
+    .select("channel, external_id, name")
     .eq("id", conversation.customer_id)
     .maybeSingle();
   if (customerError || !customer || !["telegram", "messenger", "instagram", "web"].includes(customer.channel)) {
@@ -216,6 +217,7 @@ Deno.serve(async (request: Request) => {
     } catch (error) {
       const failureReason = error instanceof Error && error.message === "token_rejected" ? "token_rejected" : "delivery_failed";
       await supabase.from("messages").update({ delivery_status: "failed", failure_reason: failureReason }).eq("id", failedMessage.id);
+      void notifySeller({ type: "delivery_failed", conversationId: conversation.id, customerName: customer.name, channel: customer.channel, reason: failureReason, dedupeKey: `delivery_failed:${conversation.id}` });
       return Response.json({ error: failureReason }, { status: 502, headers: cors ?? {} });
     }
   }
@@ -293,6 +295,7 @@ Deno.serve(async (request: Request) => {
   } catch (error) {
     const failureReason = error instanceof Error && error.message === "token_rejected" ? "token_rejected" : "delivery_failed";
     await supabase.from("messages").update({ delivery_status: "failed", failure_reason: failureReason }).eq("id", savedMessage.id);
+    void notifySeller({ type: "delivery_failed", conversationId: conversation.id, customerName: customer.name, channel: customer.channel, reason: failureReason, dedupeKey: `delivery_failed:${conversation.id}` });
     return Response.json(
       { error: "Reply saved, but the channel could not deliver it" },
       { status: 502, headers: cors ?? {} },

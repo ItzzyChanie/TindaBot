@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { labelAutoReply, runIncomingBrain, type BrainPending, type BrainProduct } from "./brain.ts";
 import { quote, type QuotePromo } from "./quote.ts";
+import { notifySeller } from "./notify.ts";
 import { customerDetailsPrompt, isCancellationRequest, isOrderAcknowledgment, isPaymentRequest, isReservationRequest, missingCustomerDetails, missingDetailsPrompt, orderDetailFields, parseOrderDetails, paymentSafetyMessage, reservationDetailsPrompt, sellerRepliedAfterOrder, type OrderCustomerDetails, validCustomerEmail, validCustomerMobile } from "./order-customer-details.ts";
 
 const supabase = createClient(
@@ -15,6 +16,12 @@ type ProductRow = Omit<BrainProduct, "price" | "discount_value" | "variants" | "
   variants: Array<BrainProduct["variants"][number] & { stock: number | string }>;
   promos: Array<QuotePromo & { value: number | string }>;
 };
+
+function notifySellerSafely(event: Parameters<typeof notifySeller>[0]): void {
+  void notifySeller(event).catch((error) => {
+    console.error("[notify] Notification call failed", error instanceof Error ? error.name : "unknown_error");
+  });
+}
 
 export type IncomingContext = {
   externalMessageId?: string;
@@ -76,7 +83,7 @@ async function sellerPresentForOrder(conversationId: string, orderId: number, ai
   return aiMode === "human" || sellerRepliedAfterOrder(order.created_at, sellerMessage.created_at);
 }
 
-async function savePaymentProof(conversationId: string, customerId: string, proof: NonNullable<IncomingContext["paymentProof"]>, text: string) {
+async function savePaymentProof(conversationId: string, customerId: string, proof: NonNullable<IncomingContext["paymentProof"]>, text: string, channel: string, customerName: string | null) {
   const { data: order, error: orderError } = await supabase
     .from("orders")
     .select("id, payment_proof, created_at")
@@ -86,6 +93,10 @@ async function savePaymentProof(conversationId: string, customerId: string, proo
     .limit(1)
     .maybeSingle();
   if (orderError) throw orderError;
+
+  if (order) {
+    notifySellerSafely({ type: "payment_proof", conversationId, orderId: Number(order.id), dedupeKey: `payment_proof:${order.id}` });
+  }
 
   let reply = "Natanggap po ang payment proof. Iko-confirm ito ng seller.";
   let systemBody = "Payment proof received.";
@@ -131,6 +142,7 @@ async function savePaymentProof(conversationId: string, customerId: string, proo
   const { error: statusError } = await supabase.from("conversations")
     .update({ status: "needs_seller" }).eq("id", conversationId);
   if (statusError) throw statusError;
+  notifySellerSafely({ type: "needs_seller", conversationId, customerName, channel, dedupeKey: `needs_seller:${conversationId}` });
   const { error: systemError } = await supabase.from("messages").insert({
     conversation_id: conversationId,
     sender: "system",
@@ -246,8 +258,17 @@ export async function handleIncoming(
     ? { ...existing, status: existing.status === "resolved" ? "open" : existing.status }
     : { status: "open", ai_mode: "auto", pending: {} };
   const aiMode = conversation.ai_mode as "auto" | "suggest" | "human";
+  if (/^\s*(seller|\/seller)\s*$/i.test(text)) {
+    const { error } = await supabase.from("conversations").update({ status: "needs_seller" }).eq("id", conversationId);
+    if (error) throw error;
+    const { error: missedError } = await supabase.from("missed_requests").insert({ conversation_id: conversationId, request_text: text });
+    if (missedError) throw missedError;
+    notifySellerSafely({ type: "needs_seller", conversationId, customerName, channel, dedupeKey: `needs_seller:${conversationId}` });
+    const handoff = "Sige po, ipinasa ko na sa seller ang chat na ito. Magre-reply po siya rito kapag available.";
+    return { conversationId, reply: aiMode === "human" ? null : labelAutoReply(handoff, aiMode), draft: null };
+  }
   if (context.paymentProof) {
-    const reply = await savePaymentProof(conversationId, customer.id, context.paymentProof, text);
+    const reply = await savePaymentProof(conversationId, customer.id, context.paymentProof, text, channel, customerName);
     return {
       conversationId,
       reply: aiMode === "human" ? null : labelAutoReply(reply, aiMode),
@@ -256,15 +277,6 @@ export async function handleIncoming(
   }
 
   if (aiMode === "human") {
-    if (/^\s*(seller|\/seller)\s*$/i.test(text)) {
-      const { error } = await supabase.from("conversations").update({ status: "needs_seller" }).eq("id", conversationId);
-      if (error) throw error;
-      const { error: missedError } = await supabase.from("missed_requests").insert({
-        conversation_id: conversationId,
-        request_text: text,
-      });
-      if (missedError) throw missedError;
-    }
     return { conversationId, reply: null, draft: null };
   }
 
@@ -397,6 +409,7 @@ export async function handleIncoming(
           request_text: "Reservation could not be completed because the catalog item is unavailable.",
         });
         if (missedError) throw missedError;
+        notifySellerSafely({ type: "needs_seller", conversationId, customerName, channel, dedupeKey: `needs_seller:${conversationId}` });
         return { conversationId, reply: aiMode === "auto" ? labelAutoReply(message, aiMode) : null, draft: aiMode === "suggest" ? message : null };
       }
       const pricing = quote(product, quantity, new Date(), product.promos);
@@ -411,6 +424,7 @@ export async function handleIncoming(
           request_text: "Reservation quote changed before customer details were completed.",
         });
         if (missedError) throw missedError;
+        notifySellerSafely({ type: "needs_seller", conversationId, customerName, channel, dedupeKey: `needs_seller:${conversationId}` });
         return { conversationId, reply: aiMode === "auto" ? labelAutoReply(message, aiMode) : null, draft: aiMode === "suggest" ? message : null };
       }
       const { data: createdOrderId, error: createOrderError } = await supabase.rpc("create_order", {
@@ -434,10 +448,12 @@ export async function handleIncoming(
           request_text: "Reservation stock ran out before customer details were completed.",
         });
         if (missedError) throw missedError;
+        notifySellerSafely({ type: "needs_seller", conversationId, customerName, channel, dedupeKey: `needs_seller:${conversationId}` });
         return { conversationId, reply: aiMode === "auto" ? labelAutoReply(message, aiMode) : null, draft: aiMode === "suggest" ? message : null };
       }
       if (createOrderError) throw createOrderError;
       orderId = Number(createdOrderId);
+      notifySellerSafely({ type: "new_order", conversationId, orderId, amount: total, dedupeKey: `new_order:${orderId}` });
       const { error: reservationStateError } = await supabase.from("conversations")
         .update({ pending: { ...currentPending, order_customer_details: { order_id: orderId, values: details } } })
         .eq("id", conversationId);
@@ -455,6 +471,7 @@ export async function handleIncoming(
     const { error: conversationUpdateError } = await supabase.from("conversations")
       .update({ pending: { order_followup: "done", order_id: orderId }, status: "needs_seller" }).eq("id", conversationId);
     if (conversationUpdateError) throw conversationUpdateError;
+    notifySellerSafely({ type: "needs_seller", conversationId, customerName, channel, dedupeKey: `needs_seller:${conversationId}` });
     const options = object(settings.bot_options);
     const pageName = typeof options.facebook_page_name === "string" ? options.facebook_page_name.trim() : "";
     const pageUrl = typeof options.facebook_page_url === "string" && /^https:\/\//i.test(options.facebook_page_url) ? options.facebook_page_url.trim() : "";
@@ -621,6 +638,9 @@ export async function handleIncoming(
     .update({ pending: nextPending, ...(status ? { status } : {}) })
     .eq("id", conversationId);
   if (brainUpdateError) throw brainUpdateError;
+  if (status === "needs_seller") {
+    notifySellerSafely({ type: "needs_seller", conversationId, customerName, channel, customerText: text, dedupeKey: `needs_seller:${conversationId}` });
+  }
   if (missedRequest) {
     const { error } = await supabase.from("missed_requests").insert({
       conversation_id: conversationId,

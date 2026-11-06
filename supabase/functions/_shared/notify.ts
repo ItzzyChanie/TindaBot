@@ -23,7 +23,7 @@ type NotificationSettings = {
 
 export type SellerNotificationEvent = {
   type: "needs_seller" | "new_order" | "payment_proof" | "reply_failed" |
-    "messenger_window" | "low_stock" | "out_of_stock" | string;
+    "delivery_failed" | "window_closing" | "messenger_window" | "low_stock" | "out_of_stock" | string;
   conversationId?: string | null;
   orderId?: number | null;
   customerName?: string | null;
@@ -83,10 +83,12 @@ function titleAndBody(event: SellerNotificationEvent, settings: NotificationSett
       body = "Please review the payment proof.";
       break;
     case "reply_failed":
+    case "delivery_failed":
       title = `Reply not delivered to ${clean(event.customerName || "customer", 50)}`;
       body = `Reason: ${clean(event.reason || "Delivery failed", 100)}`;
       break;
     case "messenger_window":
+    case "window_closing":
       title = `Messenger window closes in 2 hours for ${clean(event.customerName || "customer", 50)}`;
       body = "Reply before the messaging window closes.";
       break;
@@ -214,7 +216,8 @@ export async function notifySeller(
     const subject = event.conversationId ? `conversation:${event.conversationId}` : `order:${event.orderId ?? "none"}`;
     const dedupeKey = event.dedupeKey || `${event.type}:${subject}`;
     const { data, error } = await client.rpc("upsert_notification", {
-      p_type: event.type, p_severity: event.type === "needs_seller" ? "urgent" : "attention",
+      p_type: event.type,
+      p_severity: event.type === "needs_seller" ? "urgent" : event.type === "low_stock" ? "info" : "attention",
       p_title: title, p_body: body, p_link: link,
       p_conversation_id: event.conversationId ?? null, p_order_id: event.orderId ?? null,
       p_dedupe_key: dedupeKey, p_group_window_minutes: settings.group_window_minutes,

@@ -8,6 +8,7 @@ import {
 } from "../_shared/handleIncoming.ts";
 import faq from "../_shared/faq.json" with { type: "json" };
 import { sendToChannel } from "../_shared/channel-messaging.ts";
+import { notifySeller } from "../_shared/notify.ts";
 
 const telegramToken = Deno.env.get("TELEGRAM_BOT_TOKEN");
 const webhookSecret = Deno.env.get("TELEGRAM_WEBHOOK_SECRET");
@@ -85,6 +86,9 @@ async function processTelegramUpdate(
 ): Promise<void> {
   let claimed = false;
   let succeeded = false;
+  let conversationId: string | null = null;
+  let customerName: string | null = null;
+  let replyDeliveryStarted = false;
   try {
     claimed = await claimTelegramUpdate(updateId);
     if (!claimed) {
@@ -152,6 +156,7 @@ async function processTelegramUpdate(
     const name = [message.from?.first_name, message.from?.last_name]
       .filter(Boolean)
       .join(" ") || message.from?.username || null;
+    customerName = name;
     const startPayload = text.match(/^\/start(?:@[a-z0-9_]+)?\s+product_([0-9a-f-]{36})\s*$/i);
     const incoming = await handleIncoming("telegram", String(chatId), text, {
       name,
@@ -169,6 +174,7 @@ async function processTelegramUpdate(
         }
         : undefined,
     });
+    conversationId = incoming.conversationId;
     if (incoming.reply) {
       const images = incoming.imageUrls?.length
         ? incoming.imageUrls.slice(0, 5)
@@ -176,6 +182,7 @@ async function processTelegramUpdate(
       const savedReplyId = await saveAssistantReply(incoming.conversationId, incoming.reply, images);
       const channelMessageIds: string[] = [];
       if (images.length) {
+        replyDeliveryStarted = true;
         const caption = incoming.reply.replace(/https:\/\/\S+/g, "").trim();
         for (let index = 0; index < images.length; index += 1) {
           try {
@@ -187,12 +194,19 @@ async function processTelegramUpdate(
           }
         }
       } else {
+        replyDeliveryStarted = true;
         channelMessageIds.push(...await sendToChannel("telegram", String(chatId), incoming.reply, { replyMarkup }));
       }
       await saveChannelMessageIds(savedReplyId, channelMessageIds);
     }
     succeeded = true;
   } catch (error) {
+    if (replyDeliveryStarted && conversationId) {
+      void notifySeller({
+        type: "delivery_failed", conversationId, customerName, channel: "telegram",
+        reason: "Telegram message delivery failed", dedupeKey: `delivery_failed:${conversationId}`,
+      });
+    }
     console.error("Telegram update processing failed", {
       updateId,
       error: error instanceof Error ? error.message : "Unknown error",
