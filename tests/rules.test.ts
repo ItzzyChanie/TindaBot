@@ -36,6 +36,8 @@ describe("catalog-grounded message rules", () => {
       confidence: 0.95,
       availability_requested: false,
       price_quantities: [],
+      item_questions: [],
+      total_requested: false,
     });
   });
 
@@ -208,6 +210,34 @@ describe("catalog-grounded message rules", () => {
       price_quantities: [1, 3],
       availability_requested: true,
     });
+  });
+
+  it("assigns combined availability, size, and price questions to each named item", () => {
+    const products: CatalogProduct[] = [
+      { name: "Hoodie Jacket", aliases: ["hoodie"], sizes: ["M", "L"] },
+      { name: "Trouser", sizes: ["S", "M", "L"] },
+    ];
+    expect(understandFromRules(
+      "Available po ba yung hoodie jacket and/at trouser? May large size ba yung hoodie? how much sa tatlong hoodie?",
+      products,
+    ).item_questions).toEqual([
+      { product_query: "Hoodie Jacket", asks_price: true, asks_availability: true, size: "L", quantity: 3 },
+      { product_query: "Trouser", asks_price: false, asks_availability: true, size: null, quantity: null },
+    ]);
+  });
+
+  it("inherits a shared price question and scopes the later size and quantity to the t-shirt", () => {
+    const products: CatalogProduct[] = [
+      { name: "Hoodie Jacket", aliases: ["hoodie"], sizes: ["M", "L"] },
+      { name: "T-Shirt", aliases: ["tshirt"], sizes: ["S", "M"] },
+    ];
+    expect(understandFromRules(
+      "Magkano yung hoodie jacket and/at tshirt? May available ba yung Small sa tshirt? Magkano kapag dalawang tshirt?",
+      products,
+    ).item_questions).toEqual([
+      { product_query: "Hoodie Jacket", asks_price: true, asks_availability: false, size: null, quantity: null },
+      { product_query: "T-Shirt", asks_price: true, asks_availability: true, size: "S", quantity: 2 },
+    ]);
   });
 
   it("recognizes quantity total follow-ups without repeating the product name", () => {

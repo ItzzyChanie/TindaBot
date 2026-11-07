@@ -57,6 +57,97 @@ function ai(result: Understanding): BrainRules {
 }
 
 describe("grounded incoming conversation brain", () => {
+  it("answers product-specific availability, size, and quantity questions across items", async () => {
+    const hoodie: BrainProduct = {
+      ...product,
+      id: "hoodie",
+      name: "Hoodie Jacket",
+      aliases: ["hoodie"],
+      variants: [
+        { id: "hoodie-m", size: "M", stock: 2, price: 900 },
+        { id: "hoodie-l", size: "L", stock: 5, price: 1000 },
+      ],
+    };
+    const trousers: BrainProduct = {
+      ...product,
+      id: "trouser",
+      name: "Trouser",
+      variants: [
+        { id: "trouser-s", size: "S", stock: 3 },
+        { id: "trouser-m", size: "M", stock: 0 },
+      ],
+    };
+    const result = await runIncomingBrain({
+      ...baseInput,
+      message: "Available po ba yung hoodie jacket and/at trouser? May large size ba yung hoodie? how much sa tatlong hoodie?",
+      products: [hoodie, trousers],
+    });
+    expect(result.reply).toContain("Hoodie Jacket");
+    expect(result.reply).toContain("size L has 5 available");
+    expect(result.reply).toContain("x3 = ₱3,000.00 subtotal");
+    expect(result.reply).toContain("Trouser");
+    expect(result.reply).toContain("S: 3 available, M: sold out");
+  });
+
+  it("shares a price request across items and applies a later size and quantity to its named item", async () => {
+    const hoodie: BrainProduct = {
+      ...product,
+      id: "hoodie",
+      name: "Hoodie Jacket",
+      aliases: ["hoodie"],
+      variants: [
+        { id: "hoodie-m", size: "M", stock: 2, price: 900 },
+        { id: "hoodie-l", size: "L", stock: 5, price: 1000 },
+      ],
+    };
+    const shirt: BrainProduct = {
+      ...product,
+      id: "shirt",
+      name: "T-Shirt",
+      aliases: ["tshirt"],
+      variants: [
+        { id: "shirt-s", size: "S", stock: 6, price: 100 },
+        { id: "shirt-m", size: "M", stock: 4, price: 120 },
+      ],
+    };
+    const result = await runIncomingBrain({
+      ...baseInput,
+      message: "Magkano yung hoodie jacket and/at tshirt? May available ba yung Small sa tshirt? Magkano kapag dalawang tshirt?",
+      products: [hoodie, shirt],
+    });
+    expect(result.reply).toContain("Hoodie Jacket");
+    expect(result.reply).toContain("M x1 = ₱900.00 subtotal");
+    expect(result.reply).toContain("L x1 = ₱1,000.00 subtotal");
+    expect(result.reply).toContain("T-Shirt");
+    expect(result.reply).toContain("S x2 = ₱200.00 subtotal");
+    expect(result.reply).toContain("size S has 6 available");
+  });
+
+  it("computes a combined subtotal for multiple items when each has one size", async () => {
+    const shirt: BrainProduct = {
+      ...product,
+      id: "bayanihan-shirt",
+      name: "Bayanihan T-Shirt",
+      aliases: ["bayanihan tshirt"],
+      variants: [{ id: "shirt-s", size: "S", stock: 5, price: 200 }],
+    };
+    const skirt: BrainProduct = {
+      ...product,
+      id: "liwayway-skirt",
+      name: "Liwayway Skirt",
+      aliases: ["liwayway"],
+      variants: [{ id: "skirt-m", size: "M", stock: 3, price: 500 }],
+    };
+    const result = await runIncomingBrain({
+      ...baseInput,
+      message: "Magkano lahat yung Bayanihan tshirt and/at Liwayway skirt?",
+      products: [shirt, skirt],
+    });
+    expect(result.reply).toContain("Bayanihan T-Shirt");
+    expect(result.reply).toContain("Liwayway Skirt");
+    expect(result.reply).toContain("Pinagsamang subtotal po ay ₱700.00");
+  });
+
   it("returns separate catalog quotes for multiple quantities in one message", async () => {
     const result = await runIncomingBrain({
       ...baseInput,

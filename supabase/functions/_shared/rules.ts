@@ -33,6 +33,14 @@ export type Understanding = {
   confidence: number;
   availability_requested?: boolean;
   price_quantities?: number[];
+  item_questions?: Array<{
+    product_query: string;
+    asks_price: boolean;
+    asks_availability: boolean;
+    size: string | null;
+    quantity: number | null;
+  }>;
+  total_requested?: boolean;
 };
 
 export type CatalogProduct = {
@@ -479,6 +487,66 @@ function extractQuantities(message: string, productStart: number | null): number
   return [...candidates].sort((a, b) => a - b);
 }
 
+function extractItemQuestions(
+  message: string,
+  catalog: CatalogProduct[],
+): Understanding["item_questions"] {
+  const questions = new Map<string, NonNullable<Understanding["item_questions"]>[number]>();
+  const clauses = message.split(/[?!;\n]+/).map(normalizeMessage).filter(Boolean);
+  for (const clause of clauses) {
+    const matches = findProductMatches(clause, catalog);
+    const distinct = [...new Map(matches.map((match) => [match.product.name, match])).values()];
+    if (distinct.length === 0) continue;
+    const overlappingProductMatch = distinct.some((match, index) =>
+      distinct.slice(index + 1).some((other) =>
+        match.start < other.end && other.start < match.end
+      )
+    );
+    if (overlappingProductMatch) continue;
+    const asksPrice = hasAny(clause, intentPhrases.price);
+    const availabilityWords = hasAny(clause, intentPhrases.availability);
+    const asksIfSizeAvailable = /\b(may|meron|mayroon)\b/.test(clause) &&
+      /\bsize|sizes\b/.test(clause);
+    if (!asksPrice && !availabilityWords && !asksIfSizeAvailable) continue;
+    for (const match of distinct) {
+      const tokens = clause.split(" ");
+      const localStart = Math.max(0, match.start - 4);
+      const localEnd = Math.min(tokens.length, match.end + 4);
+      const localText = tokens.slice(localStart, localEnd).join(" ");
+      const exactSizes = (match.product.sizes ?? []).filter((candidate) =>
+        (sizeWords[normalizeMessage(candidate)] ?? [normalizeMessage(candidate)])
+          .some((alias) => containsPhrase(localText, alias))
+      );
+      const size = exactSizes.length === 1
+        ? exactSizes[0]
+        : exactSizes.length > 1
+          ? null
+          : matchCatalogSize(localText, match.product.sizes ?? []);
+      const localMatchStart = match.start - localStart;
+      const quantities = extractQuantities(localText, localMatchStart);
+      const asksAvailability = availabilityWords ||
+        (size !== null && /\b(may|meron|mayroon)\b/.test(clause));
+      const current = questions.get(match.product.name) ?? {
+        product_query: match.product.name,
+        asks_price: false,
+        asks_availability: false,
+        size: null,
+        quantity: null,
+      };
+      current.asks_price ||= asksPrice;
+      current.asks_availability ||= asksAvailability;
+      if (size) current.size = current.size && current.size !== size ? null : size;
+      if (quantities.length === 1) {
+        current.quantity = current.quantity !== null && current.quantity !== quantities[0]
+          ? null
+          : quantities[0];
+      } else if (quantities.length > 1) current.quantity = null;
+      questions.set(match.product.name, current);
+    }
+  }
+  return questions.size > 1 ? [...questions.values()] : [];
+}
+
 function extractLocation(message: string): string | null {
   const locationText = message.replace(/\b(?:outside|outside of|other than|sa labas ng)\s+(?:the\s+)?metro manila\b/g, " ");
   const matches = regions.flatMap((region) => region.aliases
@@ -574,6 +642,16 @@ export function understandFromRules(
   const confidence = intent === "unknown" ? 0 : 0.95;
   const priceCueCount = (normalized.match(/\b(?:magkano|hm|how much|price)\b/g) ?? []).length;
   const distinctMatchedProducts = new Set(productMatches.map((match) => match.product.name));
+  const hasDistinctProductMentions = productMatches.some((match, index) =>
+    productMatches.slice(index + 1).some((other) =>
+      match.product.name !== other.product.name &&
+      (match.end <= other.start || other.end <= match.start)
+    )
+  );
+  const itemQuestions = hasDistinctProductMentions &&
+      ["price", "availability", "question"].includes(intent)
+    ? extractItemQuestions(message, catalog) ?? []
+    : [];
   return {
     intent,
     product_query: intent === "other" && !bestMatch ? null : productQuery,
@@ -588,5 +666,8 @@ export function understandFromRules(
         distinctMatchedProducts.size === 1
         ? quantities
         : [],
+    item_questions: itemQuestions,
+    total_requested: Boolean(itemQuestions.length) &&
+      /\b(magkano lahat|magkano lahat nito|how much all|total lahat|combined total|grand total)\b/.test(normalized),
   };
 }

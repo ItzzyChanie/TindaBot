@@ -917,6 +917,75 @@ export function runIncomingBrain(
     };
   };
 
+  if (understanding.item_questions && understanding.item_questions.length > 1) {
+    const now = input.now ?? new Date();
+    const details: string[] = [];
+    const combinedTotals: number[] = [];
+    const sizesNeededForTotal: string[] = [];
+    const products = understanding.item_questions.map((question) => {
+      const product = activeProducts.find((item) => item.name === question.product_query);
+      if (!product) return null;
+      const variants = question.size
+        ? product.variants.filter((variant) => variant.size === question.size)
+        : product.variants;
+      if (!variants.length) return null;
+      const quantity = question.quantity ?? 1;
+      const parts: string[] = [];
+      if (question.asks_availability) {
+        const stock = variants.map((variant) =>
+          variant.size + ": " +
+          (variant.stock > 0 ? variant.stock + " available" : "sold out"),
+        );
+        parts.push(
+          question.size
+            ? "size " + question.size + " has " + stock[0].split(": ")[1] + " po"
+            : "sizes/stock: " + stock.join(", "),
+        );
+      }
+      if (question.asks_price) {
+        const prices = variants.map((variant) => {
+          const pricing = quote(product, quantity, now, product.promos, variant.price);
+          const total = pricing.total;
+          return {
+            pricing,
+            label: variant.size + " x" + quantity + " = " + peso(total) + " subtotal",
+          };
+        });
+        parts.push("presyo: " + prices.map((item) => item.label).join("; "));
+        if (prices.length === 1) combinedTotals.push(prices[0].pricing.total);
+        else sizesNeededForTotal.push(product.name);
+      }
+      return { product, question, quantity, variants, prices: parts, description: parts.join("; ") };
+    });
+    if (products.some((item) => item === null)) {
+      return escalate("May item o size po akong hindi ma-match nang sigurado sa catalog. Ipa-check ko muna sa seller po.");
+    }
+    for (const item of products) {
+      if (item && item.description) details.push(item.product.name + " — " + item.description + ".");
+    }
+    if (understanding.total_requested) {
+      if (sizesNeededForTotal.length === 0 && combinedTotals.length > 1) {
+        const combined = Math.round((combinedTotals.reduce((sum, amount) => sum + amount, 0) + Number.EPSILON) * 100) / 100;
+        details.push("Pinagsamang subtotal po ay " + peso(combined) + ".");
+      } else if (sizesNeededForTotal.length) {
+        details.push("Para makuha ang pinagsamang total, pakisabi po ang size ng " + sizesNeededForTotal.join(" at ") + ".");
+      }
+    }
+    return respond(
+      {
+        products: products.map((item) => ({
+          product: item?.product.name,
+          size: item?.question.size,
+          quantity: item?.quantity,
+          availability: item?.question.asks_availability,
+          price: item?.question.asks_price,
+        })),
+        total_requested: understanding.total_requested === true,
+      },
+      details.join(" "),
+    );
+  }
+
   if (understanding.intent === "greeting") {
     return respond(
       { greeting: true, automated_assistant: true },
