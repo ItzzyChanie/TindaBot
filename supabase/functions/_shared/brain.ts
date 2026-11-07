@@ -12,6 +12,7 @@ import {
   type Understanding,
 } from "./rules.ts";
 import { formatOfferDateTime, offerTiming, quote, type QuotePromo } from "./quote.ts";
+import { geminiFallbackEnabled, geminiUnderstand } from "./gemini.ts";
 import {
   isCancellationRequest,
   paymentSafetyMessage,
@@ -217,10 +218,10 @@ function prefersEnglish(message: string): boolean {
   );
 }
 
-export function runIncomingBrain(
+export async function runIncomingBrain(
   input: BrainInput,
   rules: BrainRules = defaultRules,
-): BrainResult {
+): Promise<BrainResult> {
   const base: BrainResult = {
     action: "none",
     reply: null,
@@ -359,6 +360,30 @@ export function runIncomingBrain(
       failure: "rule_evaluation_error",
     });
     return escalate(unknownMessageReply);
+  }
+  if (understanding.intent === "unknown" && geminiFallbackEnabled()) {
+    const ai = await geminiUnderstand(input.message, input.products
+      .filter((product) => product.active)
+      .map((product) => ({ name: product.name, sizes: product.variants.map((variant) => variant.size), colors: product.colors ?? [] })));
+    if (ai?.intent === "other" && ai.reply) {
+      return {
+        ...base,
+        action: input.aiMode === "suggest" ? "draft" : "reply",
+        reply: ai.reply + (input.firstContact ? " " + disclosure : ""),
+      };
+    }
+    if (ai && ai.intent !== "other" && ai.intent !== "unknown") {
+      understanding = {
+        ...understanding,
+        intent: ai.intent as Understanding["intent"],
+        product_query: ai.product_query,
+        size: ai.size,
+        quantity: ai.qty,
+        quantities_mentioned: ai.qty === null ? [] : [ai.qty],
+        location: null,
+        confidence: 0.8,
+      };
+    }
   }
   const activeProducts = input.products.filter((product) => product.active);
   const replyProductResolution = input.replyContextText
