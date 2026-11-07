@@ -32,6 +32,7 @@ export type Understanding = {
   location: string | null;
   confidence: number;
   availability_requested?: boolean;
+  price_quantities?: number[];
 };
 
 export type CatalogProduct = {
@@ -470,7 +471,9 @@ function extractQuantities(message: string, productStart: number | null): number
     const nextIsSize = Object.values(sizeWords).flat().includes(next);
     const followsProduct = productStart !== null && index > productStart &&
       index - productStart <= 4 && (hasUnit || next === "x" || nextIsSize);
-    if (hasUnit || nearProduct || prefixed || followsProduct) candidates.add(value);
+    const pricingContext = prev === "sa" || ["kapag", "for", "each"].includes(prev) ||
+      /^(?:pcs?|pieces?|piraso|ganyan|ganito|ito|item|items)$/.test(next);
+    if (hasUnit || nearProduct || prefixed || followsProduct || pricingContext) candidates.add(value);
     index = found.end - 1;
   }
   return [...candidates].sort((a, b) => a - b);
@@ -569,6 +572,8 @@ export function understandFromRules(
     resolveProduct(productQuery, catalog).status === "matched") intent = "question";
 
   const confidence = intent === "unknown" ? 0 : 0.95;
+  const priceCueCount = (normalized.match(/\b(?:magkano|hm|how much|price)\b/g) ?? []).length;
+  const distinctMatchedProducts = new Set(productMatches.map((match) => match.product.name));
   return {
     intent,
     product_query: intent === "other" && !bestMatch ? null : productQuery,
@@ -578,5 +583,10 @@ export function understandFromRules(
     location,
     confidence,
     availability_requested: availabilityRequested,
+    price_quantities:
+      intent === "price" && priceCueCount > 1 && quantities.length > 1 &&
+        distinctMatchedProducts.size === 1
+        ? quantities
+        : [],
   };
 }

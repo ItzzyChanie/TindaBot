@@ -35,6 +35,7 @@ describe("catalog-grounded message rules", () => {
       location: "Metro Manila",
       confidence: 0.95,
       availability_requested: false,
+      price_quantities: [],
     });
   });
 
@@ -194,6 +195,19 @@ describe("catalog-grounded message rules", () => {
         product_query: expect.any(String),
       });
     }
+  });
+
+  it("separates two explicit price quantities in one Taglish message", () => {
+    expect(understandFromRules(
+      "Magkano po sa isang t-shirt? available po ba large size nyan? Magkano po kapag tatlong ganyan?",
+      catalog,
+    )).toMatchObject({
+      intent: "price",
+      size: "L",
+      quantities_mentioned: [1, 3],
+      price_quantities: [1, 3],
+      availability_requested: true,
+    });
   });
 
   it("recognizes quantity total follow-ups without repeating the product name", () => {

@@ -1866,6 +1866,88 @@ export function runIncomingBrain(
   }
   const size = chosenSize ?? (sizes.length === 1 ? sizes[0] : null);
   if (
+    understanding.price_quantities &&
+    understanding.price_quantities.length > 1 &&
+    !size &&
+    sizes.length > 1
+  ) {
+    return respond(
+      { product: product.name, price_quantities: understanding.price_quantities },
+      "Makakapagbigay po ako ng magkahiwalay na quote para sa bawat dami. Anong size po ang gusto ninyo? Available sizes po ay " +
+        sizes.join(", ") + ".",
+      {
+        ...activePending,
+        last_product: { product_id: product.id },
+        clarification: {
+          kind: "size",
+          product_id: product.id,
+          intent: "price",
+          location: understanding.location,
+          price_quantities: understanding.price_quantities,
+        },
+      },
+    );
+  }
+  if (understanding.price_quantities && understanding.price_quantities.length > 1) {
+    const variant = size
+      ? product.variants.find((item) => item.size === size)
+      : product.variants[0];
+    if (!variant) return escalate("I-check ko muna ang available sizes sa seller po.");
+    const now = input.now ?? new Date();
+    const quotes = understanding.price_quantities.map((quantity) => ({
+      quantity,
+      pricing: quote(product, quantity, now, product.promos, variant.price),
+    }));
+    const region = regionFor(understanding.location);
+    const shipping = region ? input.settings.shipping_rates[region] : undefined;
+    if (region && typeof shipping !== "number") {
+      return escalate(
+        "Hindi ko makita ang shipping rate para sa " + region + ". I-check ko muna sa seller po.",
+      );
+    }
+    const lines = quotes.map(({ quantity, pricing }) => {
+      const total = typeof shipping === "number"
+        ? Math.round((pricing.total + shipping + Number.EPSILON) * 100) / 100
+        : null;
+      const stockStatus = understanding.availability_requested
+        ? variant.stock >= quantity
+          ? " available"
+          : variant.stock === 0
+            ? " sold out"
+            : " (" + variant.stock + " lang ang available)"
+        : "";
+      return quantity + " piraso" + stockStatus + ": " +
+        peso(pricing.total) + " subtotal" +
+        (total === null ? "" : ", " + peso(total) + " kasama ang shipping");
+    });
+    const stockText = variant.stock > 0
+      ? "May " + variant.stock + " stock po sa size " + variant.size + "."
+      : "Sold out po ngayon ang size " + variant.size + ".";
+    const shippingText = typeof shipping === "number"
+      ? " Shipping sa " + region + " ay " + peso(shipping) + "."
+      : " Sabihin po ang delivery area para makuha ang shipping.";
+    const reply = product.name + " (" + variant.size + ") po, eto ang magkahiwalay na presyo: " +
+      lines.join("; ") + ". " + stockText + shippingText;
+    return respond(
+      {
+        product: product.name,
+        size: variant.size,
+        price_quotes: quotes.map(({ quantity, pricing }) => ({ quantity, subtotal: pricing.total })),
+        stock: variant.stock,
+        shipping: typeof shipping === "number" ? shipping : null,
+      },
+      reply,
+      {
+        ...activePending,
+        last_product: {
+          product_id: product.id,
+          size: variant.size,
+          location: understanding.location,
+        },
+      },
+    );
+  }
+  if (
     !size &&
     sizes.length > 1 &&
     ["availability", "order_confirm", "question"].includes(understanding.intent)

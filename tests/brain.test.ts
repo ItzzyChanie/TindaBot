@@ -57,6 +57,40 @@ function ai(result: Understanding): BrainRules {
 }
 
 describe("grounded incoming conversation brain", () => {
+  it("returns separate catalog quotes for multiple quantities in one message", async () => {
+    const result = await runIncomingBrain({
+      ...baseInput,
+      message: "Magkano po sa isang Isla blouse size S? Magkano po kapag tatlong ganyan sa Cebu?",
+      settings: { ...baseInput.settings, shipping_rates: { Visayas: 75 } },
+    });
+    expect(result.reply).toContain("1 piraso: ₱33.33 subtotal, ₱108.33 kasama ang shipping");
+    expect(result.reply).toContain("3 piraso: ₱99.99 subtotal, ₱174.99 kasama ang shipping");
+    expect(result.reply).toContain("May 5 stock po sa size S.");
+    expect(result.reply).toContain("Shipping sa Visayas ay ₱75.00.");
+  });
+
+  it("answers availability, size, quantity price, and shipping together", async () => {
+    const skirt: BrainProduct = {
+      ...product,
+      id: "liwayway-skirt",
+      name: "Liwayway Skirt",
+      aliases: ["liwayway"],
+      variants: [
+        { id: "skirt-m", size: "M", stock: 4, price: 500 },
+      ],
+    };
+    const result = await runIncomingBrain({
+      ...baseInput,
+      message: "Available po ba liwayway skirt medium size? how much po kapag tatlo, metro manila area?",
+      products: [skirt],
+      settings: { ...baseInput.settings, shipping_rates: { "Metro Manila": 80 } },
+    });
+    expect(result.reply).toContain("₱1,500.00");
+    expect(result.reply).toContain("Shipping po ay ₱80.00");
+    expect(result.reply).toContain("total ₱1,580.00");
+    expect(result.reply).toContain("May 4 stock po sa size M.");
+  });
+
   it("resolves distinctive partial product names and recognizes med as M", async () => {
     const basicTee: BrainProduct = {
       ...product,
