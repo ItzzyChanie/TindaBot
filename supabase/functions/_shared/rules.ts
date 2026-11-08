@@ -586,8 +586,41 @@ export function understandFromRules(
 ): Understanding {
   const normalized = normalizeMessage(message);
   const productMatches = findProductMatches(normalized, catalog);
-  const bestMatch = productMatches[0];
-  const productQuery = bestMatch?.alias ?? unknownProductQuery(normalized);
+  const genericProductWords = new Set([
+    "shirt", "tshirt", "tee", "top", "item", "the", "a",
+  ]);
+  const distinctiveProductMatches = productMatches.filter((match) =>
+    normalizeProductQuery(match.alias).split(" ").some((word) =>
+      word && !genericProductWords.has(word)
+    )
+  );
+  const distinctiveProductIds = new Set(
+    distinctiveProductMatches.map((match) => match.product.name),
+  );
+  const preferredProductMatch = distinctiveProductIds.size === 1
+    ? distinctiveProductMatches.find((match) =>
+      match.product.name === [...distinctiveProductIds][0]
+    ) ?? null
+    : null;
+  const normalizedProductMessage = normalizeProductQuery(normalized);
+  const explicitNameMatches = catalog
+    .filter((product) =>
+      containsPhrase(
+        normalizedProductMessage,
+        normalizeProductQuery(product.name),
+      )
+    )
+    .sort((a, b) => normalizeProductQuery(b.name).length - normalizeProductQuery(a.name).length);
+  const explicitProduct = explicitNameMatches[0] ?? null;
+  const explicitProductMatch = explicitProduct
+    ? productMatches.find((match) => match.product.name === explicitProduct.name)
+    : null;
+  const bestMatch = preferredProductMatch ?? explicitProductMatch ?? productMatches[0];
+  const productQuery = preferredProductMatch
+    ? explicitProduct?.name === preferredProductMatch.product.name
+      ? explicitProduct.name
+      : preferredProductMatch.alias
+    : explicitProduct?.name ?? bestMatch?.alias ?? unknownProductQuery(normalized);
   const inferredProductStart = productQuery
     ? normalized.split(" ").indexOf(normalizeMessage(productQuery).split(" ")[0])
     : -1;
