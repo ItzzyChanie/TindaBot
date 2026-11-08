@@ -1468,7 +1468,7 @@ describe("grounded incoming conversation brain", () => {
       ...baseInput, message: "sige po", products: [coloredProduct], pending: answer.pending,
     });
     expect(yes.reply).toContain("Anong size po");
-    expect(yes.pending.last_product).toMatchObject({ color: "Brown" });
+    expect(yes.pending.recent_products?.[0]).toMatchObject({ color: "Brown" });
   });
 
   it.each(["telegram", "web"])("keeps the selected catalog item through color and order-interest replies (%s)", async (channel) => {

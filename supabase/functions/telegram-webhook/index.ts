@@ -38,7 +38,13 @@ type TelegramMessage = {
   from?: { first_name?: string; last_name?: string; username?: string };
 };
 
-type TelegramUpdate = { update_id?: number; message?: TelegramMessage; edited_message?: TelegramMessage };
+type TelegramCallbackQuery = {
+  id?: string;
+  data?: string;
+  from?: { first_name?: string; last_name?: string; username?: string };
+  message?: TelegramMessage;
+};
+type TelegramUpdate = { update_id?: number; message?: TelegramMessage; edited_message?: TelegramMessage; callback_query?: TelegramCallbackQuery };
 
 async function sendTelegramMessage(chatId: number, text: string): Promise<string | null> {
   if (!telegramToken) throw new Error("Telegram bot is not configured");
@@ -195,7 +201,9 @@ async function processTelegramUpdate(
         }
       } else {
         replyDeliveryStarted = true;
-        channelMessageIds.push(...await sendToChannel("telegram", String(chatId), incoming.reply, { replyMarkup }));
+        channelMessageIds.push(...await sendToChannel("telegram", String(chatId), incoming.reply, {
+          replyMarkup: incoming.replyMarkup as Record<string, unknown> | undefined ?? replyMarkup,
+        }));
       }
       await saveChannelMessageIds(savedReplyId, channelMessageIds);
     }
@@ -225,6 +233,65 @@ async function processTelegramUpdate(
   }
 }
 
+async function answerTelegramCallback(callbackQueryId: string): Promise<void> {
+  if (!telegramToken) return;
+  try {
+    await fetch(`https://api.telegram.org/bot${telegramToken}/answerCallbackQuery`, {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ callback_query_id: callbackQueryId }),
+    });
+  } catch {
+    // Callback acknowledgement is best-effort; the selected message is still processed.
+  }
+}
+
+async function processTelegramCallback(updateId: number, callback: TelegramCallbackQuery): Promise<void> {
+  let claimed = false;
+  let succeeded = false;
+  try {
+    claimed = await claimTelegramUpdate(updateId);
+    if (!claimed) return;
+    const chatId = callback.message?.chat?.id;
+    const callbackId = callback.id;
+    const match = typeof callback.data === "string" ? callback.data.match(/^recent_product:([1-3])$/) : null;
+    if (!chatId || !callbackId || !match) {
+      succeeded = true;
+      return;
+    }
+    const name = [callback.from?.first_name, callback.from?.last_name].filter(Boolean).join(" ") || callback.from?.username || null;
+    const incoming = await handleIncoming("telegram", String(chatId), match[1], {
+      externalMessageId: `callback:${callbackId}`,
+      name,
+    });
+    if (incoming.reply) {
+      const savedReplyId = await saveAssistantReply(incoming.conversationId, incoming.reply, incoming.imageUrls ?? []);
+      const channelMessageIds = await sendToChannel("telegram", String(chatId), incoming.reply, {
+        replyMarkup: incoming.replyMarkup as Record<string, unknown> | undefined ?? replyMarkup,
+        imageUrls: incoming.imageUrls ?? (incoming.imageUrl ? [incoming.imageUrl] : []),
+      });
+      await saveChannelMessageIds(savedReplyId, channelMessageIds);
+    }
+    succeeded = true;
+  } catch (error) {
+    console.error("Telegram callback processing failed", {
+      updateId,
+      errorType: error instanceof Error ? error.name : "unknown_error",
+    });
+  } finally {
+    if (callback.id) await answerTelegramCallback(callback.id);
+    if (claimed) {
+      try {
+        await finishTelegramUpdate(updateId, succeeded);
+      } catch (error) {
+        console.error("Could not record Telegram callback status", {
+          updateId,
+          errorType: error instanceof Error ? error.name : "unknown_error",
+        });
+      }
+    }
+  }
+}
+
 Deno.serve(async (request: Request) => {
   if (request.method !== "POST")
     return new Response("Method not allowed", { status: 405 });
@@ -246,6 +313,17 @@ Deno.serve(async (request: Request) => {
   }
 
   const edited = Boolean(update.edited_message);
+  if (update.callback_query) {
+    if (!Number.isSafeInteger(update.update_id)) return new Response("Invalid Telegram update ID", { status: 400 });
+    const task = processTelegramCallback(update.update_id as number, update.callback_query);
+    const edgeRuntime = (globalThis as typeof globalThis & { EdgeRuntime?: { waitUntil(promise: Promise<unknown>): void } }).EdgeRuntime;
+    if (edgeRuntime?.waitUntil) {
+      edgeRuntime.waitUntil(task);
+      return Response.json({ ok: true });
+    }
+    await task;
+    return Response.json({ ok: true });
+  }
   const message = update.edited_message ?? update.message;
   if (!message?.chat?.id) return Response.json({ ok: true });
   if (!Number.isSafeInteger(update.update_id))

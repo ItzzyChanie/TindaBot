@@ -407,6 +407,11 @@ export function resolveProductChoice<T extends CatalogProduct>(
   products: T[],
 ): ProductResolution<T> {
   const normalizedQuery = normalizeProductQuery(query ?? "");
+  const numberedChoice = normalizedQuery.match(/^[1-3]$/);
+  if (numberedChoice) {
+    const selected = products[Number(numberedChoice[0]) - 1];
+    if (selected) return { status: "matched", product: selected };
+  }
   const exactNames = products.filter((product) =>
     normalizeProductQuery(product.name) === normalizedQuery
   );

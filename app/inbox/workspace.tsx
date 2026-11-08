@@ -752,9 +752,10 @@ export function InboxWorkspace() {
 
   async function markResolved() {
     if (!selected) return;
+    const pending = { recent_products: Array.isArray(selected.pending.recent_products) ? selected.pending.recent_products : [] };
     const { error: updateError } = await createSupabaseBrowserClient()
       .from("conversations")
-      .update({ status: "resolved", pending: {} })
+      .update({ status: "resolved", pending })
       .eq("id", selected.id);
     if (updateError) {
       setError(updateError.message);
@@ -763,7 +764,7 @@ export function InboxWorkspace() {
     setConversations((current) =>
       current.map((item) =>
         item.id === selected.id
-          ? { ...item, status: "resolved", pending: {} }
+          ? { ...item, status: "resolved", pending }
           : item,
       ),
     );

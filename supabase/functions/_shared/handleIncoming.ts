@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import { labelAutoReply, runIncomingBrain, type BrainPending, type BrainProduct } from "./brain.ts";
+import { labelAutoReply, readRecentProducts, rememberProduct, runIncomingBrain, type BrainPending, type BrainProduct } from "./brain.ts";
 import { quote, type QuotePromo } from "./quote.ts";
 import { notifySeller } from "./notify.ts";
 import { customerDetailsPrompt, isCancellationRequest, isOrderAcknowledgment, isPaymentRequest, isReservationRequest, missingCustomerDetails, missingDetailsPrompt, orderDetailFields, parseOrderDetails, paymentSafetyMessage, reservationDetailsPrompt, sellerRepliedAfterOrder, type OrderCustomerDetails, validCustomerEmail, validCustomerMobile } from "./order-customer-details.ts";
@@ -65,6 +65,17 @@ function object(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
     ? value as Record<string, unknown>
     : {};
+}
+
+function keepRecentProducts(pending: Record<string, unknown>, previous: Record<string, unknown>, now = Date.now()): Record<string, unknown> {
+  const all = [...readRecentProducts(pending, now), ...readRecentProducts(previous, now)];
+  const unique = new Map<string, (typeof all)[number]>();
+  for (const item of all.sort((a, b) => Date.parse(b.at) - Date.parse(a.at))) {
+    if (!unique.has(item.product_id)) unique.set(item.product_id, item);
+  }
+  const result = { ...pending, recent_products: [...unique.values()].slice(0, 3) };
+  delete result.last_product;
+  return result;
 }
 
 function formatPeso(value: number): string {
@@ -230,6 +241,14 @@ export async function handleIncoming(
   }
   const replyContextText = [replyTarget?.body, replyParentText, replyTarget?.reply_to_text]
     .filter((value): value is string => Boolean(value?.trim())).join("\n");
+  const { data: previousMessages, error: historyError } = await supabase.from("messages")
+    .select("sender, body").eq("conversation_id", conversationId).in("sender", ["customer", "ai"])
+    .order("created_at", { ascending: false }).limit(6);
+  if (historyError) throw historyError;
+  const history = (previousMessages ?? []).reverse().map((message) => ({
+    role: message.sender === "ai" ? "bot" as const : "customer" as const,
+    text: String(message.body ?? "").slice(0, 200),
+  }));
   const { error: messageError } = await supabase.from("messages").insert({
     conversation_id: conversationId,
     sender: "customer",
@@ -300,7 +319,32 @@ export async function handleIncoming(
     .maybeSingle();
   if (settingsError) throw settingsError;
   const settings = settingsRow ?? { shipping_rates: {}, payment_instructions: "", policies: "", size_chart_url: null, greeting_text: "", shipping_text: "", faq_answers: {}, bot_options: {} };
-  const currentPending = object(conversation.pending);
+  let currentPending = keepRecentProducts(object(conversation.pending), object(conversation.pending)) as BrainPending;
+  const legacyRecent = object(currentPending.last_product);
+  if (!Array.isArray(currentPending.recent_products) && typeof legacyRecent.product_id === "string") {
+    const legacyProduct = products.find((item) => item.id === legacyRecent.product_id);
+    if (legacyProduct) currentPending = rememberProduct(currentPending, legacyProduct, {
+      size: typeof legacyRecent.size === "string" ? legacyRecent.size : null,
+      color: typeof legacyRecent.color === "string" ? legacyRecent.color : null,
+    }) as BrainPending;
+  }
+  delete currentPending.last_product;
+  const explicitProduct = products.find((item) => item.id === productId) ?? (() => {
+    const match = resolveProduct(text, products);
+    return match.status === "matched" ? match.product as BrainProduct : null;
+  })();
+  const repliedProductResolution = replyContextText ? resolveProduct(replyContextText, products) : null;
+  const repliedProduct = repliedProductResolution?.status === "matched" ? repliedProductResolution.product as BrainProduct : null;
+  const mentionedProduct = explicitProduct ?? repliedProduct;
+  if (mentionedProduct) currentPending = rememberProduct(currentPending, mentionedProduct, {
+    size: typeof legacyRecent.size === "string" ? legacyRecent.size : null,
+    color: typeof legacyRecent.color === "string" ? legacyRecent.color : null,
+  }) as BrainPending;
+  if (mentionedProduct || legacyRecent.product_id) {
+    const { error } = await supabase.from("conversations").update({ pending: currentPending }).eq("id", conversationId);
+    if (error) throw error;
+  }
+  conversation = { ...conversation, pending: currentPending };
   const detailState = object(currentPending.order_customer_details);
   const provisionalOrder = object(detailState.order);
   const hasProvisionalOrder = typeof provisionalOrder.variant_id === "string";
@@ -401,7 +445,7 @@ export async function handleIncoming(
       const product = products.find((item) => item.id === provisionalOrder.product_id && item.active);
       const variant = product?.variants.find((item) => item.id === provisionalOrder.variant_id);
       if (!product || !variant || !Number.isInteger(quantity) || quantity <= 0) {
-        const { error } = await supabase.from("conversations").update({ pending: {}, status: "needs_seller" }).eq("id", conversationId);
+        const { error } = await supabase.from("conversations").update({ pending: { recent_products: currentPending.recent_products }, status: "needs_seller" }).eq("id", conversationId);
         if (error) throw error;
         const message = "Pasensya na po, hindi ko na ma-verify ang item para sa reservation. Ipa-check ko muna sa seller po.";
         const { error: missedError } = await supabase.from("missed_requests").insert({
@@ -416,7 +460,7 @@ export async function handleIncoming(
       const shipping = Number(provisionalOrder.shipping);
       const total = Math.round((pricing.total + shipping + Number.EPSILON) * 100) / 100;
       if (Math.round(Number(provisionalOrder.total) * 100) !== Math.round(total * 100)) {
-        const { error } = await supabase.from("conversations").update({ pending: {}, status: "needs_seller" }).eq("id", conversationId);
+        const { error } = await supabase.from("conversations").update({ pending: { recent_products: currentPending.recent_products }, status: "needs_seller" }).eq("id", conversationId);
         if (error) throw error;
         const message = "Nagbago po ang quote habang kinukuha ang details. Ipa-confirm ko muna sa seller ang latest price bago mag-reserve.";
         const { error: missedError } = await supabase.from("missed_requests").insert({
@@ -440,7 +484,7 @@ export async function handleIncoming(
         p_total: total,
       });
       if (createOrderError?.message.includes("OUT_OF_STOCK")) {
-        const { error } = await supabase.from("conversations").update({ pending: {}, status: "needs_seller" }).eq("id", conversationId);
+        const { error } = await supabase.from("conversations").update({ pending: { recent_products: currentPending.recent_products }, status: "needs_seller" }).eq("id", conversationId);
         if (error) throw error;
         const message = "Pasensya na po, naubos na ang stock habang kinukuha ang details kaya hindi ko na-reserve. Ipa-check ko muna sa seller ang ibang available na option po.";
         const { error: missedError } = await supabase.from("missed_requests").insert({
@@ -469,7 +513,7 @@ export async function handleIncoming(
     }).eq("id", orderId);
     if (orderDetailsError) throw orderDetailsError;
     const { error: conversationUpdateError } = await supabase.from("conversations")
-      .update({ pending: { order_followup: "done", order_id: orderId }, status: "needs_seller" }).eq("id", conversationId);
+      .update({ pending: { recent_products: currentPending.recent_products, order_followup: "done", order_id: orderId }, status: "needs_seller" }).eq("id", conversationId);
     if (conversationUpdateError) throw conversationUpdateError;
     notifySellerSafely({ type: "needs_seller", conversationId, customerName, channel, dedupeKey: `needs_seller:${conversationId}` });
     const options = object(settings.bot_options);
@@ -493,9 +537,10 @@ export async function handleIncoming(
   if (currentPending.order_followup === "done") {
     if (isOrderAcknowledgment(text))
       return { conversationId, reply: null, draft: null };
-    const { error } = await supabase.from("conversations").update({ pending: {} }).eq("id", conversationId);
+    const resetState = { recent_products: currentPending.recent_products };
+    const { error } = await supabase.from("conversations").update({ pending: resetState }).eq("id", conversationId);
     if (error) throw error;
-    conversation = { ...conversation, pending: {} };
+    conversation = { ...conversation, pending: resetState };
   }
   const { data: latestOrderRow, error: orderError } = await supabase
     .from("orders")
@@ -508,6 +553,7 @@ export async function handleIncoming(
 
   const brain = await runIncomingBrain({
     message: text,
+    history,
     replyPromptText: replyTarget?.body ?? null,
     replyContextText: replyContextText || null,
     replyPriorText: replyParentText,
@@ -628,7 +674,7 @@ export async function handleIncoming(
     draft = reply;
     reply = null;
   }
-  const nextPending = draft ? { ...pending, ai_draft: draft } : pending;
+  const nextPending = keepRecentProducts(draft ? { ...pending, ai_draft: draft } : pending, currentPending);
   const status = needsSeller
     ? "needs_seller"
     : brain.clearSellerHandoff
@@ -649,7 +695,7 @@ export async function handleIncoming(
     if (error) throw error;
   }
 
-  return { conversationId, reply, draft, imageUrl: reply ? brain.imageUrl ?? null : null, imageUrls: reply ? brain.imageUrls ?? [] : [] };
+  return { conversationId, reply, draft, imageUrl: reply ? brain.imageUrl ?? null : null, imageUrls: reply ? brain.imageUrls ?? [] : [], replyMarkup: reply ? brain.replyMarkup ?? null : null };
 }
 
 export async function saveAssistantReply(

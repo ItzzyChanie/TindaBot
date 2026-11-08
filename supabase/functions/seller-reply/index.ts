@@ -257,7 +257,7 @@ Deno.serve(async (request: Request) => {
   const { error: modeError } = await supabase
     .from("conversations")
     .update({
-      ...(sendDraft ? {} : { ai_mode: "human", pending: {} }),
+      ...(sendDraft ? {} : { ai_mode: "human", pending: { recent_products: Array.isArray(pending.recent_products) ? pending.recent_products : [] } }),
       ...(sendDraft ? { pending: nextPending } : {}),
       status: conversation.status === "needs_seller" ? "open" : conversation.status,
       last_message_at: new Date().toISOString(),

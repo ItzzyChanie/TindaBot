@@ -45,10 +45,17 @@ export type BrainProduct = CatalogProduct & {
 export type BrainPending = Record<string, unknown> & {
   order?: Record<string, unknown>;
   clarification?: Record<string, unknown>;
-  last_product?: Record<string, unknown>;
+  recent_products?: RecentProduct[];
+  last_product_details?: Record<string, unknown>;
 };
+export type RecentProduct = { product_id: string; name: string; size?: string; color?: string; at: string };
+export type ReferenceResolution =
+  | { kind: "resolved"; product: RecentProduct }
+  | { kind: "clarify"; products: RecentProduct[] }
+  | { kind: "none" };
 export type BrainInput = {
   message: string;
+  history?: Array<{ role: "customer" | "bot"; text: string }>;
   replyContextText?: string | null;
   replyPromptText?: string | null;
   replyPriorText?: string | null;
@@ -106,9 +113,79 @@ export type BrainResult = {
   imageUrl?: string | null;
   imageUrls?: string[];
   clearSellerHandoff?: boolean;
+  replyMarkup?: Record<string, unknown>;
 };
+
+export function readRecentProducts(state: Record<string, unknown>, now = Date.now()): RecentProduct[] {
+  const values = Array.isArray(state.recent_products) ? state.recent_products : [];
+  return values.flatMap((value): RecentProduct[] => {
+    if (!value || typeof value !== "object") return [];
+    const row = value as Record<string, unknown>;
+    const at = typeof row.at === "string" ? Date.parse(row.at) : NaN;
+    if (typeof row.product_id !== "string" || typeof row.name !== "string" || !Number.isFinite(at) || now - at > 86400000 || at > now) return [];
+    return [{ product_id: row.product_id, name: row.name, ...(typeof row.size === "string" ? { size: row.size } : {}), ...(typeof row.color === "string" ? { color: row.color } : {}), at: new Date(at).toISOString() }];
+  }).sort((a, b) => Date.parse(b.at) - Date.parse(a.at)).slice(0, 3);
+}
+
+export function rememberProduct(state: Record<string, unknown>, product: Pick<BrainProduct, "id" | "name">, details: { size?: string | null; color?: string | null } = {}, now = Date.now()): Record<string, unknown> {
+  const previous = readRecentProducts(state, now).find((item) => item.product_id === product.id);
+  const size = details.size ?? previous?.size;
+  const color = details.color ?? previous?.color;
+  const entry: RecentProduct = { product_id: product.id, name: product.name, ...(size ? { size } : {}), ...(color ? { color } : {}), at: new Date(now).toISOString() };
+  return { ...state, recent_products: [entry, ...readRecentProducts(state, now).filter((item) => item.product_id !== product.id)].slice(0, 3) };
+}
+
+const clothingCategories = ["dress", "jacket", "blouse", "shirt", "t-shirt", "tshirt", "pants", "jeans", "skirt", "shorts", "top", "hoodie", "sweater", "cardigan"];
+const referenceCue = /\b(that one|this one|that item|this item|it|those|these|yung|yun|iyon|iyan|dito|diyan|kanina|ulit|again|same one|red|blue|black|white|green|pink|beige)\b/i;
+
+function inferFollowupIntent(text: string): Understanding["intent"] {
+  const normalized = normalizeMessage(text);
+  if (/\b(magkano|price|how much|cost)\b/.test(normalized)) return "price";
+  if (/\b(stock|available|availability|meron|mayroon|avail)\b/.test(normalized)) return "availability";
+  if (/\b(discount|promo|sale)\b/.test(normalized)) return "discount";
+  return "question";
+}
+
+function rememberProductsInText(state: Record<string, unknown>, text: string, products: BrainProduct[], now?: number): Record<string, unknown> {
+  const normalized = normalizeMessage(text);
+  const matches = products.flatMap((product) => [product.name, ...(product.aliases ?? [])]
+    .map((alias) => ({ product, position: normalizeMessage(alias) ? normalized.indexOf(normalizeMessage(alias)) : -1 }))
+    .filter((match) => match.position >= 0))
+    .sort((a, b) => a.position - b.position);
+  return matches.reduce((memo, match) => rememberProduct(memo, match.product, {}, now), state);
+}
+
+export function resolveReference(text: string, state: Record<string, unknown>, telegramReplyContext: string | null, products: BrainProduct[] = [], now = Date.now()): ReferenceResolution {
+  const recent = readRecentProducts(state, now);
+  if (telegramReplyContext) {
+    const replied = resolveProduct(telegramReplyContext, products.filter((product) => product.active));
+    if (replied.status === "matched") {
+      const product = replied.product as BrainProduct;
+      return { kind: "resolved", product: recent.find((entry) => entry.product_id === product.id) ?? { product_id: product.id, name: product.name, at: new Date(now).toISOString() } };
+    }
+    const replyMatch = recent.filter((entry) => normalizeMessage(telegramReplyContext).includes(normalizeMessage(entry.name)));
+    if (replyMatch.length === 1) return { kind: "resolved", product: replyMatch[0] };
+  }
+  if (!recent.length) return { kind: "none" };
+  const normalized = normalizeMessage(text);
+  const candidates = recent.filter((entry) => {
+    const catalog = products.find((product) => product.id === entry.product_id);
+    const names = [entry.name, ...(catalog?.aliases ?? [])].map(normalizeMessage).filter(Boolean);
+    if (names.some((name) => normalized.includes(name))) return true;
+    const colors = [...(catalog?.colors ?? []), ...(entry.color ? [entry.color] : [])].map(normalizeMessage);
+    if (colors.some((color) => color && normalized.split(" ").includes(color))) return true;
+    return clothingCategories.some((category) => normalized.includes(category) && names.some((name) => name.includes(category)));
+  });
+  if (candidates.length === 1) return { kind: "resolved", product: candidates[0] };
+  if (candidates.length > 1) return { kind: "clarify", products: candidates };
+  if (!referenceCue.test(normalized)) return { kind: "none" };
+  if (recent.length === 1) return { kind: "resolved", product: recent[0] };
+  return { kind: "clarify", products: recent };
+}
 export type BrainRules = {
   understand: typeof understandFromRules;
+  fallbackEnabled?: () => boolean;
+  fallback?: typeof geminiUnderstand;
 };
 
 const defaultRules: BrainRules = { understand: understandFromRules };
@@ -361,10 +438,49 @@ export async function runIncomingBrain(
     });
     return escalate(unknownMessageReply);
   }
-  if (understanding.intent === "unknown" && geminiFallbackEnabled()) {
-    const ai = await geminiUnderstand(input.message, input.products
-      .filter((product) => product.active)
-      .map((product) => ({ name: product.name, sizes: product.variants.map((variant) => variant.size), colors: product.colors ?? [] })));
+  const activeProducts = input.products.filter((product) => product.active);
+  const reference = resolveReference(input.message, input.pending, input.replyContextText ?? null, activeProducts, input.now?.getTime());
+  if (reference.kind === "clarify" && clarification.kind !== "product") {
+    const choices = reference.products.map((item) => activeProducts.find((product) => product.id === item.product_id)).filter((item): item is BrainProduct => Boolean(item));
+    if (choices.length > 1) {
+      const intent = understanding.intent === "unknown" ? inferFollowupIntent(input.message) : understanding.intent;
+      const pending: BrainPending = {
+        ...input.pending,
+        clarification: {
+          kind: "product",
+          candidates: choices.map((product) => product.name),
+          intent,
+          size: understanding.size,
+          quantity: understanding.quantity,
+          location: understanding.location,
+        },
+      };
+      const labels = choices.map((product, index) => `${index + 1}) ${product.name}`);
+      return {
+        ...base,
+        action: input.aiMode === "suggest" ? "draft" : "reply",
+        reply: "Alin po dito ang tinutukoy ninyo? " + labels.join("  "),
+        pending,
+        replyMarkup: input.channel === "telegram" ? {
+          inline_keyboard: choices.map((product, index) => [{ text: `${index + 1}) ${product.name}`,
+            callback_data: `recent_product:${index + 1}` }]),
+        } : undefined,
+      };
+    }
+  }
+  const resolvedRecent = reference.kind === "resolved"
+    ? activeProducts.find((product) => product.id === reference.product.product_id)
+    : undefined;
+  const queryResolution = understanding.product_query ? resolveProduct(understanding.product_query, activeProducts) : null;
+  if (resolvedRecent && (!understanding.product_query || queryResolution?.status !== "matched" || referenceCue.test(normalizeMessage(input.message)) || input.replyContextText)) {
+    understanding = { ...understanding, product_query: resolvedRecent.name, confidence: Math.max(understanding.confidence, 0.9) };
+  }
+  const recent = readRecentProducts(input.pending, input.now?.getTime());
+  const awaitingProductChoice = clarification.kind === "product" && Array.isArray(clarification.candidates);
+  if (understanding.intent === "unknown" && !awaitingProductChoice && (rules.fallbackEnabled?.() ?? geminiFallbackEnabled())) {
+    const ai = await (rules.fallback ?? geminiUnderstand)(input.message,
+      activeProducts.map((product) => ({ name: product.name, sizes: product.variants.map((variant) => variant.size), colors: product.colors ?? [] })),
+      { history: input.history ?? [], recent: recent.map((item) => ({ id: item.product_id, name: item.name })) });
     if (ai?.intent === "other" && ai.reply) {
       return {
         ...base,
@@ -376,7 +492,7 @@ export async function runIncomingBrain(
       understanding = {
         ...understanding,
         intent: ai.intent as Understanding["intent"],
-        product_query: ai.product_query,
+        product_query: (ai.product_ref ? recent.find((item) => item.product_id === ai.product_ref)?.name : null) ?? ai.product_query ?? resolvedRecent?.name ?? null,
         size: ai.size,
         quantity: ai.qty,
         quantities_mentioned: ai.qty === null ? [] : [ai.qty],
@@ -385,7 +501,6 @@ export async function runIncomingBrain(
       };
     }
   }
-  const activeProducts = input.products.filter((product) => product.active);
   const replyProductResolution = input.replyContextText
     ? resolveProduct(input.replyContextText, activeProducts)
     : { status: "not_found" as const, candidates: [] };
@@ -397,7 +512,11 @@ export async function runIncomingBrain(
     input.products.find(
       (product) => product.active && product.id === input.contextProductId,
     ) ?? replyContextProduct;
-  let lastProductContext = record(input.pending.last_product);
+  const recentHead = readRecentProducts(input.pending, input.now?.getTime())[0];
+  let lastProductContext: Record<string, unknown> = {
+    ...record(input.pending.last_product_details ?? input.pending.last_product),
+    ...(recentHead ? { product_id: recentHead.product_id, size: recentHead.size, color: recentHead.color } : {}),
+  };
   const lastProduct = input.products.find(
     (item) => item.active && item.id === lastProductContext.product_id,
   );
@@ -697,11 +816,21 @@ export async function runIncomingBrain(
   const continueReply = (reply: string, pending: BrainPending): BrainResult => {
     const nextPending = { ...pending };
     delete nextPending.seller_handoff;
+    delete nextPending.last_product;
+    const last = record(pending.last_product_details);
+    const product = input.products.find((item) => item.active && item.id === last.product_id);
+    let remembered: BrainPending = product ? rememberProduct(pending, product, {
+      size: typeof last.size === "string" ? last.size : null,
+      color: typeof last.color === "string" ? last.color : null,
+    }, input.now?.getTime()) as BrainPending : pending;
+    remembered = rememberProductsInText(remembered, reply, input.products, input.now?.getTime()) as BrainPending;
+    const replyPending: BrainPending = { ...remembered, ...nextPending, recent_products: remembered.recent_products };
+    delete replyPending.seller_handoff;
     return {
       ...base,
       action: input.aiMode === "suggest" ? "draft" : "reply",
       reply: reply + (input.firstContact ? " " + disclosure : ""),
-      pending: nextPending,
+      pending: replyPending,
       clearSellerHandoff:
         input.status === "needs_seller" ||
         input.pending.seller_handoff === true,
@@ -788,7 +917,7 @@ export async function runIncomingBrain(
         ...lastProductContext,
         product_id: followupProduct.id,
       };
-      activePending.last_product = lastProductContext;
+      activePending.last_product_details = lastProductContext;
     }
   } else if (clarification.kind === "engagement" && isYes) {
     return continueReply(
@@ -817,7 +946,7 @@ export async function runIncomingBrain(
         ...lastProductContext,
         product_id: followupProduct.id,
       };
-      activePending.last_product = lastProductContext;
+      activePending.last_product_details = lastProductContext;
     } else {
       return continueReply(
         "Okay po. Nandito lang po kami kung may iba pa kayong tanong.",
@@ -846,7 +975,7 @@ export async function runIncomingBrain(
     if (selectedColor) {
       const pending: BrainPending = {
         ...activePending,
-        last_product: {
+        last_product_details: {
           ...lastProductContext,
           product_id: clarificationProduct.id,
           color: selectedColor,
@@ -931,11 +1060,25 @@ export async function runIncomingBrain(
   ): BrainResult => {
     let text = template;
     if (input.firstContact) text += " " + disclosure;
+    const responseState: BrainPending = { ...pending };
+    const responseProducts: string[] = typeof facts.product === "string" ? [facts.product] : Array.isArray(facts.products)
+      ? (facts.products as Array<Record<string, unknown>>).map((item) => item.product).filter((name): name is string => typeof name === "string")
+      : [];
+    for (const name of responseProducts) {
+      const product = input.products.find((item) => item.active && item.name === name);
+      if (product) Object.assign(responseState, rememberProduct(responseState, product, {
+        size: typeof facts.size === "string" ? facts.size : null,
+        color: typeof lastProductContext.color === "string" ? lastProductContext.color : null,
+      }, input.now?.getTime()));
+    }
+    Object.assign(responseState, rememberProductsInText(responseState, text, input.products, input.now?.getTime()));
+    responseState.recent_products = readRecentProducts(responseState, input.now?.getTime());
+    delete responseState.last_product;
     return {
       ...base,
       action: input.aiMode === "suggest" ? "draft" : "reply",
       reply: text,
-      pending,
+      pending: responseState,
       quotedPriceMatches:
         typeof facts.quote_total === "number" &&
         facts.quote_total === facts.expected_quote_total,
@@ -1558,7 +1701,7 @@ export async function runIncomingBrain(
       reply,
       understanding.intent === "discount" ? {
         ...activePending,
-        last_product: {
+        last_product_details: {
           ...lastProductContext,
           product_id: product.id,
           quantity,
@@ -1925,7 +2068,7 @@ export async function runIncomingBrain(
         ".",
       {
         ...activePending,
-        last_product: { product_id: product.id },
+        last_product_details: { product_id: product.id },
         ...(understanding.quantity !== null
           ? {
               clarification: {
@@ -1971,7 +2114,7 @@ export async function runIncomingBrain(
         sizes.join(", ") + ".",
       {
         ...activePending,
-        last_product: { product_id: product.id },
+        last_product_details: { product_id: product.id },
         clarification: {
           kind: "size",
           product_id: product.id,
@@ -2033,7 +2176,7 @@ export async function runIncomingBrain(
       reply,
       {
         ...activePending,
-        last_product: {
+        last_product_details: {
           product_id: product.id,
           size: variant.size,
           location: understanding.location,
@@ -2074,7 +2217,7 @@ export async function runIncomingBrain(
       "Noted po, " + size + ". Ilang piraso po ang gusto ninyo?",
       {
         ...activePending,
-        last_product: { ...lastProductContext, product_id: product.id, size },
+        last_product_details: { ...lastProductContext, product_id: product.id, size },
         clarification: {
           kind: "quantity",
           product_id: product.id,
@@ -2177,7 +2320,7 @@ export async function runIncomingBrain(
       typeof shipping === "number"
         ? {
             ...activePending,
-            last_product: {
+            last_product_details: {
               product_id: product.id,
               size: variant.size,
               quantity,
@@ -2186,7 +2329,7 @@ export async function runIncomingBrain(
           }
         : {
             ...activePending,
-            last_product: {
+            last_product_details: {
               product_id: product.id,
               size: variant.size,
               quantity,
@@ -2231,7 +2374,7 @@ export async function runIncomingBrain(
   const pending: BrainPending = orderIntent
     ? { ...activePending, order }
     : activePending;
-  pending.last_product = {
+  pending.last_product_details = {
     product_id: product.id,
     size: variant.size,
     quantity,
