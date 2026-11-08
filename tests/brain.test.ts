@@ -852,6 +852,53 @@ describe("grounded incoming conversation brain", () => {
     expect(answer.reply).toContain("530.00");
   });
 
+  it("uses a newly requested size with the remembered product and switches to a newly named item", async () => {
+    const bayanihan: BrainProduct = {
+      ...product,
+      id: "bayanihan-tee",
+      name: "Bayanihan Basic T-Shirt",
+      aliases: ["bayanihan", "basic tee", "t-shirt"],
+      price: 299,
+      variants: [
+        { id: "bayanihan-s", size: "S", stock: 5, price: 299 },
+        { id: "bayanihan-m", size: "M", stock: 4, price: 349 },
+      ],
+    };
+    const followupProduct: BrainProduct = {
+      ...product,
+      variants: [
+        { id: "variant-s", size: "S", stock: 5, price: 500 },
+        { id: "variant-m", size: "M", stock: 4, price: 550 },
+      ],
+    };
+    const first = await runIncomingBrain({
+      ...baseInput,
+      message: "Magkano po sa Bayanihan Basic T-Shirt size small?",
+      products: [bayanihan, followupProduct],
+    });
+    expect(first.reply).toContain("(S)");
+    expect(first.reply).toContain("₱299.00");
+
+    const changedSize = await runIncomingBrain({
+      ...baseInput,
+      message: "Magkano po kapag medium?",
+      pending: first.pending,
+      products: [bayanihan, followupProduct],
+    });
+    expect(changedSize.reply).toContain("Bayanihan Basic T-Shirt (M)");
+    expect(changedSize.reply).toContain("₱349.00");
+    expect(changedSize.reply).not.toContain("(S)");
+
+    const changedItem = await runIncomingBrain({
+      ...baseInput,
+      message: "Magkano po sa Isla blouse size M?",
+      pending: changedSize.pending,
+      products: [bayanihan, followupProduct],
+    });
+    expect(changedItem.reply).toContain("Isla Linen Top (M)");
+    expect(changedItem.reply).toContain("₱550.00");
+  });
+
   it("explains that an unlisted item is not in the catalog and flags it for the seller", async () => {
     const result = await runIncomingBrain({
       ...baseInput,

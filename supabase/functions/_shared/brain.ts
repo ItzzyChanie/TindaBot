@@ -624,6 +624,10 @@ export async function runIncomingBrain(
       product_query: contextProduct.name,
       size:
         understanding.size ??
+        matchCatalogSize(
+          input.message,
+          contextProduct.variants.map((item) => item.size),
+        ) ??
         (hasLastProductContext && typeof lastProductContext.size === "string"
           ? lastProductContext.size
           : null),
@@ -785,6 +789,10 @@ export async function runIncomingBrain(
       product_query: lastProduct.name,
       size:
         understanding.size ??
+        matchCatalogSize(
+          input.message,
+          lastProduct.variants.map((item) => item.size),
+        ) ??
         (typeof lastProductContext.size === "string"
           ? lastProductContext.size
           : null),
