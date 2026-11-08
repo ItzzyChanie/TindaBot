@@ -61,6 +61,16 @@ type CustomerOrder = {
 
 const CONVERSATIONS_PER_PAGE = 30;
 const MESSAGES_PER_PAGE = 100;
+const INSTAGRAM_SAMPLE_THREADS = [
+  {
+    name: "Mika Santos",
+    preview: "Hi po! Available pa ba ang Bayanihan Basic T-Shirt in medium?",
+  },
+  {
+    name: "Bea Reyes",
+    preview: "Hello po, magkano ang Isla Linen Top? May size small po ba?",
+  },
+];
 
 async function hydrateAttachments(rows: Message[]): Promise<Message[]> {
   const supabase = createSupabaseBrowserClient();
@@ -519,6 +529,13 @@ export function InboxWorkspace() {
         .includes(normalized);
     });
   }, [conversations, lastMessages, needsSellerOnly, search]);
+  const visibleInstagramSamples = useMemo(() => {
+    if (showHidden || needsSellerOnly) return [];
+    const normalized = search.trim().toLocaleLowerCase();
+    return INSTAGRAM_SAMPLE_THREADS.filter((sample) =>
+      !normalized || `${sample.name} ${sample.preview}`.toLocaleLowerCase().includes(normalized)
+    );
+  }, [needsSellerOnly, search, showHidden]);
 
   async function changeMode(mode: Conversation["ai_mode"]) {
     if (!selected) return;
@@ -909,9 +926,9 @@ export function InboxWorkspace() {
               Try again
             </button>
           </div>
-        ) : conversations.length === 0 ? (
+        ) : conversations.length === 0 && visibleInstagramSamples.length === 0 ? (
           <p className="inbox-state">Wala pang conversations po.</p>
-        ) : visibleConversations.length === 0 ? (
+        ) : visibleConversations.length === 0 && visibleInstagramSamples.length === 0 ? (
           <p className="inbox-state">No conversations match your search.</p>
         ) : (
           <div className="conversation-list">
@@ -956,6 +973,26 @@ export function InboxWorkspace() {
                 </button>
               );
             })}
+            {visibleInstagramSamples.map((sample) => (
+              <article
+                key={`instagram-sample-${sample.name}`}
+                className="conversation-card conversation-card-sample"
+                aria-label={`Sample Instagram conversation with ${sample.name}`}
+              >
+                <span className="conversation-avatar">
+                  {sample.name.slice(0, 1)}
+                </span>
+                <span className="conversation-main">
+                  <span className="conversation-title">
+                    <strong>{sample.name}</strong>
+                    <span className="sample-thread-label">Sample</span>
+                  </span>
+                  <span className="conversation-preview">{sample.preview}</span>
+                  <span className="channel-badge">Instagram (Coming soon)</span>
+                </span>
+                <span className="conversation-time">Demo</span>
+              </article>
+            ))}
           </div>
         )}
         {conversationCount > CONVERSATIONS_PER_PAGE && (
