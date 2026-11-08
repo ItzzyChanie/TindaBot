@@ -2492,6 +2492,31 @@ h2 {
   gap: 10px;
   margin-bottom: 15px;
 }
+.orders-view-tabs {
+  display: flex;
+  gap: 8px;
+  margin: 18px 0 10px;
+  border-bottom: 1px solid var(--line);
+}
+.orders-view-tabs button {
+  padding: 10px 12px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.orders-view-tabs button.active {
+  border-bottom-color: var(--green);
+  color: var(--green);
+  font-weight: 650;
+}
+.orders-view-tabs button:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
+}
 .order-search input {
   min-height: 40px;
   width: min(340px, 75vw);
@@ -2684,6 +2709,9 @@ h2 {
   min-height: 36px;
   border: 0;
 }
+.order-actions .message-icon-button:disabled { cursor: wait; opacity: .55; }
+.order-actions .order-delete-button:hover { color: #b42318; border-color: #b42318; }
+.order-actions .message-icon-button svg { width: 15px; height: 15px; }
 .empty-orders {
   color: var(--muted);
   text-align: center;

@@ -15,8 +15,10 @@ type Order = {
   customer_id: string;
   total: number;
   shipping: number;
-  status: "awaiting_payment" | "paid" | "shipped";
+  status: "awaiting_payment" | "paid" | "shipped" | "expired";
   created_at: string;
+  expires_at: string;
+  hidden_at: string | null;
   payment_proof: unknown[];
   customer_full_name: string | null;
   customer_address: string | null;
@@ -29,6 +31,7 @@ type Order = {
 type Filter = "all" | Order["status"];
 type DateFilter = "all" | "7" | "30";
 const PAGE_SIZE = 20;
+type OrderView = "active" | "hidden";
 function dateSince(days: DateFilter) {
   const parts = new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Manila", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
   const part = (type: string) => Number(parts.find((item) => item.type === type)?.value);
@@ -40,17 +43,19 @@ const statusLabels: Record<Order["status"], string> = {
   awaiting_payment: "Awaiting payment",
   paid: "Paid",
   shipped: "Shipped",
+  expired: "Expired",
 };
 
 function money(value: number) {
   return "₱" + Number(value).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-const ORDER_SELECT = "id, customer_id, total, shipping, status, created_at, payment_proof, customer_full_name, customer_address, customer_mobile, customer_email, customer_notes, customers(name, channel, external_id), order_items(qty, unit_price, offer_label, color, variants(size, products(name)))";
+const ORDER_SELECT = "id, customer_id, total, shipping, status, created_at, expires_at, hidden_at, payment_proof, customer_full_name, customer_address, customer_mobile, customer_email, customer_notes, customers(name, channel, external_id), order_items(qty, unit_price, offer_label, color, variants(size, products(name)))";
 
 export function OrdersManager() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [filter, setFilter] = useState<Filter>("all");
+  const [view, setView] = useState<OrderView>("active");
   const [dateFilter, setDateFilter] = useState<DateFilter>("all");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
@@ -72,6 +77,7 @@ export function OrdersManager() {
       customerIds = (customers ?? []).map((customer: { id: string }) => customer.id);
     }
     let query = supabase.from("orders").select(ORDER_SELECT, { count: "exact" }).order("created_at", { ascending: false });
+    query = view === "hidden" ? query.not("hidden_at", "is", null) : query.is("hidden_at", null);
     if (filter !== "all") query = query.eq("status", filter);
     if (dateFilter !== "all") {
       query = query.gte("created_at", dateSince(dateFilter));
@@ -85,7 +91,7 @@ export function OrdersManager() {
       setError("");
     }
     if (showLoading) setLoading(false);
-  }, [filter, dateFilter, search, page]);
+  }, [filter, view, dateFilter, search, page]);
 
   useEffect(() => {
     void loadOrders(true);
@@ -115,6 +121,29 @@ export function OrdersManager() {
     setSavingId(null);
   }
 
+  async function setHidden(order: Order, hidden: boolean) {
+    setSavingId(order.id);
+    setError("");
+    const { data, error: actionError } = await createSupabaseBrowserClient()
+      .rpc("set_order_hidden", { p_order_id: order.id, p_hidden: hidden });
+    if (actionError) setError(actionError.message);
+    else if (data !== true) setError("Could not update this order.");
+    else await loadOrders();
+    setSavingId(null);
+  }
+
+  async function deleteOrder(order: Order) {
+    if (!window.confirm(`Permanently delete order #${order.id}? This cannot be undone.`)) return;
+    setSavingId(order.id);
+    setError("");
+    const { data, error: actionError } = await createSupabaseBrowserClient()
+      .rpc("delete_order", { p_order_id: order.id });
+    if (actionError) setError(actionError.message);
+    else if (data !== true) setError("Could not delete this order.");
+    else await loadOrders();
+    setSavingId(null);
+  }
+
   const visible = orders;
 
   async function exportCsv() {
@@ -129,6 +158,7 @@ export function OrdersManager() {
       }
       const fetchPage = async (offset: number) => {
         let query = supabase.from("orders").select(ORDER_SELECT).order("created_at", { ascending: false });
+        query = view === "hidden" ? query.not("hidden_at", "is", null) : query.is("hidden_at", null);
         if (filter !== "all") query = query.eq("status", filter);
         if (dateFilter !== "all") query = query.gte("created_at", dateSince(dateFilter));
         if (term) query = /^\d+$/.test(term) ? query.eq("id", Number(term)) : customerIds?.length ? query.in("customer_id", customerIds) : query.eq("id", -1);
@@ -169,10 +199,15 @@ export function OrdersManager() {
             <option value="awaiting_payment">Awaiting payment</option>
             <option value="paid">Paid</option>
             <option value="shipped">Shipped</option>
+            <option value="expired">Expired</option>
           </select>
         </label>
       </section>
       {error && <p className="inbox-alert error-state" role="alert">{error}</p>}
+      <nav className="orders-view-tabs" aria-label="Order views">
+        <button type="button" className={view === "active" ? "active" : ""} aria-current={view === "active" ? "page" : undefined} onClick={() => { setView("active"); setPage(0); }}>Orders</button>
+        <button type="button" className={view === "hidden" ? "active" : ""} aria-current={view === "hidden" ? "page" : undefined} onClick={() => { setView("hidden"); setPage(0); }}>Hidden orders</button>
+      </nav>
       <section className="orders-tools" aria-label="Filter and export order history">
         <label className="order-search"><span className="sr-only">Search by order number or customer</span><input value={search} onChange={(event) => { setSearch(event.target.value); setPage(0); }} placeholder="Search order # or customer" /></label>
         <label className="order-filter"><span className="sr-only">Filter date</span><select value={dateFilter} onChange={(event) => { setDateFilter(event.target.value as DateFilter); setPage(0); }}><option value="all">Any date</option><option value="7">Last 7 days</option><option value="30">Last 30 days</option></select></label>
@@ -199,6 +234,7 @@ export function OrdersManager() {
                 <span className="channel-badge">{order.customers?.channel ?? "unknown"}</span>
                 <time>{new Intl.DateTimeFormat("en-PH", { dateStyle: "medium", timeStyle: "short" }).format(new Date(order.created_at))}</time>
               </div>
+              {order.status === "awaiting_payment" && <p className="muted">Reservation expires {new Intl.DateTimeFormat("en-PH", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Manila" }).format(new Date(order.expires_at))}</p>}
               {(order.customer_full_name || order.customer_address || order.customer_mobile || order.customer_email || order.customer_notes) && (
                 <dl className="order-customer-details">
                   {order.customer_full_name && <><dt>Full name</dt><dd>{order.customer_full_name}</dd></>}
@@ -226,6 +262,12 @@ export function OrdersManager() {
                 <p className="proof-received">Payment proof received · {order.payment_proof.length}</p>
               )}
               <div className="order-actions">
+                <button className="message-icon-button" type="button" disabled={savingId === order.id} onClick={() => void setHidden(order, view !== "hidden")} aria-label={view === "hidden" ? `Unhide order ${order.id}` : `Hide order ${order.id}`} title={view === "hidden" ? "Unhide order" : "Hide order"}>
+                  {view === "hidden" ? <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6Z"/><circle cx="12" cy="12" r="2.5"/></svg> : <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="m3 3 18 18M10.6 6.2A10.7 10.7 0 0 1 12 6c6.5 0 10 6 10 6a16 16 0 0 1-3.1 3.6M6.2 6.7C3.4 8.4 2 12 2 12s3.5 6 10 6c1.2 0 2.3-.2 3.3-.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>}
+                </button>
+                <button className="message-icon-button order-delete-button" type="button" disabled={savingId === order.id} onClick={() => void deleteOrder(order)} aria-label={`Delete order ${order.id}`} title="Delete order">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M4 7h16M10 11v6m4-6v6M6 7l1 14h10l1-14M9 7V4h6v3"/></svg>
+                </button>
                 {order.status === "awaiting_payment" && (
                   <button className="button button-primary" disabled={savingId === order.id} onClick={() => void setStatus(order, "paid")}>
                     {savingId === order.id ? "Saving…" : "Mark paid"}

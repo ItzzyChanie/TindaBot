@@ -520,8 +520,12 @@ export async function handleIncoming(
     const options = object(settings.bot_options);
     const pageName = typeof options.facebook_page_name === "string" ? options.facebook_page_name.trim() : "";
     const pageUrl = typeof options.facebook_page_url === "string" && /^https:\/\//i.test(options.facebook_page_url) ? options.facebook_page_url.trim() : "";
+    const { data: reservedOrder, error: reservedOrderError } = await supabase.from("orders").select("expires_at").eq("id", orderId).single();
+    if (reservedOrderError) throw reservedOrderError;
+    const expiryText = new Intl.DateTimeFormat("en-PH", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Manila" }).format(new Date(reservedOrder.expires_at));
     const completion = "Salamat po! Kumpleto na ang details ng order #" + orderId +
-      ". Ire-review po muna ni seller ang details ninyo para ma-verify ang buyer at matiyak ang tamang delivery information. " +
+      ". Naka-reserve po ang item hanggang " + expiryText + " (oras sa Pilipinas)." +
+      " Ire-review po muna ni seller ang details ninyo para ma-verify ang buyer at matiyak ang tamang delivery information. " +
       paymentSafetyMessage({
         channel,
         orderId,
