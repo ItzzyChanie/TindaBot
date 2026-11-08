@@ -63,12 +63,24 @@ const CONVERSATIONS_PER_PAGE = 30;
 const MESSAGES_PER_PAGE = 100;
 const INSTAGRAM_SAMPLE_THREADS = [
   {
+    id: "instagram-sample-mika",
     name: "Mika Santos",
     preview: "Hi po! Available pa ba ang Bayanihan Basic T-Shirt in medium?",
+    messages: [
+      { sender: "customer", body: "Hi po! Available pa ba ang Bayanihan Basic T-Shirt in medium?", time: "Today · 2:03 PM" },
+      { sender: "ai", body: "Opo, may medium po. Automated assistant po ito ng shop. I-type ang SELLER kung gusto ninyo pong makausap ang seller.", time: "Today · 2:03 PM" },
+      { sender: "customer", body: "Magkano po kasama shipping sa Quezon City?", time: "Today · 2:05 PM" },
+    ],
   },
   {
+    id: "instagram-sample-bea",
     name: "Bea Reyes",
     preview: "Hello po, magkano ang Isla Linen Top? May size small po ba?",
+    messages: [
+      { sender: "customer", body: "Hello po, magkano ang Isla Linen Top? May size small po ba?", time: "Today · 1:42 PM" },
+      { sender: "ai", body: "Isla Linen Top (S) po ay ₱450.00. Sabihin po ang area ninyo para makuha ang shipping at total.", time: "Today · 1:42 PM" },
+      { sender: "customer", body: "Sa Cebu po. Available pa ba?", time: "Today · 1:44 PM" },
+    ],
   },
 ];
 
@@ -165,6 +177,7 @@ export function InboxWorkspace() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [orders, setOrders] = useState<CustomerOrder[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedSampleId, setSelectedSampleId] = useState<string | null>(null);
   const [selectedSnapshot, setSelectedSnapshot] = useState<Conversation | null>(null);
   const [draft, setDraft] = useState("");
   const [attachment, setAttachment] = useState<File | null>(null);
@@ -536,6 +549,9 @@ export function InboxWorkspace() {
       !normalized || `${sample.name} ${sample.preview}`.toLocaleLowerCase().includes(normalized)
     );
   }, [needsSellerOnly, search, showHidden]);
+  const selectedSample = INSTAGRAM_SAMPLE_THREADS.find(
+    (sample) => sample.id === selectedSampleId,
+  ) ?? null;
 
   async function changeMode(mode: Conversation["ai_mode"]) {
     if (!selected) return;
@@ -873,7 +889,7 @@ export function InboxWorkspace() {
     : [];
 
   return (
-    <div className={`inbox-page${selectedId ? " has-selection" : ""}${mobileDetailsOpen ? " show-mobile-details" : ""}`}>
+    <div className={`inbox-page${selectedId || selectedSampleId ? " has-selection" : ""}${mobileDetailsOpen ? " show-mobile-details" : ""}`}>
       <aside className="inbox-list-panel">
         <div className="inbox-list-heading">
           <div className="inbox-page-title">
@@ -891,7 +907,7 @@ export function InboxWorkspace() {
           <span className="inbox-filter-label">
             {showHidden ? "Hidden conversations" : needsSellerOnly ? "Needs seller" : "All conversations"}
           </span>
-          {!showHidden && <button className="inbox-filter-button" onClick={() => setNeedsSellerOnly((value) => !value)}>
+          {!showHidden && <button className="inbox-filter-button" onClick={() => { setSelectedSampleId(null); setNeedsSellerOnly((value) => !value); }}>
             {needsSellerOnly ? "Show all" : "Needs seller only"}
           </button>}
           <button
@@ -900,6 +916,7 @@ export function InboxWorkspace() {
               setConversationPage(0);
               setSelectedSnapshot(null);
               setSelectedId(null);
+              setSelectedSampleId(null);
               setShowHidden((value) => !value);
             }}
           >
@@ -941,6 +958,7 @@ export function InboxWorkspace() {
                   className={`conversation-card${selectedId === conversation.id ? " selected" : ""}${conversation.status === "needs_seller" && !conversation.seller_read_at ? " unread" : ""}`}
                   onClick={() => {
                     setMobileDetailsOpen(false);
+                    setSelectedSampleId(null);
                     setSelectedSnapshot(conversation);
                     setSelectedId(conversation.id);
                   }}
@@ -974,10 +992,18 @@ export function InboxWorkspace() {
               );
             })}
             {visibleInstagramSamples.map((sample) => (
-              <article
+              <button
+                type="button"
                 key={`instagram-sample-${sample.name}`}
-                className="conversation-card conversation-card-sample"
+                className={`conversation-card conversation-card-sample${selectedSampleId === sample.id ? " selected" : ""}`}
                 aria-label={`Sample Instagram conversation with ${sample.name}`}
+                aria-pressed={selectedSampleId === sample.id}
+                onClick={() => {
+                  setSelectedId(null);
+                  setSelectedSnapshot(null);
+                  setSelectedSampleId(sample.id);
+                  setMobileDetailsOpen(false);
+                }}
               >
                 <span className="conversation-avatar">
                   {sample.name.slice(0, 1)}
@@ -988,24 +1014,76 @@ export function InboxWorkspace() {
                     <span className="sample-thread-label">Sample</span>
                   </span>
                   <span className="conversation-preview">{sample.preview}</span>
-                  <span className="channel-badge">Instagram (Coming soon)</span>
+                  <span className="channel-badge">Instagram</span>
                 </span>
                 <span className="conversation-time">Demo</span>
-              </article>
+              </button>
             ))}
           </div>
         )}
         {conversationCount > CONVERSATIONS_PER_PAGE && (
           <nav className="inbox-pagination" aria-label="Conversation pages">
-            <button className="text-button" disabled={conversationPage === 0 || loading} onClick={() => { setSelectedSnapshot(null); setSelectedId(null); setConversationPage((page) => Math.max(0, page - 1)); }}>Previous</button>
+            <button className="text-button" disabled={conversationPage === 0 || loading} onClick={() => { setSelectedSnapshot(null); setSelectedId(null); setSelectedSampleId(null); setConversationPage((page) => Math.max(0, page - 1)); }}>Previous</button>
             <span>Page {conversationPage + 1} of {Math.ceil(conversationCount / CONVERSATIONS_PER_PAGE)}</span>
-            <button className="text-button" disabled={(conversationPage + 1) * CONVERSATIONS_PER_PAGE >= conversationCount || loading} onClick={() => { setSelectedSnapshot(null); setSelectedId(null); setConversationPage((page) => page + 1); }}>Next</button>
+            <button className="text-button" disabled={(conversationPage + 1) * CONVERSATIONS_PER_PAGE >= conversationCount || loading} onClick={() => { setSelectedSnapshot(null); setSelectedId(null); setSelectedSampleId(null); setConversationPage((page) => page + 1); }}>Next</button>
           </nav>
         )}
       </aside>
 
       <section className="inbox-thread-panel" aria-label="Conversation thread">
-        {selected ? (
+        {selectedSample ? (
+          <>
+            <header className="thread-header">
+              <button
+                className="back-to-inbox"
+                onClick={() => setSelectedSampleId(null)}
+                aria-label="Back to conversation list"
+              >
+                ←
+              </button>
+              <span className="conversation-avatar">
+                {selectedSample.name.slice(0, 1)}
+              </span>
+              <div className="thread-contact">
+                <strong>{selectedSample.name}</strong>
+                <span>Instagram</span>
+              </div>
+            </header>
+            <div className="thread-messages" aria-live="polite">
+              {selectedSample.messages.map((message, index) => (
+                <article
+                  key={`${selectedSample.id}-${index}`}
+                  className={`message-row ${message.sender}`}
+                >
+                  <div className="message-bubble">
+                    <span className="message-sender">
+                      {message.sender === "customer" ? selectedSample.name : "TindaBot"}
+                    </span>
+                    <p>{message.body}</p>
+                    <time>{message.time}</time>
+                  </div>
+                </article>
+              ))}
+            </div>
+            <div className="reply-form simulated-reply-form">
+              <div className="reply-composer-row">
+                <textarea
+                  aria-label="Instagram sample reply input"
+                  readOnly
+                  value=""
+                  placeholder="Simulated — Instagram replies are coming soon."
+                  rows={2}
+                />
+                <button className="button button-primary reply-send-button" type="button" disabled>
+                  Coming soon
+                </button>
+              </div>
+              <p className="simulated-note" role="note">
+                Sample conversation lang po ito. Instagram messaging is coming soon.
+              </p>
+            </div>
+          </>
+        ) : selected ? (
           <>
             <header className="thread-header">
               <button
@@ -1284,7 +1362,24 @@ export function InboxWorkspace() {
       </section>
 
       <aside className="inbox-details-panel">
-        {selected && customer ? (
+        {selectedSample ? (
+          <>
+            <div className="details-heading">
+              <p className="eyebrow">CUSTOMER PROFILE</p>
+              <button className="mobile-details-close text-button" type="button" aria-label="Close customer profile" onClick={() => setMobileDetailsOpen(false)}>
+                Close
+              </button>
+            </div>
+            <div className="customer-profile">
+              <span className="customer-avatar">
+                {selectedSample.name.slice(0, 1)}
+              </span>
+              <h2>{selectedSample.name}</h2>
+              <span className="channel-badge">Instagram</span>
+              <p className="muted">Sample conversation · simulated</p>
+            </div>
+          </>
+        ) : selected && customer ? (
           <>
             <div className="details-heading">
               <p className="eyebrow">CUSTOMER PROFILE</p>

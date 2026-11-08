@@ -2100,10 +2100,7 @@ h2 {
   background: var(--green-soft);
 }
 .conversation-card-sample {
-  cursor: default;
-}
-.conversation-card-sample:hover {
-  background: transparent;
+  cursor: pointer;
 }
 .sample-thread-label {
   flex: 0 0 auto;
