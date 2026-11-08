@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { labelAutoReply, readRecentProducts, rememberProduct, runIncomingBrain, type BrainPending, type BrainProduct } from "./brain.ts";
 import { quote, type QuotePromo } from "./quote.ts";
+import { resolveProduct } from "./rules.ts";
 import { notifySeller } from "./notify.ts";
 import { customerDetailsPrompt, isCancellationRequest, isOrderAcknowledgment, isPaymentRequest, isReservationRequest, missingCustomerDetails, missingDetailsPrompt, orderDetailFields, parseOrderDetails, paymentSafetyMessage, reservationDetailsPrompt, sellerRepliedAfterOrder, type OrderCustomerDetails, validCustomerEmail, validCustomerMobile } from "./order-customer-details.ts";
 
@@ -73,7 +74,7 @@ function keepRecentProducts(pending: Record<string, unknown>, previous: Record<s
   for (const item of all.sort((a, b) => Date.parse(b.at) - Date.parse(a.at))) {
     if (!unique.has(item.product_id)) unique.set(item.product_id, item);
   }
-  const result = { ...pending, recent_products: [...unique.values()].slice(0, 3) };
+  const result: Record<string, unknown> = { ...pending, recent_products: [...unique.values()].slice(0, 3) };
   delete result.last_product;
   return result;
 }

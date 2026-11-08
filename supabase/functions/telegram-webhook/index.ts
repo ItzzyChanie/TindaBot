@@ -267,7 +267,7 @@ async function processTelegramCallback(updateId: number, callback: TelegramCallb
       const savedReplyId = await saveAssistantReply(incoming.conversationId, incoming.reply, incoming.imageUrls ?? []);
       const channelMessageIds = await sendToChannel("telegram", String(chatId), incoming.reply, {
         replyMarkup: incoming.replyMarkup as Record<string, unknown> | undefined ?? replyMarkup,
-        imageUrls: incoming.imageUrls ?? (incoming.imageUrl ? [incoming.imageUrl] : []),
+        imageUrls: incoming.imageUrls ?? [],
       });
       await saveChannelMessageIds(savedReplyId, channelMessageIds);
     }
