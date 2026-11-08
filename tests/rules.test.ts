@@ -101,8 +101,43 @@ describe("catalog-grounded message rules", () => {
       { name: "Bayanihan Basic T-Shirt", aliases: ["t-shirt"], sizes: ["M"] },
     ];
 
-    expect(resolveProduct("T-shirt", products).status).toBe("ambiguous");
+    expect(resolveProduct("T-shirt", products)).toMatchObject({
+      status: "matched",
+      product: { name: "T-Shirt" },
+    });
     expect(resolveProductChoice("T-shirt", products)).toMatchObject({
+      status: "matched",
+      product: { name: "T-Shirt" },
+    });
+  });
+
+  it.each([
+    "Bayanihan basic tshirt",
+    "Bayanihan basic t-shirt",
+    "Bayanihan",
+    "Bayanihan tshirt",
+    "Bayanihan t-shirt",
+    "basic thisrt",
+    "basic t-shirt",
+  ])("prefers Bayanihan Basic T-Shirt for the distinctive phrase %s", (phrase) => {
+    const products = [
+      { name: "T-Shirt", aliases: ["tee", "tshirt"], sizes: ["M"] },
+      { name: "Bayanihan Basic T-Shirt", aliases: ["t-shirt", "basic tee"], sizes: ["S", "M"] },
+    ];
+    const understanding = understandFromRules("Magkano po " + phrase + "?", products);
+    expect(resolveProduct(understanding.product_query, products)).toMatchObject({
+      status: "matched",
+      product: { name: "Bayanihan Basic T-Shirt" },
+    });
+  });
+
+  it.each(["tshirt", "t-shirt", "T-Shirt"])("matches a bare %s to the generic T-Shirt product", (phrase) => {
+    const products = [
+      { name: "T-Shirt", aliases: ["tee", "tshirt"], sizes: ["M"] },
+      { name: "Bayanihan Basic T-Shirt", aliases: ["t-shirt", "basic tee"], sizes: ["S", "M"] },
+    ];
+    const understanding = understandFromRules("Magkano po " + phrase + "?", products);
+    expect(resolveProduct(understanding.product_query, products)).toMatchObject({
       status: "matched",
       product: { name: "T-Shirt" },
     });

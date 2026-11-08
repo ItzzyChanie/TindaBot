@@ -1041,7 +1041,38 @@ describe("grounded incoming conversation brain", () => {
     expect(result.reply).not.toContain("I-check ko muna");
   });
 
-  it("accepts a shared-alias clarification when the customer repeats an exact product name", async () => {
+  it("answers an exact Bayanihan Basic T-Shirt mention without asking which t-shirt", async () => {
+    const products: BrainProduct[] = [
+      {
+        ...product,
+        id: "plain-tee",
+        name: "T-Shirt",
+        aliases: ["tee", "tshirt"],
+        price: 100,
+        variants: [{ id: "plain-tee-m", size: "M", stock: 6 }],
+      },
+      {
+        ...product,
+        id: "bayanihan-tee",
+        name: "Bayanihan Basic T-Shirt",
+        aliases: ["t-shirt", "basic tee"],
+        price: 450,
+        variants: [{ id: "bayanihan-tee-m", size: "M", stock: 8 }],
+      },
+    ];
+    const result = await runIncomingBrain({
+      ...baseInput,
+      message: "magkano po ulit sa bayanihan basic t-shirt?",
+      products,
+    });
+
+    expect(result.needsSeller).toBe(false);
+    expect(result.reply).toContain("Bayanihan Basic T-Shirt");
+    expect(result.reply).toContain("450.00");
+    expect(result.reply).not.toContain("Alin po rito");
+  });
+
+  it("uses the exact generic product name when resolving a shared alias", async () => {
     const products: BrainProduct[] = [
       {
         ...product,
@@ -1065,17 +1096,8 @@ describe("grounded incoming conversation brain", () => {
       message: "How much po 2 medium t-shirt?",
       products,
     });
-    expect(question.reply).toContain("T-Shirt o Bayanihan Basic T-Shirt");
-
-    const answer = await runIncomingBrain({
-      ...baseInput,
-      message: "T-shirt",
-      products,
-      pending: question.pending,
-    });
-    expect(answer.reply).toContain("T-Shirt (M) x2");
-    expect(answer.reply).toContain("200.00");
-    expect(answer.reply).not.toContain("Alin po rito");
+    expect(question.reply).toContain("T-Shirt (M) x2");
+    expect(question.reply).not.toContain("Alin po rito");
   });
 
   it("answers with the full catalog item when the customer gives a generated partial name", async () => {

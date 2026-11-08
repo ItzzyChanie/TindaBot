@@ -375,6 +375,11 @@ export function resolveProduct<T extends CatalogProduct>(
 ): ProductResolution<T> {
   const normalizedQuery = normalizeProductQuery(query ?? "");
   if (!normalizedQuery) return { status: "not_found", candidates: [] };
+  const exactNames = products.filter((product) =>
+    normalizeProductQuery(product.name) === normalizedQuery
+  );
+  if (exactNames.length === 1) return { status: "matched", product: exactNames[0] };
+  if (exactNames.length > 1) return { status: "ambiguous", candidates: exactNames };
   const scored = products.map((product) => {
     const names = productPhrases(product);
     let score = names.includes(normalizedQuery) ? 1 : 0;
