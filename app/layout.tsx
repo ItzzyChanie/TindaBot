@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { AppShell } from "./ui/app-shell";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -8,6 +8,11 @@ export const metadata: Metadata = {
   title: "TindaBot | Seller workspace",
   description:
     "Manage your shop conversations, catalog, and orders in one place.",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
 };
 
 export default async function RootLayout({

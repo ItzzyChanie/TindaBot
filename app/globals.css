@@ -4618,9 +4618,13 @@ h2 {
 }
 @media (max-width: 680px) {
   .shop-page {
+    width: 100%;
+    min-width: 0;
     padding: 0 15px 20px;
   }
   .shop-header {
+    width: 100%;
+    min-width: 0;
     min-height: 64px;
   }
   .shop-header .brand {
@@ -5562,4 +5566,808 @@ button:disabled {
   height: 28px;
   flex-basis: 28px;
   border-radius: 7px;
+}
+
+/* Responsive polish for storefront and seller workflows. */
+html,
+body {
+  max-width: 100%;
+  overflow-x: clip;
+}
+
+@media (min-width: 700px) {
+  .shop-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1051px) {
+  .shop-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.shop-product-image {
+  height: 290px;
+  aspect-ratio: auto;
+}
+
+.shop-product-heading h2,
+.shop-description,
+.product-heading h2,
+.product-aliases,
+.order-card,
+.order-items li,
+.order-customer,
+.order-customer-details dd {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.shop-price-row strong,
+.product-price strong,
+.order-total-row strong {
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.shop-product-actions .button,
+.catalog-form-actions .button,
+.catalog-form-actions .text-button,
+.product-actions .text-button,
+.order-actions .button,
+.order-actions .message-icon-button,
+.orders-pagination .button {
+  min-height: 44px;
+}
+
+.shop-product-actions .button {
+  width: 100%;
+}
+
+.catalog-form-actions {
+  display: flex;
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  justify-content: flex-end;
+  gap: 8px;
+  margin: 0 -10px -10px;
+  padding: 10px;
+  border-top: 1px solid var(--line);
+  background: color-mix(in srgb, var(--surface), transparent 4%);
+  padding-bottom: max(10px, env(safe-area-inset-bottom));
+}
+
+.catalog-form-actions .catalog-save {
+  min-width: 150px;
+  border: 0;
+}
+
+@media (min-width: 1051px) {
+  .catalog-form-actions {
+    position: static;
+    margin: 0;
+    padding: 0;
+    border-top: 0;
+    background: transparent;
+  }
+}
+
+.order-status-filters {
+  display: flex;
+  max-width: 100%;
+  gap: 8px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+}
+
+.order-status-filters button {
+  min-height: 44px;
+  flex: 0 0 auto;
+  padding: 8px 13px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.order-status-filters button.active {
+  border-color: var(--green);
+  background: var(--green-soft);
+  color: var(--green);
+  font-weight: 700;
+}
+
+.widget-message p,
+.widget-message a {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.widget-close {
+  width: 44px;
+  height: 44px;
+  flex-basis: 44px;
+}
+
+.widget-messages > div[aria-hidden="true"] {
+  flex: 0 0 1px;
+}
+
+@media (max-width: 1050px) {
+  .page-content.catalog-page,
+  .page-content.orders-page {
+    min-width: 0;
+    padding: 22px 18px max(24px, env(safe-area-inset-bottom));
+  }
+
+  .inbox-page {
+    height: calc(100dvh - 62px - env(safe-area-inset-top));
+    margin-top: 0;
+  }
+
+  .mobile-header {
+    top: 0;
+    height: calc(62px + env(safe-area-inset-top));
+    padding-top: env(safe-area-inset-top);
+  }
+
+  .mobile-menu,
+  .theme-button.compact {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+  }
+
+  .catalog-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .catalog-form {
+    position: relative;
+    top: auto;
+    grid-template-columns: minmax(0, 1fr);
+    min-width: 0;
+  }
+
+  .orders-hero {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .orders-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .page-content input,
+  .page-content select,
+  .page-content textarea,
+  .shop-search input,
+  .widget-form textarea {
+    font-size: 16px;
+  }
+}
+
+@media (max-width: 700px) {
+  body {
+    font-size: 15px;
+  }
+
+  .shop-page {
+    width: 100%;
+    min-width: 0;
+    padding-right: 12px;
+    padding-left: 12px;
+    padding-bottom: max(20px, env(safe-area-inset-bottom));
+  }
+
+  .shop-header {
+    width: 100%;
+    min-width: 0;
+    gap: 8px;
+    min-height: 68px;
+    padding-top: env(safe-area-inset-top);
+  }
+
+  .shop-header .brand {
+    min-width: max-content;
+    flex: 0 0 auto;
+    gap: 7px;
+    font-size: 17px;
+    white-space: nowrap;
+  }
+
+  .shop-header .brand-logo {
+    width: 36px;
+    height: 36px;
+    flex-basis: 36px;
+  }
+
+  .shop-nav {
+    display: flex;
+    min-width: 0;
+    flex: 0 0 auto;
+    gap: 4px;
+    margin-left: auto;
+  }
+
+  .shop-nav a {
+    display: inline-flex;
+    min-height: 44px;
+    align-items: center;
+    justify-content: center;
+    padding: 0 7px;
+    font-size: 13px;
+    white-space: nowrap;
+  }
+
+  .shop-nav a:nth-child(2) {
+    display: none;
+  }
+
+  .shop-nav .shop-help-link {
+    padding: 0 9px;
+  }
+
+  .shop-hero {
+    width: 100%;
+    min-width: 0;
+    margin-top: 12px;
+    padding-right: 18px;
+    padding-left: 18px;
+  }
+
+  .shop-hero-copy > p:not(.eyebrow),
+  .shop-section-heading p:last-child,
+  .shop-collection-meta,
+  .shop-description,
+  .shop-state,
+  .shop-error {
+    font-size: 15px;
+  }
+
+  .shop-hero-copy,
+  .shop-hero-copy h1 {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .shop-hero-copy h1 {
+    font-size: clamp(34px, 9vw, 47px);
+  }
+
+  .shop-collection-meta {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .shop-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .shop-product-body {
+    gap: 9px;
+    padding: 10px;
+  }
+
+  .shop-product-image {
+    height: auto;
+    aspect-ratio: 4 / 5;
+  }
+
+  .shop-product-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .shop-product-heading h2 {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    font-size: 16px;
+    line-height: 1.3;
+  }
+
+  .shop-stock,
+  .shop-page .offer-badge {
+    max-width: 100%;
+    white-space: normal;
+  }
+
+  .shop-price-row {
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .shop-price-row strong {
+    font-size: 18px;
+    font-weight: 750;
+  }
+
+  .shop-product-actions .button {
+    min-height: 44px;
+    padding: 8px 9px;
+    font-size: 14px;
+  }
+
+  .shop-hero-cta {
+    min-height: 44px;
+    align-items: center;
+  }
+
+  .widget-page {
+    min-height: 100dvh;
+    padding: 0;
+  }
+
+  .widget-card {
+    width: 100%;
+    height: 100dvh;
+    min-height: 0;
+    padding-top: env(safe-area-inset-top);
+    border: 0;
+    border-radius: 0;
+  }
+
+  .shop-chat-drawer {
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 100vw;
+    height: 100dvh;
+    padding-top: env(safe-area-inset-top);
+  }
+
+  .shop-chat-drawer .widget-card {
+    height: 100%;
+  }
+
+  .shop-chat-drawer .widget-header {
+    min-height: 60px;
+    padding: 8px 12px;
+  }
+
+  .shop-chat-drawer .widget-notice {
+    max-height: 20dvh;
+    overflow-y: auto;
+    margin: 8px 10px;
+    padding: 8px 10px;
+    font-size: 13px;
+  }
+
+  .widget-messages {
+    min-height: 0;
+    padding: 10px;
+  }
+
+  .widget-message {
+    max-width: 94%;
+  }
+
+  .widget-message p {
+    font-size: 15px;
+  }
+
+  .widget-quick-replies {
+    max-height: 94px;
+    overflow-y: auto;
+    gap: 7px;
+    padding: 6px 10px;
+  }
+
+  .widget-quick-replies button,
+  .shop-chat-drawer .widget-quick-replies button {
+    min-height: 44px;
+    padding: 8px 10px;
+    font-size: 14px;
+  }
+
+  .widget-form {
+    padding: 8px 10px;
+  }
+
+  .widget-form textarea,
+  .shop-chat-drawer .widget-form textarea {
+    min-height: 52px;
+    max-height: 25dvh;
+    font-size: 16px;
+  }
+
+  .widget-form .button {
+    min-height: 44px;
+    font-size: 15px;
+  }
+
+  .widget-message-actions button,
+  .widget-reply-action,
+  .widget-compose-context button,
+  .widget-legal-links a,
+  .orders-view-tabs button {
+    min-height: 44px;
+    align-items: center;
+  }
+
+  .widget-message-actions button,
+  .widget-reply-action {
+    display: inline-flex;
+    padding: 8px;
+    font-size: 13px;
+  }
+
+  .widget-session-note {
+    padding-bottom: max(8px, env(safe-area-inset-bottom));
+    font-size: 12px;
+  }
+
+  .widget-legal-links a,
+  .shop-legal-links a,
+  .public-legal-page .legal-back-link {
+    display: inline-flex;
+    min-height: 44px;
+    align-items: center;
+  }
+
+  .catalog-page,
+  .orders-page {
+    overflow-wrap: anywhere;
+  }
+
+  .catalog-hero,
+  .orders-hero {
+    min-height: 0;
+    gap: 16px;
+    padding: 20px 18px;
+  }
+
+  .catalog-hero h1,
+  .orders-hero h1 {
+    font-size: 29px;
+  }
+
+  .catalog-hero p:last-child,
+  .orders-hero p:last-child {
+    font-size: 15px;
+  }
+
+  .catalog-hero-count {
+    min-height: 62px;
+    grid-template-columns: auto 1fr;
+    justify-items: start;
+    padding: 9px 12px;
+  }
+
+  .catalog-hero-count strong {
+    grid-row: span 2;
+    align-self: center;
+    font-size: 24px;
+  }
+
+  .catalog-toolbar {
+    padding: 10px;
+  }
+
+  .catalog-toolbar input,
+  .catalog-form input:not([type="checkbox"]):not([type="file"]),
+  .catalog-form textarea,
+  .catalog-form select,
+  .orders-tools input,
+  .orders-tools select {
+    min-height: 44px;
+    font-size: 16px;
+  }
+
+  .page-content input,
+  .page-content select,
+  .page-content textarea,
+  .shop-search input {
+    font-size: 16px;
+  }
+
+  .catalog-grid {
+    gap: 14px;
+  }
+
+  .product-card {
+    align-items: flex-start;
+    gap: 10px;
+    min-width: 0;
+    padding: 10px;
+  }
+
+  .product-photo {
+    width: 78px;
+    height: 98px;
+    flex-basis: 78px;
+    aspect-ratio: 4 / 5;
+  }
+
+  .product-heading {
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .product-price {
+    justify-items: start;
+    white-space: normal;
+  }
+
+  .product-price strong {
+    font-size: 17px;
+  }
+
+  .size-chips {
+    gap: 8px;
+  }
+
+  .size-chip {
+    flex-wrap: wrap;
+    min-height: 42px;
+    align-items: center;
+    padding: 6px 8px;
+    font-size: 13px;
+  }
+
+  .size-chip button {
+    width: 36px;
+    height: 36px;
+    font-size: 18px;
+  }
+
+  .product-actions {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 8px;
+  }
+
+  .product-actions .text-button {
+    min-height: 44px;
+  }
+
+  .catalog-form {
+    gap: 13px;
+    padding: 14px;
+  }
+
+  .catalog-form > label,
+  .discount-fields > label {
+    min-width: 0;
+    font-size: 15px;
+  }
+
+  .discount-fields,
+  .discount-window-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .catalog-form small {
+    font-size: 13px;
+    overflow-wrap: anywhere;
+  }
+
+  .catalog-form-actions {
+    bottom: 0;
+    margin-right: -6px;
+    margin-left: -6px;
+    padding-right: 6px;
+    padding-left: 6px;
+  }
+
+  .catalog-form-actions .button,
+  .catalog-form-actions .text-button {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 8px;
+  }
+
+  .orders-summary {
+    gap: 8px;
+  }
+
+  .order-summary-card {
+    min-width: 0;
+    min-height: 66px;
+    padding: 10px;
+  }
+
+  .order-summary-card span {
+    font-size: 13px;
+  }
+
+  .order-summary-card strong {
+    font-size: 20px;
+  }
+
+  .order-status-filters {
+    width: 100%;
+    margin: 0 -2px;
+    padding: 2px 2px 8px;
+  }
+
+  .orders-tools {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .orders-tools .order-search,
+  .orders-tools .order-search input,
+  .orders-tools .order-filter select,
+  .orders-tools > .button {
+    width: 100%;
+    min-height: 44px;
+  }
+
+  .orders-tools > .muted {
+    margin-left: 0;
+    font-size: 14px;
+  }
+
+  .orders-list {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .order-card {
+    gap: 12px;
+    padding: 14px;
+  }
+
+  .order-card-header {
+    align-items: flex-start;
+  }
+
+  .order-card-header h2 {
+    max-width: 56vw;
+    font-size: 17px;
+    overflow-wrap: anywhere;
+  }
+
+  .order-customer {
+    align-items: flex-start;
+    font-size: 14px;
+  }
+
+  .order-customer time {
+    width: 100%;
+    margin-left: 0;
+    font-size: 13px;
+  }
+
+  .order-items li,
+  .order-customer-details,
+  .order-total-row {
+    font-size: 14px;
+  }
+
+  .order-actions {
+    flex-wrap: wrap;
+    justify-content: stretch;
+    gap: 8px;
+  }
+
+  .order-actions .button {
+    flex: 1 1 100%;
+    min-height: 48px;
+  }
+
+  .order-actions .message-icon-button {
+    width: 44px;
+    height: 44px;
+  }
+
+  .orders-pagination {
+    gap: 8px;
+    font-size: 14px;
+  }
+
+  .orders-pagination .button {
+    min-width: 90px;
+  }
+}
+
+@media (min-width: 701px) and (max-width: 1050px) {
+  .shop-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .shop-header {
+    gap: 12px;
+  }
+
+  .shop-nav {
+    gap: 12px;
+  }
+}
+
+@media (max-width: 370px) {
+  .shop-header .brand {
+    font-size: 15px;
+  }
+
+  .shop-header .brand-logo {
+    width: 32px;
+    height: 32px;
+    flex-basis: 32px;
+  }
+
+  .shop-nav .shop-help-link {
+    padding: 0 6px;
+    font-size: 12px;
+  }
+
+  .shop-grid {
+    gap: 8px;
+  }
+
+  .shop-product-body {
+    padding: 8px;
+  }
+
+  .shop-price-row strong {
+    font-size: 16px;
+  }
+}
+
+:root[data-theme="dark"] .shop-page {
+  background: var(--page);
+}
+
+:root[data-theme="dark"] .shop-header {
+  border-color: var(--line);
+}
+
+:root[data-theme="dark"] .shop-header .brand,
+:root[data-theme="dark"] .shop-product-heading h2,
+:root[data-theme="dark"] .shop-section-heading h2,
+:root[data-theme="dark"] .shop-about h2 {
+  color: var(--text);
+}
+
+:root[data-theme="dark"] .shop-hero,
+:root[data-theme="dark"] .shop-product,
+:root[data-theme="dark"] .shop-art-label {
+  border-color: var(--line);
+  background-color: var(--surface);
+}
+
+:root[data-theme="dark"] .shop-hero-copy h1,
+:root[data-theme="dark"] .shop-art-label strong {
+  color: var(--text);
+}
+
+:root[data-theme="dark"] .shop-hero-copy > p:not(.eyebrow),
+:root[data-theme="dark"] .shop-section-heading p:last-child,
+:root[data-theme="dark"] .shop-collection-meta,
+:root[data-theme="dark"] .shop-description,
+:root[data-theme="dark"] .shop-footer {
+  color: var(--muted);
+}
+
+:root[data-theme="dark"] .shop-search input {
+  border-color: var(--line);
+  background: var(--page);
+  color: var(--text);
+}
+
+:root[data-theme="dark"] .shop-about,
+:root[data-theme="dark"] .shop-footer {
+  border-color: var(--line);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shop-chat-drawer,
+  .shop-chat-backdrop,
+  .shop-product {
+    scroll-behavior: auto;
+    transition: none;
+  }
 }

@@ -192,16 +192,19 @@ export function OrdersManager() {
           <h1>Orders</h1>
           <p>Keep payments and delivery status moving in one place.</p>
         </div>
-        <label className="order-filter orders-filter">
-          <span className="sr-only">Filter orders by status</span>
-          <select value={filter} onChange={(event) => { setFilter(event.target.value as Filter); setPage(0); }}>
-            <option value="all">All orders</option>
-            <option value="awaiting_payment">Awaiting payment</option>
-            <option value="paid">Paid</option>
-            <option value="shipped">Shipped</option>
-            <option value="expired">Expired</option>
-          </select>
-        </label>
+        <div className="order-status-filters" role="group" aria-label="Filter orders by status">
+          {(["all", "awaiting_payment", "paid", "shipped", "expired"] as Filter[]).map((status) => (
+            <button
+              className={filter === status ? "active" : ""}
+              type="button"
+              key={status}
+              aria-pressed={filter === status}
+              onClick={() => { setFilter(status); setPage(0); }}
+            >
+              {status === "all" ? "All orders" : statusLabels[status]}
+            </button>
+          ))}
+        </div>
       </section>
       {error && <p className="inbox-alert error-state" role="alert">{error}</p>}
       <nav className="orders-view-tabs" aria-label="Order views">

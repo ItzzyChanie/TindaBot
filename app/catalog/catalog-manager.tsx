@@ -538,7 +538,10 @@ export function CatalogManager({
                           </small>
                         )}
                         {offer.label ? (
-                          <del>{currency(product.price)}</del>
+                          <>
+                            <span className="offer-badge">{offer.label}</span>
+                            <del>{currency(product.price)}</del>
+                          </>
                         ) : null}
                         <strong>{currency(offer.unit)}</strong>
                       </div>
@@ -606,11 +609,6 @@ export function CatalogManager({
               </p>
               <h2>{editingId ? "Edit product" : "Add product"}</h2>
             </div>
-            {editingId && (
-              <button type="button" className="text-button" onClick={resetForm}>
-                Cancel
-              </button>
-            )}
           </div>
           <label>
             Product name
@@ -790,12 +788,17 @@ export function CatalogManager({
             <strong>{currency(preview.total)}</strong>
             {preview.label && <small>{preview.label}</small>}
           </div>
-          <button
-            className="button button-primary catalog-save"
-            disabled={busy}
-          >
-            {busy ? "Saving…" : editingId ? "Save changes" : "Add to catalog"}
-          </button>
+          <div className="catalog-form-actions">
+            <button type="button" className="text-button" onClick={resetForm}>
+              Cancel
+            </button>
+            <button
+              className="button button-primary catalog-save"
+              disabled={busy}
+            >
+              {busy ? "Saving…" : editingId ? "Save changes" : "Add to catalog"}
+            </button>
+          </div>
         </form>
       </section>
     </div>

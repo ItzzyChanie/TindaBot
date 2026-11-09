@@ -81,6 +81,11 @@ export function ChatWidget({ productId: initialProductId, sessionId: initialSess
   const productIdRef = useRef<string | null>(initialProductId ?? null);
   const [replyTarget, setReplyTarget] = useState<WidgetMessage | null>(null);
   const [editingMessage, setEditingMessage] = useState<WidgetMessage | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ block: "end" });
+  }, [messages]);
 
   const getToken = useCallback((): Promise<string> => {
     if (tokenRef.current) return Promise.resolve(tokenRef.current);
@@ -248,7 +253,14 @@ export function ChatWidget({ productId: initialProductId, sessionId: initialSess
       <header className="widget-header">
         <Image className="brand-logo" src={tindabotLogo} alt="" priority />
         <div><strong>TindaBot shop assistant</strong><span>Web chat</span></div>
-        {onClose && <button className="widget-close" type="button" onClick={onClose} aria-label="Close chat">×</button>}
+        <button
+          className="widget-close"
+          type="button"
+          onClick={() => onClose ? onClose() : window.location.assign("/shop")}
+          aria-label="Close chat"
+        >
+          ×
+        </button>
       </header>
       <p className="widget-notice">Automated assistant po ito ng shop. Maaari po kayong magtanong tungkol sa catalog, presyo, sizes at stock, shipping, paano mag-order, at order status. Storefront chat lang po ito para sa basic questions at hindi tumatanggap o nagpoproseso ng payment. I-type ang SELLER para makausap ang seller. Chat messages are retained for 90 days po.</p>
       {error && <p className="widget-error" role="alert">{error}</p>}
@@ -283,6 +295,7 @@ export function ChatWidget({ productId: initialProductId, sessionId: initialSess
             <time>{message.pending ? "Sending…" : `${new Intl.DateTimeFormat("en-PH", { hour: "numeric", minute: "2-digit" }).format(new Date(message.created_at))}${message.edited_at ? " · edited" : ""}`}</time>
           </article>
         ))}
+        <div ref={messagesEndRef} aria-hidden="true" />
         {sending && <p className="widget-typing" role="status">Sending your message…</p>}
       </div>
       <div className="widget-quick-replies" aria-label="Quick questions">

@@ -279,7 +279,11 @@ export default function ShopPage() {
                       <span
                         className={`shop-stock ${available ? "available" : "unavailable"}`}
                       >
-                        {available ? "Available" : "Sold out"}
+                        {!available
+                          ? "Sold out"
+                          : sizes.some((size) => size.availability === "low_stock")
+                            ? "Low stock"
+                            : "Available"}
                       </span>
                     </div>
                     <p className="shop-description">
