@@ -3,7 +3,14 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getSupabasePublicEnv, isSupabasePublicConfigured } from "./lib/supabase/env";
 
 export async function middleware(request: NextRequest) {
-  const isLogin = request.nextUrl.pathname === "/login";
+  const pathname = request.nextUrl.pathname;
+  const isLogin = pathname === "/login";
+  const isPublicPage = ["/shop", "/chat", "/privacy", "/data-deletion"].some(
+    (route) => pathname === route || pathname.startsWith(`${route}/`),
+  );
+
+  if (isPublicPage) return NextResponse.next({ request });
+
   if (!isSupabasePublicConfigured()) {
     return isLogin
       ? NextResponse.next({ request })
